@@ -25,15 +25,49 @@ _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
 
 
 def merge_scan_data(output_dir,
-                    spec_h5_fname,
-                    scans,
+                    spec_fname,
+                    beam_energy,
                     pixelsize_dim0=-1.,
                     pixelsize_dim1=-1.,
-                    beam_energy,
+                    scan_ids=None,
                     master_f=None,
                     overwrite=False,
+                    img_dir_base=None,
                     n_proc=None):
-    pass
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    temporary_dir = os.path.join(output_dir, 'xsocs_tmp')
+    if not os.path.exists(temporary_dir):
+        os.makedirs(temporary_dir)
+
+    temp_h5 = os.path.join(temporary_dir, 'temp_spec.h5')
+
+    _spec_to_h5(spec_fname, temp_h5)
+
+    scans_results = _find_scan_img_files(temp_h5, img_dir=img_dir_base)
+
+    complete_scans = scans_results[0]
+
+    if scan_ids is None:
+        scans = complete_scans
+    else:
+        try:
+            scans = {'{0}.1'.format(scan_id) : complete_scans['{0}.1'.format(scan_id)]
+                     for scan_id in scan_ids}
+        except KeyError as ex:
+            msg = 'TODO err Scan ID {0}'.format(scan_id)
+            raise ValueError(msg)
+
+    _merge_data(output_dir,
+                temp_h5,
+                scans,
+                pixelsize_dim0,
+                pixelsize_dim1,
+                beam_energy,
+                master_f='master.h5',
+                overwrite=True)
 
 
 # #######################################################################

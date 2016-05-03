@@ -26,8 +26,6 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "01/03/2016"
 
-import numpy
-
 from numpy.distutils.misc_util import Configuration
 
 

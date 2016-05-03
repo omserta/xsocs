@@ -31,7 +31,6 @@ __date__ = "20/04/2016"
 
 
 import logging
-import os
 import unittest
 
 
@@ -40,11 +39,11 @@ logger = logging.getLogger(__name__)
 
 
 from .test_version import suite as test_version_suite
-#from ..io.test import suite as test_io_suite
+# from ..io.test import suite as test_io_suite
 
 
 def suite():
     test_suite = unittest.TestSuite()
     test_suite.addTest(test_version_suite())
-    #test_suite.addTest(test_io_suite())
+    # test_suite.addTest(test_io_suite())
     return test_suite

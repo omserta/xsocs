@@ -1,3 +1,33 @@
+#!/usr/bin/python
+# coding: utf8
+# /*##########################################################################
+#
+# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# ###########################################################################*/
+
+__authors__ = ["D. Naudet"]
+__date__ = "20/04/2016"
+__license__ = "MIT"
+
 import re
 import glob
 import os.path
@@ -27,13 +57,70 @@ _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
 def merge_scan_data(output_dir,
                     spec_fname,
                     beam_energy,
-                    pixelsize_dim0=-1.,
-                    pixelsize_dim1=-1.,
+                    chan_per_deg,
+                    pixelsize=(-1., -1.),
                     scan_ids=None,
                     master_f=None,
-                    overwrite=False,
                     img_dir_base=None,
-                    n_proc=None):
+                    n_proc=None,
+                    nextnr_ofst=0):
+
+    """
+    Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
+    contain spec data (from *spec_fname*) as well as the associated
+    image data. This file will either contain all valid scans or the one
+    selected using the scan_ids parameter. A valid scan is a scan associated
+    with an (existing) image file. Existing output files will be
+    overwritten.
+
+    :param output_dir: folder name into which output data (as well as
+        temporary files) will be written.
+    :type output_dir: str
+
+    :param spec_fname: path to the spec file.
+    :type output_dir: str
+
+    :param beam_energy: beam energy.
+    :type beam_energy: numeric
+
+    :param chan_per_deg: 2 elements array containing the number of channels
+        per degree (as defined by xrayutilitied, used when converting to
+        reciprocal space coordinates).
+    :type chan_per_deg: array_like
+
+    :param pixelsize: 2 elements array containing the pixel size of the,
+        detector, in TBD.
+    :type pixelsize: *optional* array_like
+
+    :param scan_ids: array of scan numbers to add to the merged file. If
+        None, all valid scans will be merged.
+    :type scan_ids: *optional* array of int
+
+    :param master_f: name of the "master" (top level) HDF5 file.
+        If None, the file will be named master.h5. This file is created in the
+        folder pointed to by output_dir.
+    :type master_f: *optional* str
+
+    :param img_dir: directory path. If provided the image files will be
+        looked for into that folder instead of the one found in the scan
+        headers.
+    :type img_dir: *optional* str
+
+    :param n_proc: Number of threads to use when merging files. If None, the
+        number of threads used will be the value returned by the function
+        `multiprocessing.cpu_count()`
+    :type n_proc: *optional* str
+
+    :param version: version of the spec file. It is currently used to get
+    the offset to apply to the nextNr values found in the spec scan headers.
+    This nextNr is then used to generate the image file name. Leave it to 0
+    if you are merging data generated after April 2016 (TBC). Prior to this
+    date the nextnr_ofst should probably be -1.
+    :type img_dir: *optional* str
+
+    :returns: a list of scan IDs that were merged
+    :rtype: *list*
+    """
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -46,28 +133,38 @@ def merge_scan_data(output_dir,
 
     _spec_to_h5(spec_fname, temp_h5)
 
-    scans_results = _find_scan_img_files(temp_h5, img_dir=img_dir_base)
+    scans_results = _find_scan_img_files(temp_h5,
+                                         img_dir=img_dir_base,
+                                         nextnr_ofst=nextnr_ofst)
 
     complete_scans = scans_results[0]
+
+    # a declaration to quiet down flake8 complaining about the scan_id in
+    # the except clause
+    scan_id = 0
 
     if scan_ids is None:
         scans = complete_scans
     else:
         try:
-            scans = {'{0}.1'.format(scan_id) : complete_scans['{0}.1'.format(scan_id)]
+            scans = {'{0}.1'.format(scan_id):
+                     complete_scans['{0}.1'.format(scan_id)]
                      for scan_id in scan_ids}
-        except KeyError as ex:
-            msg = 'TODO err Scan ID {0}'.format(scan_id)
+        except KeyError:
+            msg = 'Scan ID {0} not found.'.format(scan_id)
             raise ValueError(msg)
 
     _merge_data(output_dir,
                 temp_h5,
                 scans,
-                pixelsize_dim0,
-                pixelsize_dim1,
                 beam_energy,
+                chan_per_deg,
+                pixelsize,
                 master_f='master.h5',
-                overwrite=True)
+                overwrite=True,
+                n_proc=n_proc)
+
+    return scans.keys()
 
 
 # #######################################################################
@@ -158,7 +255,8 @@ def _spec_get_img_filenames(spec_h5_filename):
 
 
 def _find_scan_img_files(spec_h5_filename,
-                         img_dir=None):
+                         img_dir=None,
+                         nextnr_ofst=0):
     """
     Parses the provided "*spec*" HDF5 file and tries to find the edf file
     associated  with each scans. will look for the files in img_dir if
@@ -173,6 +271,12 @@ def _find_scan_img_files(spec_h5_filename,
         headers.
     :type img_dir: *optional* str
 
+    :param version: version of the spec file. It is currently used to get
+    the offset to apply to the nextNr values found in the spec scan headers.
+    This nextNr is then used to generate the image file name. Leave it to 0
+    if you are merging data generated after April 2016 (TBC). Prior to this
+    date the nextnr_ofst should probably be -1.
+    :type img_dir: *optional* str
 
     :returns: 4 elements tuple : a dict containing the scans whose image file
         has been found, a dict containing the scans that have that have
@@ -192,7 +296,7 @@ def _find_scan_img_files(spec_h5_filename,
 
     for scan_id, infos in with_files.items():
         parsed_fname = (infos['prefix'] +
-                        '{0:0>4}'.format(int(infos['nextNr'])-1) +
+                        '{0:0>4}'.format(int(infos['nextNr']) + nextnr_ofst) +
                         infos['suffix'])
         img_file = None
 
@@ -224,12 +328,17 @@ def _find_scan_img_files(spec_h5_filename,
 def _merge_data(output_dir,
                 spec_h5_fname,
                 scans,
-                pixelsize_dim0=-1.,
-                pixelsize_dim1=-1.,
-                beam_energy=-1.,
+                beam_energy,
+                chan_per_deg,
+                pixelsize=[-1., -1.],
                 master_f=None,
                 overwrite=False,
                 n_proc=None):
+
+    """
+    Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
+    contain spec data as well as the associated image data.
+    """
 
     output_dir = os.path.realpath(output_dir)
 
@@ -275,7 +384,7 @@ def _merge_data(output_dir,
         for scan_id in sorted(scans.keys()):
             img_f = scans[scan_id]
             args = (scan_id, spec_h5_fname, output_dir, img_f,
-                    beam_energy, pixelsize_dim0, pixelsize_dim1,)
+                    beam_energy, chan_per_deg, pixelsize,)
             results[scan_id] = pool.apply_async(_add_edf_data,
                                                 args,
                                                 callback=partial(callback,
@@ -307,14 +416,23 @@ def _add_edf_data(scan_id,
                   output_dir,
                   img_f,
                   beam_energy,
-                  pixelsize_dim0,
-                  pixelsize_dim1):
+                  chan_per_deg,
+                  pixelsize):
+
+    """
+    Creates an entry_*.h5 file with scan data from the provided
+    "*spec*" HDF5 files, and adds the image data from the associated
+    image file. This function is meant to be called in from _merge_data.
+    """
 
     global g_spec_lock
     global g_term_evt
 
     entry = 'entry_{0:0>5}'.format(scan_id.split('.')[0])
     entry_fn = os.path.join(output_dir, entry + '.h5')
+
+    if pixelsize is None:
+        pixelsize = [-1., -1.]
 
     try:
 
@@ -341,11 +459,15 @@ def _add_edf_data(scan_id,
             img_data_grp = entry_grp.require_group('measurement/image_data')
 
             img_det_grp.create_dataset('pixelsize_dim0',
-                                       data=float(pixelsize_dim0))
+                                       data=float(pixelsize[0]))
             img_det_grp.create_dataset('pixelsize_dim1',
-                                       data=float(pixelsize_dim1))
+                                       data=float(pixelsize[1]))
             img_det_grp.create_dataset('beam_energy',
                                        data=float(beam_energy))
+            img_det_grp.create_dataset('chan_per_deg_dim0',
+                                       data=float(chan_per_deg[0]))
+            img_det_grp.create_dataset('chan_per_deg_dim1',
+                                       data=float(chan_per_deg[1]))
 
             edf_file = EdfFile.EdfFile(img_f, access='r', fastedf=True)
 
@@ -397,6 +519,7 @@ def _add_edf_data(scan_id,
             grp.attrs['NX_class'] = 'NXcollection'
 
     except Exception as ex:
+        print(ex)
         return ex
 
     return (entry, entry_fn, True)

@@ -51,8 +51,8 @@ gauss_fit = lambda p, x: (p[0] * (1 / np.sqrt(2 * np.pi * (p[2]**2))) *
 e_gauss_fit = lambda p, x, y: (gauss_fit(p, x) - y)
 
 
-def img_2_qpeak(master_fn,
-                workdir,
+def img_2_qpeak(data_h5f,
+                output_dir,
                 center_chan,
                 n_bins,
                 beam_energy=None,
@@ -60,15 +60,57 @@ def img_2_qpeak(master_fn,
                 nav=(4, 4),
                 img_indices=None):
     """
-    TODO : roi
+    TODO : roi parameter
+    Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
+    contain spec data (from *spec_fname*) as well as the associated
+    image data. This file will either contain all valid scans or the one
+    selected using the scan_ids parameter. A valid scan is a scan associated
+    with an (existing) image file. Existing output files will be
+    overwritten.
+
+    :param data_h5f: path to the HDF5 file containing the scan counters
+        and images
+    :type data_h5f: `str`
+
+    :param output_dir: folder name into which output data (as well as
+        temporary files) will be written (unused at the moment).
+    :type output_dir: `str`
+
+    :param center_chan: direct beam position in the detector coordinates
+    :type center_chan: `array_like`
+
+    :param n_bins: number of "bins" for the qspace cube (TODO : rephrase)
+    :type n_bins: `array_like`
+
+    :param beam_energy: energy of the beam used during the data acquisition.
+        If set, this will overwrite the one found (if any) in the HDF5 file.
+    :type beam_energy: *optional* numeric
+
+    :param chan_per_deg: number of detector chanels per degre. If set,
+        this will overwrite the values found (if any) in the HDF5 file.
+    :type chan_per_deg: *optional* `array_like`
+
+    :param nav: size of the averaging window to use when downsampling
+        the images (TODO : rephrase)
+    :type nav: *optional* `array_like`
+
+    :param img_indices: indices of the images for which the qx/qy/qz peaks
+        coordinates will be computed. E.g : if the array [1, 2, 3] is provided,
+        only the first 3 acquisitions of each scans will be used.
+        (TODO : give example)
+    :type img_indices: *optional* `array_like`
+
+    :returns: a list of tuples (x_pos, y_pos, qx_peak, qy_peak, qz_peak,
+        ||q||, i_peak)
+    :rtype: *list*
     """
 
     ta = time.time()
-    
+
     if chan_per_deg is None:
         chan_per_deg = [None, None]
 
-    with h5py.File(master_fn, 'r') as master_h5:
+    with h5py.File(data_h5f, 'r') as master_h5:
 
         entries = sorted(master_h5.keys())
 

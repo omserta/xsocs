@@ -1,11 +1,40 @@
-import os
+#!/usr/bin/python
+# coding: utf8
+# /*##########################################################################
+#
+# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# ###########################################################################*/
+
+__authors__ = ["D. Naudet"]
+__date__ = "20/04/2016"
+__license__ = "MIT"
+
 import time
 
 import h5py
 import numpy as np
 import xrayutilities as xu
 
-from scipy.signal import medfilt
+from scipy.signal import medfilt2d
 from scipy.optimize import leastsq
 
 from silx.math import histogramnd_get_lut, histogramnd_from_lut
@@ -13,82 +42,107 @@ from silx.math import histogramnd_get_lut, histogramnd_from_lut
 positioners_tpl = '/{0}/instrument/positioners'
 img_data_tpl = '/{0}/measurement/image_data/data'
 measurement_tpl = '/{0}/measurement'
+detector_tpl = '/{0}/instrument/image_detector'
 
+# 1d Gaussian func
+gauss_fit = lambda p, x: (p[0] * (1 / np.sqrt(2 * np.pi * (p[2]**2))) *
+                          np.exp(-(x - p[1])**2/(2 * p[2]**2)))
+# 1d Gaussian fit
+e_gauss_fit = lambda p, x, y: (gauss_fit(p, x) - y)
 
-en = 8000.
-chpdeg = [318., 318.]
-cch = [140, 322]
-nav = [4, 4]
-nx, ny, nz = 28, 154, 60
-roi = [0, 516, 0, 516]
 
 def img_2_qpeak(master_fn,
-                 workdir,
-                 #roi=None,
-                 nav=(4, 4),
-                 n_bins=(28, 154, 60)):
+                workdir,
+                center_chan,
+                n_bins,
+                beam_energy=None,
+                chan_per_deg=None,
+                nav=(4, 4),
+                img_indices=None):
     """
     TODO : roi
     """
-                     
+
     ta = time.time()
-
-    master_fn = os.path.join(base, 'master.h5')
-    tmp_fn = os.path.join(workdir, 'tmp.h5')
-    res_fn = os.path.join(workdir, 'results.txt')
     
-    nx, ny, nz = n_bins
-
-    qconv = xu.experiment.QConversion(['y-'],
-                                      ['z+', 'y-'],
-                                      [1, 0, 0])
-
-    # convention for coordinate system:
-    # - x downstream
-    # - z upwards
-    # - y to the "outside"
-    # (righthanded)
-    hxrd = xu.HXRD([1, 0, 0],
-                   [0, 0, 1],
-                   en=en,
-                   qconv=qconv)
+    if chan_per_deg is None:
+        chan_per_deg = [None, None]
 
     with h5py.File(master_fn, 'r') as master_h5:
 
         entries = sorted(master_h5.keys())
-        
+
         n_entries = len(entries)
 
         n_xy_pos = None
         n_images = None
 
         # retrieving some info from the first image to initialize some arrays
-        img_data = master_h5[img_data_tpl.format(entries[0])][0]
-        
-        if roi is None:
-            in_roi = [0, img_data.shape[1], 0, img_data.shape[2]]
-        else:
-            #TODO : values check
-            in_roi = roi
-            img_slice = (slice(roi[0], roi[1]), slice(roi[2], roi[3]))
-            
-        positioners = master_h5[positioners_tpl.format(entries[0])]
+        img_data = master_h5[img_data_tpl.format(entries[0])]
+
+        roi = [0, img_data.shape[1], 0, img_data.shape[2]]
+#        if roi is None:
+#            in_roi = [0, img_data.shape[1], 0, img_data.shape[2]]
+#        else:
+#            #TODO : values check
+#            in_roi = roi
+#            img_slice = (slice(roi[0], roi[1]), slice(roi[2], roi[3]))
+
+        measurement = master_h5[measurement_tpl.format(entries[0])]
+
         n_xy_pos = len(measurement['imgnr'])
         n_images = img_data.shape[0]
         img_x, img_y = img_data.shape[1:3]
-        
+
+        detector = master_h5[detector_tpl.format(entries[0])]
+
+        beam_energy = detector.get('beam_energy',
+                                   np.array(beam_energy))[()]
+        chan_per_deg_dim0 = detector.get('chan_per_deg_dim0',
+                                         np.array(chan_per_deg[0]))[()]
+        chan_per_deg_dim1 = detector.get('chan_per_deg_dim1',
+                                         np.array(chan_per_deg[1]))[()]
+
+        if beam_energy is None:
+            raise ValueError('The beam_energy value must be set.')
+        if chan_per_deg_dim0 is None:
+            raise ValueError('The chan_per_deg_dim0 value must be set.')
+        if chan_per_deg_dim1 is None:
+            raise ValueError('The chan_per_deg_dim1 value must be set.')
+
+        # TODO value testing
+        if img_indices is None:
+            img_indices = np.arange(n_images)
+
+        nx, ny, nz = n_bins
+
+        qconv = xu.experiment.QConversion(['y-'],
+                                          ['z+', 'y-'],
+                                          [1, 0, 0])
+
+        # convention for coordinate system:
+        # - x downstream
+        # - z upwards
+        # - y to the "outside"
+        # (righthanded)
+        hxrd = xu.HXRD([1, 0, 0],
+                       [0, 0, 1],
+                       en=beam_energy,
+                       qconv=qconv)
+
         hxrd.Ang2Q.init_area('z-',
                              'y+',
-                             cch1=cch[0],
-                             cch2=cch[1],
+                             cch1=center_chan[0],
+                             cch2=center_chan[1],
                              Nch1=img_x,
                              Nch2=img_y,
-                             chpdeg1=chpdeg[0],
-                             chpdeg2=chpdeg[1],
+                             chpdeg1=chan_per_deg_dim0,
+                             chpdeg2=chan_per_deg_dim1,
                              Nav=nav,
                              roi=roi)
 
-        # shape of the array that will store the qx/qy/qz for all rocking angles
+        # shape of the array that will store the qx/qy/qz for all
+        # rocking angles
         q_shape = (n_entries,
                    img_data.shape[1] // nav[0] * img_data.shape[2] // nav[1],
                    3)
@@ -120,7 +174,7 @@ def img_2_qpeak(master_fn,
                 raise ValueError('TODO')
             if img_shape[2] != img_y:
                 raise ValueError('TODO')
-                
+
             eta = np.float64(positioners['eta'][()])
             nu = np.float64(positioners['nu'][()])
             delta = np.float64(positioners['del'][()])
@@ -138,20 +192,24 @@ def img_2_qpeak(master_fn,
         qx_max = q_ar[:, :, 0].max()
         qy_max = q_ar[:, :, 1].max()
         qz_max = q_ar[:, :, 2].max()
-        
+
         step_x = (qx_max - qx_min)/(nx-1.)
         step_y = (qy_max - qy_min)/(ny-1.)
         step_z = (qz_max - qz_min)/(nz-1.)
 
-        bins_rng_x = [qx_min - step_x/2., qx_min + (qx_max - qx_min + step_x) - step_x/2.]
-        bins_rng_y = [qy_min - step_y/2., qy_min + (qy_max - qy_min + step_y) - step_y/2.]
-        bins_rng_z = [qz_min - step_z/2., qz_min + (qz_max - qz_min + step_z) - step_z/2.]
+        bins_rng_x = ([qx_min - step_x/2., qx_min +
+                      (qx_max - qx_min + step_x) - step_x/2.])
+        bins_rng_y = ([qy_min - step_y/2., qy_min +
+                      (qy_max - qy_min + step_y) - step_y/2.])
+        bins_rng_z = ([qz_min - step_z/2., qz_min +
+                      (qz_max - qz_min + step_z) - step_z/2.])
         bins_rng = [bins_rng_x, bins_rng_y, bins_rng_z]
 
         qx_idx = qx_min + step_x * np.arange(0, nx, dtype=np.float64)
         qy_idx = qy_min + step_y * np.arange(0, ny, dtype=np.float64)
         qz_idx = qz_min + step_z * np.arange(0, nz, dtype=np.float64)
-        
+
+        # TODO : find why the first version is faster than the second one
         img_shape_1 = img_shape[1]//nav[0], nav[0], img_shape[2]
         img_shape_2 = img_shape_1[0], img_shape_1[2]//nav[1], nav[1]
         sum_axis_1 = 1
@@ -161,47 +219,44 @@ def img_2_qpeak(master_fn,
         # sum_axis_1 = 2
         # sum_axis_2 = 1
         avg_weight = 1./(nav[0]*nav[1])
-        
+
         h_lut = None
         histo = np.zeros([nx, ny, nz], dtype=np.int32)
+        h_lut = []
 
         for h_idx in range(n_entries):
             lut = histogramnd_get_lut(q_ar[h_idx, ...],
                                       bins_rng,
                                       [nx, ny, nz],
                                       last_bin_closed=True)
-            if h_lut is None:
-                h_lut = np.zeros((n_entries,) + lut[0].shape,
-                                 dtype=lut[0].dtype)
-                
-            h_lut[h_idx, :] = lut[0]
+
+            h_lut.append(lut[0])
             histo += lut[1]
-            
-        mask = histo>0
-        
+
+        mask = histo > 0
+
         # array to store the results
         # X Y qx_peak, qy_peak, qz_peak, ||q||, I_peak
-        results = np.zeros((n_xy_pos, 6), dtype=np.float64)
+        results = np.zeros((n_xy_pos, 7), dtype=np.float64)
 
         measurement = master_h5[measurement_tpl.format(entries[0])]
         sample_x = measurement['adcX'][:]
         sample_y = measurement['adcY'][:]
-        
+
         t_histo = 0.
         t_fit = 0.
         t_mask = 0.
         t_read = 0.
         t_dnsamp = 0.
         t_medfilt = 0.
-        
-        for image_idx in range(1000):
-            
+
+        for image_idx in img_indices:
+
             if image_idx % 100 == 0:
                 print('#{0}/{1}'.format(image_idx, n_xy))
 
             cumul = None
 
-            i_sum = 0.
             for entry_idx, entry in enumerate(entries):
 
                 t0 = time.time()
@@ -216,13 +271,13 @@ def img_2_qpeak(master_fn,
                     sum(axis=sum_axis_1).reshape(img_shape_2).\
                     sum(axis=sum_axis_2) *\
                     avg_weight
-                #intensity = xu.blockAverage2D(img, nav[0], nav[1], roi=roi)
-                
+                # intensity = xu.blockAverage2D(img, nav[0], nav[1], roi=roi)
+
                 t_dnsamp += time.time() - t0
                 t0 = time.time()
 
-                intensity = medfilt(intensity, [3, 3])
-                
+                intensity = medfilt2d(intensity, 3)
+
                 t_medfilt += time.time() - t0
                 t0 = time.time()
 
@@ -233,29 +288,28 @@ def img_2_qpeak(master_fn,
                                              dtype=np.float64)
 
                 t_histo += time.time() - t0
-                
-            
+
             t0 = time.time()
-            
+
             cumul[mask] = cumul[mask]/histo[mask]
-            
+
             t_mask += time.time() - t0
-            
+
             t0 = time.time()
-        
+
             v0 = [1.0, qz.mean(), 1.0]
             qz_peak = leastsq(e_gauss_fit,
                               v0[:],
                               args=(qz_idx, (cumul.sum(axis=0)).sum(axis=0)),
                               maxfev=100000,
                               full_output=1)[0][1]
-            v0 = [1.0, qy.mean(), 1.0] 
+            v0 = [1.0, qy.mean(), 1.0]
             qy_peak = leastsq(e_gauss_fit,
                               v0[:],
                               args=(qy_idx, (cumul.sum(axis=2)).sum(axis=0)),
                               maxfev=100000,
                               full_output=1)[0][1]
-            v0 = [1.0, qx.mean(), 1.0] 
+            v0 = [1.0, qx.mean(), 1.0]
             qx_peak = leastsq(e_gauss_fit,
                               v0[:],
                               args=(qx_idx, (cumul.sum(axis=2)).sum(axis=1)),
@@ -267,7 +321,7 @@ def img_2_qpeak(master_fn,
                              maxfev=100000,
                              full_output=1)[0][0]
             t_fit += time.time() - t0
-            
+
             q = np.sqrt(qx_peak**2 + qy_peak**2 + qz_peak**2)
             results[image_idx] = (sample_x[image_idx],
                                   sample_y[image_idx],
@@ -276,23 +330,16 @@ def img_2_qpeak(master_fn,
                                   qz_peak,
                                   q,
                                   i_peak)
-            #res = 'Img {0} : {1} {2} {3} {4} {5} {6} {7}\n'.format(image_idx,
-                                                             #sample_x[image_idx],
-                                                             #sample_y[image_idx],
-                                                             #qx_peak,
-                                                             #qy_peak,
-                                                             #qz_peak,
-                                                             #q,
-                                                             #i_peak)
-            
+
     tb = time.time()
 
-    print('TOTAL', tb - ta)
-    print('Read', t_read)
-    print('Dn Sample', t_dnsamp)
-    print('Medfilt', t_medfilt)
-    print('Histo', t_histo)
-    print('Mask', t_mask)
-    print('Fit', t_fit)
-    
+    if(0):
+        print('TOTAL', tb - ta)
+        print('Read', t_read)
+        print('Dn Sample', t_dnsamp)
+        print('Medfilt', t_medfilt)
+        print('Histo', t_histo)
+        print('Mask', t_mask)
+        print('Fit', t_fit)
+
     return results

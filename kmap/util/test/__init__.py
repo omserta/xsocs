@@ -1,7 +1,6 @@
 # coding: utf-8
 # /*##########################################################################
-#
-# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+# Copyright (C) 2016 European Synchrotron Radiation Facility
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,29 +20,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 #
-# ###########################################################################*/
-"""Full kmap test suite.
-"""
+# ############################################################################*/
 
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
-__date__ = "20/04/2016"
+__date__ = "01/02/2016"
 
-
-import logging
 import unittest
 
-
-logging.basicConfig()
-logger = logging.getLogger(__name__)
-
-
-from .test_version import suite as test_version_suite
-from ..util.test import suite as test_util_suite
+from .test_id01_merge import\
+    suite as test_id01_merge
 
 
 def suite():
     test_suite = unittest.TestSuite()
-    test_suite.addTest(test_version_suite())
-    test_suite.addTest(test_util_suite())
+    test_suite.addTest(test_id01_merge())
     return test_suite

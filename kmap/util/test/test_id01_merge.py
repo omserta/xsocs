@@ -1,7 +1,6 @@
 # coding: utf-8
 # /*##########################################################################
-#
-# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+# Copyright (C) 2016 European Synchrotron Radiation Facility
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,29 +20,50 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 #
-# ###########################################################################*/
-"""Full kmap test suite.
-"""
+# ############################################################################*/
 
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
-__date__ = "20/04/2016"
+__date__ = "01/03/2016"
 
+"""
+Nominal tests of the merge_scan_data function.
+"""
 
-import logging
 import unittest
 
+import numpy as np
 
-logging.basicConfig()
-logger = logging.getLogger(__name__)
+from kmap.util.id01_spec import merge_scan_data
+
+# ==============================================================
+# ==============================================================
+# ==============================================================
 
 
-from .test_version import suite as test_version_suite
-from ..util.test import suite as test_util_suite
+class test_id01_merge_nominal(unittest.TestCase):
+    """
+    Unit tests of the merge_scan_data function.
+    """
+
+    def setUp(self):
+        pass
+
+# ==============================================================
+# ==============================================================
+# ==============================================================
+
+
+test_cases = (test_id01_merge_nominal,)
 
 
 def suite():
+    loader = unittest.defaultTestLoader
     test_suite = unittest.TestSuite()
-    test_suite.addTest(test_version_suite())
-    test_suite.addTest(test_util_suite())
+    for test_class in test_cases:
+        tests = loader.loadTestsFromTestCase(test_class)
+        test_suite.addTests(tests)
     return test_suite
+
+if __name__ == '__main__':
+    unittest.main(defaultTest="suite")

@@ -37,7 +37,9 @@ import xrayutilities as xu
 from scipy.signal import medfilt2d
 from scipy.optimize import leastsq
 
-from silx.math import histogramnd_get_lut, histogramnd_from_lut
+from silx.math import histogramnd#, histogramnd_get_lut, histogramnd_from_lut
+
+disp_times = False
 
 positioners_tpl = '/{0}/instrument/positioners'
 img_data_tpl = '/{0}/measurement/image_data/data'
@@ -61,6 +63,7 @@ def img_2_qpeak(data_h5f,
                 img_indices=None):
     """
     TODO : roi parameter
+    TODO : use histogram_lut when available in silx
     Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
     contain spec data (from *spec_fname*) as well as the associated
     image data. This file will either contain all valid scans or the one
@@ -262,20 +265,20 @@ def img_2_qpeak(data_h5f,
         # sum_axis_2 = 1
         avg_weight = 1./(nav[0]*nav[1])
 
-        h_lut = None
-        histo = np.zeros([nx, ny, nz], dtype=np.int32)
-        h_lut = []
+        #h_lut = None
+        #histo = np.zeros([nx, ny, nz], dtype=np.int32)
+        #h_lut = []
 
-        for h_idx in range(n_entries):
-            lut = histogramnd_get_lut(q_ar[h_idx, ...],
-                                      bins_rng,
-                                      [nx, ny, nz],
-                                      last_bin_closed=True)
+        #for h_idx in range(n_entries):
+            #lut = histogramnd_get_lut(q_ar[h_idx, ...],
+                                      #bins_rng,
+                                      #[nx, ny, nz],
+                                      #last_bin_closed=True)
 
-            h_lut.append(lut[0])
-            histo += lut[1]
+            #h_lut.append(lut[0])
+            #histo += lut[1]
 
-        mask = histo > 0
+        #mask = histo > 0
 
         # array to store the results
         # X Y qx_peak, qy_peak, qz_peak, ||q||, I_peak
@@ -298,6 +301,7 @@ def img_2_qpeak(data_h5f,
                 print('#{0}/{1}'.format(image_idx, n_xy))
 
             cumul = None
+            histo = None
 
             for entry_idx, entry in enumerate(entries):
 
@@ -323,15 +327,25 @@ def img_2_qpeak(data_h5f,
                 t_medfilt += time.time() - t0
                 t0 = time.time()
 
-                cumul = histogramnd_from_lut(intensity.reshape(-1),
-                                             h_lut[entry_idx],
-                                             shape=histo.shape,
-                                             weighted_histo=cumul,
-                                             dtype=np.float64)
+                #cumul = histogramnd_from_lut(intensity.reshape(-1),
+                                             #h_lut[entry_idx],
+                                             #shape=histo.shape,
+                                             #weighted_histo=cumul,
+                                             #dtype=np.float64)
+
+                histo, cumul = histogramnd(q_ar[entry_idx, ...],
+                                           bins_rng,
+                                           n_bins,
+                                           weights=intensity.reshape(-1),
+                                           cumul=cumul,
+                                           histo=histo,
+                                           last_bin_closed=True)
 
                 t_histo += time.time() - t0
 
             t0 = time.time()
+
+            mask = histo > 0
 
             cumul[mask] = cumul[mask]/histo[mask]
 
@@ -375,7 +389,7 @@ def img_2_qpeak(data_h5f,
 
     tb = time.time()
 
-    if(0):
+    if(disp_times):
         print('TOTAL', tb - ta)
         print('Read', t_read)
         print('Dn Sample', t_dnsamp)

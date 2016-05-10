@@ -63,7 +63,7 @@ def merge_scan_data(output_dir,
                     master_f=None,
                     img_dir_base=None,
                     n_proc=None,
-                    nextnr_ofst=0):
+                    version=1):
 
     """
     Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
@@ -112,11 +112,10 @@ def merge_scan_data(output_dir,
     :type n_proc: *optional* str
 
     :param version: version of the spec file. It is currently used to get
-    the offset to apply to the nextNr values found in the spec scan headers.
-    This nextNr is then used to generate the image file name. Leave it to 0
-    if you are merging data generated after April 2016 (TBC). Prior to this
-    date the nextnr_ofst should probably be -1.
-    :type img_dir: *optional* str
+    the offset and padding to apply to the nextNr value found in the spec scan
+    headers. This nextNr is then used to generate the image file name. Set it
+    to 0 if you are merging data generated before April 2016 (TBC).
+    :type img_dir: *optional* int
 
     :returns: a list of scan IDs that were merged
     :rtype: *list*
@@ -135,7 +134,7 @@ def merge_scan_data(output_dir,
 
     scans_results = _find_scan_img_files(temp_h5,
                                          img_dir=img_dir_base,
-                                         nextnr_ofst=nextnr_ofst)
+                                         version=version)
 
     complete_scans = scans_results[0]
 
@@ -256,7 +255,7 @@ def _spec_get_img_filenames(spec_h5_filename):
 
 def _find_scan_img_files(spec_h5_filename,
                          img_dir=None,
-                         nextnr_ofst=0):
+                         version=1):
     """
     Parses the provided "*spec*" HDF5 file and tries to find the edf file
     associated  with each scans. will look for the files in img_dir if
@@ -272,11 +271,10 @@ def _find_scan_img_files(spec_h5_filename,
     :type img_dir: *optional* str
 
     :param version: version of the spec file. It is currently used to get
-    the offset to apply to the nextNr values found in the spec scan headers.
-    This nextNr is then used to generate the image file name. Leave it to 0
-    if you are merging data generated after April 2016 (TBC). Prior to this
-    date the nextnr_ofst should probably be -1.
-    :type img_dir: *optional* str
+    the offset and padding to apply to the nextNr value found in the spec scan
+    headers. This nextNr is then used to generate the image file name. Set it
+    to 0 if you are merging data generated before April 2016 (TBC).
+    :type img_dir: *optional* int
 
     :returns: 4 elements tuple : a dict containing the scans whose image file
         has been found, a dict containing the scans that have that have
@@ -291,12 +289,19 @@ def _find_scan_img_files(spec_h5_filename,
     complete_scans = {}
     incomplete_scans = {}
 
+    if version==0:
+        nextnr_ofst = -1
+        nextnr_pattern = '{0:0>4}'
+    else:
+        nextnr_ofst = 0
+        nextnr_pattern = '{0:0>5}'
+
     if img_dir:
         img_dir = os.path.expanduser(os.path.expandvars(img_dir))
 
     for scan_id, infos in with_files.items():
         parsed_fname = (infos['prefix'] +
-                        '{0:0>4}'.format(int(infos['nextNr']) + nextnr_ofst) +
+                        nextnr_pattern.format(int(infos['nextNr']) + nextnr_ofst) +
                         infos['suffix'])
         img_file = None
 

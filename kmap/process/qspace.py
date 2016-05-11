@@ -28,6 +28,7 @@ __authors__ = ["D. Naudet"]
 __date__ = "20/04/2016"
 __license__ = "MIT"
 
+import os
 import time
 import ctypes
 import multiprocessing as mp
@@ -111,15 +112,17 @@ def img_2_qpeak(data_h5f,
         ||q||, i_peak)
     :rtype: *list*
     """
-
     ta = time.time()
 
     if chan_per_deg is None:
         chan_per_deg = [None, None]
 
+    base_dir = os.path.dirname(data_h5f)
+
     with h5py.File(data_h5f, 'r') as master_h5:
 
         entries = sorted(master_h5.keys())
+        entry_files = []
 
         n_entries = len(entries)
 
@@ -200,6 +203,14 @@ def img_2_qpeak(data_h5f,
         q_ar = np.zeros(q_shape, dtype=np.float64)
 
         for entry_idx, entry in enumerate(entries):
+            # TODO : handle the case when all the data is contained
+            # in a single file
+            entry_file = master_h5[entry].file.filename
+            if not os.path.isabs(entry_file):
+                entry_file = os.path.abspath(os.path.join(base_dir,
+                                                          entry_file))
+            entry_files.append(entry_file)
+
             positioners = master_h5[positioners_tpl.format(entry)]
             img_data = master_h5[img_data_tpl.format(entry)]
             measurement = master_h5[measurement_tpl.format(entry)]
@@ -290,19 +301,34 @@ def img_2_qpeak(data_h5f,
 
     manager = mp.Manager()
 
-    def init(shared_res_):
-        global g_shared_res
-        g_shared_res = shared_res_
-
     # array to store the results
     # qx_peak, qy_peak, qz_peak, ||q||, I_peak
     shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_xy_pos*5)
 
-    pool = mp.Pool(None,
-                   initializer=init,
-                   initargs=(shared_res,))
-
     entry_locks = [manager.Lock() for n in range(n_entries)]
+
+    pool = mp.Pool(None,
+                   initializer=_init_thread,
+                   initargs=(shared_res,
+                             entries,
+                             entry_files,
+                             entry_locks,
+                             q_ar,
+                             bins_rng,
+                             n_bins,
+                             img_shape_1,
+                             img_shape_2,
+                             sum_axis_1,
+                             sum_axis_2,
+                             avg_weight,
+                             n_xy,
+                             qx,
+                             qy,
+                             qz,
+                             qx_idx,
+                             qy_idx,
+                             qz_idx,
+                             n_xy_pos,))
 
     res_list = []
 
@@ -330,27 +356,7 @@ def img_2_qpeak(data_h5f,
         callback = None
 
     for image_idx in img_indices:
-        arg_list = (image_idx,
-                    data_h5f,
-                    entries,
-                    entry_locks,
-                    q_ar,
-                    bins_rng,
-                    n_bins,
-                    img_shape_1,
-                    img_shape_2,
-                    sum_axis_1,
-                    sum_axis_2,
-                    avg_weight,
-                    n_xy,
-                    qx,
-                    qy,
-                    qz,
-                    qx_idx,
-                    qy_idx,
-                    qz_idx,
-                    n_xy_pos)
-
+        arg_list = (image_idx,)
         res = pool.apply_async(_get_q_peak, args=arg_list, callback=callback)
         res_list.append(res)
 
@@ -374,28 +380,70 @@ def img_2_qpeak(data_h5f,
     return results
 
 
-def _get_q_peak(image_idx,
-                master_fn,
-                entries,
-                entry_locks,
-                q_ar,
-                bins_rng,
-                n_bins,
-                img_shape_1,
-                img_shape_2,
-                sum_axis_1,
-                sum_axis_2,
-                avg_weight,
-                n_xy,
-                qx,
-                qy,
-                qz,
-                qx_idx,
-                qy_idx,
-                qz_idx,
-                n_xy_pos):
+def _init_thread(shared_res_,
+                 entries_,
+                 entry_files_,
+                 entry_locks_,
+                 q_ar_,
+                 bins_rng_,
+                 n_bins_,
+                 img_shape_1_,
+                 img_shape_2_,
+                 sum_axis_1_,
+                 sum_axis_2_,
+                 avg_weight_,
+                 n_xy_,
+                 qx_,
+                 qy_,
+                 qz_,
+                 qx_idx_,
+                 qy_idx_,
+                 qz_idx_,
+                 n_xy_pos_):
 
-    global g_shared_res
+        global g_shared_res,\
+            entries,\
+            entry_files,\
+            entry_locks,\
+            q_ar,\
+            bins_rng,\
+            n_bins,\
+            img_shape_1,\
+            img_shape_2,\
+            sum_axis_1,\
+            sum_axis_2,\
+            avg_weight,\
+            n_xy,\
+            qx,\
+            qy,\
+            qz,\
+            qx_idx,\
+            qy_idx,\
+            qz_idx,\
+            n_xy_pos
+        g_shared_res = shared_res_
+        entries = entries_
+        entry_files = entry_files_
+        entry_locks = entry_locks_
+        q_ar = q_ar_
+        bins_rng = bins_rng_
+        n_bins = n_bins_
+        img_shape_1 = img_shape_1_
+        img_shape_2 = img_shape_2_
+        sum_axis_1 = sum_axis_1_
+        sum_axis_2 = sum_axis_2_
+        avg_weight = avg_weight_
+        n_xy = n_xy_
+        qx = qx_
+        qy = qy_
+        qz = qz_
+        qx_idx = qx_idx_
+        qy_idx = qy_idx_
+        qz_idx = qz_idx_
+        n_xy_pos = n_xy_pos_
+
+
+def _get_q_peak(image_idx):
 
     cumul = None
     histo = None
@@ -416,8 +464,8 @@ def _get_q_peak(image_idx,
 
         entry_locks[entry_idx].acquire()
         try:
-            with h5py.File(master_fn, 'r') as master_h5:
-                img_data = master_h5[img_data_tpl.format(entry)]
+            with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
+                img_data = entry_h5[img_data_tpl.format(entry)]
                 img = img_data[image_idx].astype(np.float64)
         except Exception as ex:
             print ex

@@ -48,6 +48,19 @@ def configuration(parent_package='', top_path=None):
                          include_dirs=filt_utils_inc,
                          language='c')
 
+    # =====================================
+    # histogramnd_lut
+    # =====================================
+    filt_utils_dir = 'filt_utils'
+    histogramnd_src = [os.path.join(filt_utils_dir, srcf)
+                       for srcf in ['histogramnd_lut.pyx']]
+    histogramnd_inc = [numpy.get_include()]
+
+    config.add_extension('histogramnd_lut',
+                         sources=histogramnd_src,
+                         include_dirs=histogramnd_inc,
+                         language='c')
+
     return config
 
 

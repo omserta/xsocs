@@ -38,11 +38,12 @@ import h5py
 import numpy as np
 import xrayutilities as xu
 
-from scipy.signal import medfilt2d
+# from scipy.signal import medfilt2d
 from scipy.optimize import leastsq
 
-from silx.math import histogramnd
-# , histogramnd_get_lut, histogramnd_from_lut
+from ..util.filt_utils import medfilt2D
+from ..util.histogramnd_lut import histogramnd_get_lut, histogramnd_from_lut
+# from silx.math import histogramnd
 
 disp_times = False
 
@@ -285,20 +286,20 @@ def img_2_qpeak(data_h5f,
         # sum_axis_2 = 1
         avg_weight = 1./(nav[0]*nav[1])
 
-#         h_lut = None
-#         histo = np.zeros([nx, ny, nz], dtype=np.int32)
-#         h_lut = []
+        # h_lut = None
+        histo = np.zeros([nx, ny, nz], dtype=np.int32)
+        h_lut = []
 
-#         for h_idx in range(n_entries):
-#             lut = histogramnd_get_lut(q_ar[h_idx, ...],
-#                                       bins_rng,
-#                                       [nx, ny, nz],
-#                                       last_bin_closed=True)
+        for h_idx in range(n_entries):
+            lut = histogramnd_get_lut(q_ar[h_idx, ...],
+                                      bins_rng,
+                                      [nx, ny, nz],
+                                      last_bin_closed=True)
 
-#             h_lut.append(lut[0])
-#             histo += lut[1]
+            h_lut.append(lut[0])
+            histo += lut[1]
 
-#         mask = histo > 0
+        mask = histo > 0
 
         measurement = master_h5[measurement_tpl.format(entries[0])]
         sample_x = measurement['adcX'][:]
@@ -316,7 +317,7 @@ def img_2_qpeak(data_h5f,
     if n_threads is None:
         n_threads = mp.cpu_count()
 
-    pool = mp.Pool(None,
+    pool = mp.Pool(n_threads,
                    initializer=_init_thread,
                    initargs=(shared_res,
                              idx_queue,
@@ -326,6 +327,9 @@ def img_2_qpeak(data_h5f,
                              q_ar,
                              bins_rng,
                              n_bins,
+                             histo,
+                             h_lut,
+                             mask,
                              img_shape_1,
                              img_shape_2,
                              sum_axis_1,
@@ -351,36 +355,53 @@ def img_2_qpeak(data_h5f,
                 self.t_read = 0.
                 self.t_dnsamp = 0.
                 self.t_medfilt = 0.
+                self.t_write = 0.
 
             def update(self, arg):
-                t_histo_, t_fit_, t_mask_, t_read_, t_dnsamp_, t_medfilt_ = arg
+                (t_read_, t_dnsamp_, t_medfilt_, t_histo_,
+                 t_mask_, t_fit_, t_write_) = arg
                 self.t_histo += t_histo_
                 self.t_fit += t_fit_
                 self.t_mask += t_mask_
                 self.t_read += t_read_
                 self.t_dnsamp += t_dnsamp_
                 self.t_medfilt += t_medfilt_
+                self.t_write += t_write_
         res_times = myTimes()
         callback = res_times.update
     else:
         callback = None
 
+    # creating the processes
     for th_idx in range(n_threads):
         arg_list = (th_idx,)
         res = pool.apply_async(_get_q_peak, args=arg_list, callback=callback)
         res_list.append(res)
 
+    # sending the image indices
     for image_idx in img_indices:
         idx_queue.put(image_idx)
 
+    # sending the None value to let the threads know that they should return
     for th_idx in range(n_threads):
         idx_queue.put(None)
 
     pool.close()
     pool.join()
 
+    for res in res_list:
+        res_val = res.get()
+        if isinstance(res_val, Exception):
+            raise res_val
+
+    t0 = time.time()
+    final_results = np.ndarray((n_xy_pos, 7), dtype=np.float64)
     results = np.frombuffer(shared_res).copy()
     results.shape = n_xy_pos, 5
+    final_results[:, 0] = sample_x
+    final_results[:, 1] = sample_y
+    final_results[:, 2:] = results
+    print('final time', time.time() - t0)
 
     tb = time.time()
 
@@ -392,8 +413,9 @@ def img_2_qpeak(data_h5f,
         print('Histo', res_times.t_histo)
         print('Mask', res_times.t_mask)
         print('Fit', res_times.t_fit)
+        print('Write', res_times.t_write)
 
-    return results
+    return final_results
 
 
 def _init_thread(shared_res_,
@@ -404,6 +426,9 @@ def _init_thread(shared_res_,
                  q_ar_,
                  bins_rng_,
                  n_bins_,
+                 histo_,
+                 h_lut_,
+                 mask_,
                  img_shape_1_,
                  img_shape_2_,
                  sum_axis_1_,
@@ -426,6 +451,9 @@ def _init_thread(shared_res_,
             q_ar,\
             bins_rng,\
             n_bins,\
+            histo,\
+            h_lut,\
+            mask,\
             img_shape_1,\
             img_shape_2,\
             sum_axis_1,\
@@ -447,6 +475,9 @@ def _init_thread(shared_res_,
         q_ar = q_ar_
         bins_rng = bins_rng_
         n_bins = n_bins_
+        histo = histo_
+        h_lut = h_lut_
+        mask = mask_
         img_shape_1 = img_shape_1_
         img_shape_2 = img_shape_2_
         sum_axis_1 = sum_axis_1_
@@ -466,121 +497,130 @@ def _get_q_peak(th_idx):
 
     print('Thread {0} started.'.format(th_idx))
 
-    cumul = None
-    histo = None
-
     t_histo = 0.
     t_fit = 0.
     t_mask = 0.
     t_read = 0.
     t_dnsamp = 0.
     t_medfilt = 0.
+    t_write = 0.
 
-    try:
-        while True:
-            image_idx = idx_queue.get()
-            if image_idx is None:
-                print('Thread {0} is done. Times={1}'
-                      ''.format(th_idx, (t_histo, t_fit,
-                                         t_mask, t_read,
-                                         t_dnsamp, t_medfilt)))
-                if disp_times:
-                    return t_histo, t_fit, t_mask, t_read, t_dnsamp, t_medfilt
-                else:
-                    return
+    while True:
+        image_idx = idx_queue.get()
+        if image_idx is None:
+            print('Thread {0} is done. Times={1}'
+                  ''.format(th_idx, (t_read, t_dnsamp,
+                                     t_medfilt, t_histo,
+                                     t_mask, t_fit, t_write)))
+            if disp_times:
+                return (t_read, t_dnsamp,
+                        t_medfilt, t_histo,
+                        t_mask, t_fit, t_write,)
+            else:
+                return None
 
-            if image_idx % 100 == 0:
-                print('#{0}/{1}'.format(image_idx, n_xy))
+        if image_idx % 100 == 0:
+            print('#{0}/{1}'.format(image_idx, n_xy))
 
-            for entry_idx, entry in enumerate(entries):
+        cumul = None
+        # histo = None
 
-                t0 = time.time()
-
-                entry_locks[entry_idx].acquire()
-                try:
-                    with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
-                        img_data = entry_h5[img_data_tpl.format(entry)]
-                        img = img_data[image_idx].astype(np.float64)
-                except Exception as ex:
-                    print ex
-                entry_locks[entry_idx].release()
-
-                t_read += time.time() - t0
-                t0 = time.time()
-
-                intensity = img.reshape(img_shape_1).\
-                    sum(axis=sum_axis_1).reshape(img_shape_2).\
-                    sum(axis=sum_axis_2) *\
-                    avg_weight
-                # intensity = xu.blockAverage2D(img, nav[0], nav[1], roi=roi)
-
-                t_dnsamp += time.time() - t0
-                t0 = time.time()
-
-                intensity = medfilt2d(intensity, 3)
-
-                t_medfilt += time.time() - t0
-                t0 = time.time()
-
-        #        cumul = histogramnd_from_lut(intensity.reshape(-1),
-        #                                     h_lut[entry_idx],
-        #                                     shape=histo.shape,
-        #                                     weighted_histo=cumul,
-        #                                     dtype=np.float64)
-
-                histo, cumul = histogramnd(q_ar[entry_idx, ...],
-                                           bins_rng,
-                                           n_bins,
-                                           weights=intensity.reshape(-1),
-                                           cumul=cumul,
-                                           histo=histo,
-                                           last_bin_closed=True)
-
-                t_histo += time.time() - t0
+        for entry_idx, entry in enumerate(entries):
 
             t0 = time.time()
 
-            mask = histo > 0
+            entry_locks[entry_idx].acquire()
+            try:
+                with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
+                    img_data = entry_h5[img_data_tpl.format(entry)]
+                    img = img_data[image_idx].astype(np.float64)
+            except Exception as ex:
+                print('Error in proc {0} while reading img {1} from entry '
+                      '{2} ({3}) : {4}.'
+                      ''.format(th_idx, image_idx, entry_idx, entry, ex))
+            entry_locks[entry_idx].release()
 
-            cumul[mask] = cumul[mask]/histo[mask]
-
-            t_mask += time.time() - t0
-
+            t_read += time.time() - t0
             t0 = time.time()
 
-            v0 = [1.0, qz.mean(), 1.0]
-            qz_peak = leastsq(e_gauss_fit,
-                              v0[:],
-                              args=(qz_idx, (cumul.sum(axis=0)).sum(axis=0)),
-                              maxfev=100000,
-                              full_output=1)[0][1]
-            v0 = [1.0, qy.mean(), 1.0]
-            qy_peak = leastsq(e_gauss_fit,
-                              v0[:],
-                              args=(qy_idx, (cumul.sum(axis=2)).sum(axis=0)),
-                              maxfev=100000,
-                              full_output=1)[0][1]
-            v0 = [1.0, qx.mean(), 1.0]
-            qx_peak = leastsq(e_gauss_fit,
-                              v0[:],
-                              args=(qx_idx, (cumul.sum(axis=2)).sum(axis=1)),
-                              maxfev=100000,
-                              full_output=1)[0][1]
-            i_peak = leastsq(e_gauss_fit,
-                             v0[:],
-                             args=(qx_idx, (cumul.sum(axis=2)).sum(axis=1)),
-                             maxfev=100000,
-                             full_output=1)[0][0]
-            t_fit += time.time() - t0
+            intensity = img.reshape(img_shape_1).\
+                sum(axis=sum_axis_1).reshape(img_shape_2).\
+                sum(axis=sum_axis_2) *\
+                avg_weight
+            # intensity = xu.blockAverage2D(img, nav[0], nav[1], roi=roi)
 
-            q = np.sqrt(qx_peak**2 + qy_peak**2 + qz_peak**2)
+            t_dnsamp += time.time() - t0
+            t0 = time.time()
 
-            results = np.frombuffer(g_shared_res)
-            results.shape = n_xy_pos, 5
-            results[image_idx] = (qx_peak,
-                                  qy_peak,
-                                  qz_peak,
-                                  q,
-                                  i_peak)
-    except Exception as ex:
-        print ex
+            # intensity = medfilt2d(intensity, 3)
+            intensity = medfilt2D(intensity, kernel=[3, 3], n_threads=None)
+
+            t_medfilt += time.time() - t0
+            t0 = time.time()
+
+            try:
+                cumul = histogramnd_from_lut(intensity.reshape(-1),
+                                             h_lut[entry_idx],
+                                             shape=n_bins,
+                                             weighted_histo=cumul,
+                                             dtype=np.float64)
+            except Exception as ex:
+                print 'EX', ex
+                raise ex
+
+#            histo, cumul = histogramnd(q_ar[entry_idx, ...],
+#                                       bins_rng,
+#                                       n_bins,
+#                                       weights=intensity.reshape(-1),
+#                                       cumul=cumul,
+#                                       histo=histo,
+#                                       last_bin_closed=True)
+
+            t_histo += time.time() - t0
+
+        t0 = time.time()
+
+        # mask = histo > 0
+
+        cumul[mask] = cumul[mask]/histo[mask]
+
+        t_mask += time.time() - t0
+
+        t0 = time.time()
+
+        v0 = [1.0, qz.mean(), 1.0]
+        qz_peak = leastsq(e_gauss_fit,
+                          v0[:],
+                          args=(qz_idx, (cumul.sum(axis=0)).sum(axis=0)),
+                          maxfev=100000,
+                          full_output=1)[0][1]
+        v0 = [1.0, qy.mean(), 1.0]
+        qy_peak = leastsq(e_gauss_fit,
+                          v0[:],
+                          args=(qy_idx, (cumul.sum(axis=2)).sum(axis=0)),
+                          maxfev=100000,
+                          full_output=1)[0][1]
+        v0 = [1.0, qx.mean(), 1.0]
+        qx_peak = leastsq(e_gauss_fit,
+                          v0[:],
+                          args=(qx_idx, (cumul.sum(axis=2)).sum(axis=1)),
+                          maxfev=100000,
+                          full_output=1)[0][1]
+        i_peak = leastsq(e_gauss_fit,
+                         v0[:],
+                         args=(qx_idx, (cumul.sum(axis=2)).sum(axis=1)),
+                         maxfev=100000,
+                         full_output=1)[0][0]
+        t_fit += time.time() - t0
+
+        q = np.sqrt(qx_peak**2 + qy_peak**2 + qz_peak**2)
+
+        t0 = time.time()
+        results = np.frombuffer(g_shared_res)
+        results.shape = n_xy_pos, 5
+        results[image_idx] = (qx_peak,
+                              qy_peak,
+                              qz_peak,
+                              q,
+                              i_peak)
+        t_write += time.time() - t0

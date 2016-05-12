@@ -26,12 +26,27 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "01/03/2016"
 
+import os
+import numpy
 from numpy.distutils.misc_util import Configuration
 
 
 def configuration(parent_package='', top_path=None):
     config = Configuration('util', parent_package, top_path)
     config.add_subpackage('test')
+
+    # =====================================
+    # filt_utils
+    # =====================================
+    filt_utils_dir = 'filt_utils'
+    filt_utils_src = [os.path.join(filt_utils_dir, srcf)
+                      for srcf in ['filt_utils.pyx']]
+    filt_utils_inc = [numpy.get_include()]
+
+    config.add_extension('filt_utils',
+                         sources=filt_utils_src,
+                         include_dirs=filt_utils_inc,
+                         language='c')
 
     return config
 

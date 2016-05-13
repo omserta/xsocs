@@ -59,11 +59,13 @@ def merge_scan_data(output_dir,
                     beam_energy,
                     chan_per_deg,
                     pixelsize=(-1., -1.),
+                    center_chan=(-1., -1.),
                     scan_ids=None,
                     master_f=None,
                     img_dir_base=None,
                     n_proc=None,
-                    version=1):
+                    version=1,
+                    compression='lzf'):
 
     """
     Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
@@ -80,7 +82,7 @@ def merge_scan_data(output_dir,
     :param spec_fname: path to the spec file.
     :type output_dir: str
 
-    :param beam_energy: beam energy.
+    :param beam_energy: beam energy in ....
     :type beam_energy: numeric
 
     :param chan_per_deg: 2 elements array containing the number of channels
@@ -91,6 +93,10 @@ def merge_scan_data(output_dir,
     :param pixelsize: 2 elements array containing the pixel size of the,
         detector, in TBD.
     :type pixelsize: *optional* array_like
+
+    :param center_chan: 2 elements array containing the coordinates of the
+        direct beam position in the detector coordinates.
+    :type center_chan: *optional* array_like
 
     :param scan_ids: array of scan numbers to add to the merged file. If
         None, all valid scans will be merged.
@@ -138,6 +144,13 @@ def merge_scan_data(output_dir,
 
     complete_scans = scans_results[0]
 
+    if len(complete_scans) == 0:
+        print('No complete scans found (scan + image file).')
+        return None
+
+    print('Complete scans (scan + image file) : {0}'
+          ''.format(', '.join(complete_scans.keys())))
+
     # a declaration to quiet down flake8 complaining about the scan_id in
     # the except clause
     scan_id = 0
@@ -153,15 +166,20 @@ def merge_scan_data(output_dir,
             msg = 'Scan ID {0} not found.'.format(scan_id)
             raise ValueError(msg)
 
+    print('Merging scan IDs : {}.'
+          ''.format(', '.join(scans.keys())))
+
     _merge_data(output_dir,
                 temp_h5,
                 scans,
                 beam_energy,
                 chan_per_deg,
                 pixelsize,
+                center_chan,
                 master_f='master.h5',
                 overwrite=True,
-                n_proc=n_proc)
+                n_proc=n_proc,
+                compression=compression)
 
     return scans.keys()
 
@@ -284,12 +302,16 @@ def _find_scan_img_files(spec_h5_filename,
     :rtype: *list* (*dict*, *dict*, *list*, *list*)
     """
 
+    if not os.path.exists(img_dir):
+        raise ValueError('Image folder not found : {0}'
+                         ''.format(img_dir))
+
     imgfile_info = _spec_get_img_filenames(spec_h5_filename)
     with_files = imgfile_info[0]
     complete_scans = {}
     incomplete_scans = {}
 
-    if version==0:
+    if version == 0:
         nextnr_ofst = -1
         nextnr_pattern = '{0:0>4}'
     else:
@@ -301,7 +323,8 @@ def _find_scan_img_files(spec_h5_filename,
 
     for scan_id, infos in with_files.items():
         parsed_fname = (infos['prefix'] +
-                        nextnr_pattern.format(int(infos['nextNr']) + nextnr_ofst) +
+                        nextnr_pattern.format(int(infos['nextNr']) +
+                                              nextnr_ofst) +
                         infos['suffix'])
         img_file = None
 
@@ -336,9 +359,11 @@ def _merge_data(output_dir,
                 beam_energy,
                 chan_per_deg,
                 pixelsize=[-1., -1.],
+                center_chan=[-1, -1],
                 master_f=None,
                 overwrite=False,
-                n_proc=None):
+                n_proc=None,
+                compression='lzf'):
 
     """
     Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
@@ -389,7 +414,8 @@ def _merge_data(output_dir,
         for scan_id in sorted(scans.keys()):
             img_f = scans[scan_id]
             args = (scan_id, spec_h5_fname, output_dir, img_f,
-                    beam_energy, chan_per_deg, pixelsize,)
+                    beam_energy, chan_per_deg, pixelsize,
+                    center_chan, compression)
             results[scan_id] = pool.apply_async(_add_edf_data,
                                                 args,
                                                 callback=partial(callback,
@@ -422,7 +448,9 @@ def _add_edf_data(scan_id,
                   img_f,
                   beam_energy,
                   chan_per_deg,
-                  pixelsize):
+                  pixelsize,
+                  center_chan,
+                  compression):
 
     """
     Creates an entry_*.h5 file with scan data from the provided
@@ -440,6 +468,7 @@ def _add_edf_data(scan_id,
         pixelsize = [-1., -1.]
 
     try:
+        print('Merging scan ID {0}'.format(scan_id))
 
         if g_term_evt.is_set():
             return (entry, entry_fn, False)
@@ -467,12 +496,19 @@ def _add_edf_data(scan_id,
                                        data=float(pixelsize[0]))
             img_det_grp.create_dataset('pixelsize_dim1',
                                        data=float(pixelsize[1]))
-            img_det_grp.create_dataset('beam_energy',
-                                       data=float(beam_energy))
-            img_det_grp.create_dataset('chan_per_deg_dim0',
-                                       data=float(chan_per_deg[0]))
-            img_det_grp.create_dataset('chan_per_deg_dim1',
-                                       data=float(chan_per_deg[1]))
+            if beam_energy is not None:
+                img_det_grp.create_dataset('beam_energy',
+                                           data=float(beam_energy))
+            if chan_per_deg is not None:
+                img_det_grp.create_dataset('chan_per_deg_dim0',
+                                           data=float(chan_per_deg[0]))
+                img_det_grp.create_dataset('chan_per_deg_dim1',
+                                           data=float(chan_per_deg[1]))
+            if center_chan is not None:
+                img_det_grp.create_dataset('center_chan_dim0',
+                                           data=float(center_chan[0]))
+                img_det_grp.create_dataset('center_chan_dim1',
+                                           data=float(center_chan[1]))
 
             edf_file = EdfFile.EdfFile(img_f, access='r', fastedf=True)
 
@@ -488,7 +524,7 @@ def _add_edf_data(scan_id,
                                                      shape=dset_shape,
                                                      dtype=dtype,
                                                      chunks=chunks,
-                                                     compression='lzf',
+                                                     compression=compression,
                                                      shuffle=True)
 
             for i in range(n_images):

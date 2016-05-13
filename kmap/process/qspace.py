@@ -61,9 +61,9 @@ e_gauss_fit = lambda p, x, y: (gauss_fit(p, x) - y)
 
 def img_2_qpeak(data_h5f,
                 output_dir,
-                center_chan,
                 n_bins,
                 beam_energy=None,
+                center_chan=None,
                 chan_per_deg=None,
                 nav=(4, 4),
                 img_indices=None,
@@ -86,15 +86,17 @@ def img_2_qpeak(data_h5f,
         temporary files) will be written (unused at the moment).
     :type output_dir: `str`
 
-    :param center_chan: direct beam position in the detector coordinates
-    :type center_chan: `array_like`
-
     :param n_bins: number of "bins" for the qspace cube (TODO : rephrase)
     :type n_bins: `array_like`
 
-    :param beam_energy: energy of the beam used during the data acquisition.
-        If set, this will overwrite the one found (if any) in the HDF5 file.
+    :param beam_energy: energy (in ...) of the beam used during the data
+        acquisition. If set, this will overwrite the one found (if any) in
+        the HDF5 file.
     :type beam_energy: *optional* numeric
+
+    :param center_chan: direct beam position in the detector coordinates
+        If set, this will overwrite the one found (if any) in the HDF5 file.
+    :type center_chan: *optional* `array_like`
 
     :param chan_per_deg: number of detector chanels per degre. If set,
         this will overwrite the values found (if any) in the HDF5 file.
@@ -118,10 +120,9 @@ def img_2_qpeak(data_h5f,
         ||q||, i_peak)
     :rtype: *list*
     """
+    # TODO : put beam_energy/center_chan at top level or check
+    # that all values are identical
     ta = time.time()
-
-    if chan_per_deg is None:
-        chan_per_deg = [None, None]
 
     base_dir = os.path.dirname(data_h5f)
 
@@ -154,19 +155,57 @@ def img_2_qpeak(data_h5f,
 
         detector = master_h5[detector_tpl.format(entries[0])]
 
-        beam_energy = detector.get('beam_energy',
-                                   np.array(beam_energy))[()]
-        chan_per_deg_dim0 = detector.get('chan_per_deg_dim0',
-                                         np.array(chan_per_deg[0]))[()]
-        chan_per_deg_dim1 = detector.get('chan_per_deg_dim1',
-                                         np.array(chan_per_deg[1]))[()]
-
         if beam_energy is None:
-            raise ValueError('The beam_energy value must be set.')
-        if chan_per_deg_dim0 is None:
-            raise ValueError('The chan_per_deg_dim0 value must be set.')
-        if chan_per_deg_dim1 is None:
-            raise ValueError('The chan_per_deg_dim1 value must be set.')
+            try:
+                beam_energy = detector.get('beam_energy')[()]
+            except:
+                beam_energy = None
+
+            if beam_energy is None:
+                raise ValueError('The beam_energy value found in the '
+                                 'file is None (or missing).')
+
+        if chan_per_deg is None:
+            try:
+                chan_per_deg_dim0 = detector.get('chan_per_deg_dim0')[()]
+            except:
+                chan_per_deg_dim0 = None
+
+            try:
+                chan_per_deg_dim1 = detector.get('chan_per_deg_dim1')[()]
+            except:
+                chan_per_deg_dim1 = None
+
+            if chan_per_deg_dim0 is None:
+                raise ValueError('The chan_per_deg_dim0 value found in the '
+                                 'file is None (or missing).')
+            if chan_per_deg_dim1 is None:
+                raise ValueError('The chan_per_deg_dim1 value found in the '
+                                 'file is None (or missing).')
+        else:
+            chan_per_deg_dim0 = chan_per_deg[0]
+            chan_per_deg_dim1 = chan_per_deg[1]
+
+        if center_chan is None:
+            try:
+                center_chan_dim0 = detector.get('center_chan_dim0')[()]
+            except:
+                center_chan_dim0 = None
+
+            try:
+                center_chan_dim1 = detector.get('center_chan_dim1')[()]
+            except:
+                center_chan_dim1 = None
+
+            if center_chan_dim0 is None:
+                raise ValueError('The center_chan_dim0 value found in the '
+                                 'file is None (or missing).')
+            if center_chan_dim1 is None:
+                raise ValueError('The center_chan_dim1 value found in the '
+                                 'file is None (or missing).')
+        else:
+            center_chan_dim0 = center_chan[0]
+            center_chan_dim1 = center_chan[1]
 
         # TODO value testing
         if img_indices is None:
@@ -177,6 +216,13 @@ def img_2_qpeak(data_h5f,
         qconv = xu.experiment.QConversion(['y-'],
                                           ['z+', 'y-'],
                                           [1, 0, 0])
+
+        print('Parameters :')
+        print('\t- beam energy  : {0}'.format(beam_energy))
+        print('\t- center chan  : [{0}, {1}]'.format(center_chan_dim0,
+                                                     center_chan_dim1))
+        print('\t- chan per deg : [{0}, {1}]'.format(chan_per_deg_dim0,
+                                                     chan_per_deg_dim1))
 
         # convention for coordinate system:
         # - x downstream
@@ -190,8 +236,8 @@ def img_2_qpeak(data_h5f,
 
         hxrd.Ang2Q.init_area('z-',
                              'y+',
-                             cch1=center_chan[0],
-                             cch2=center_chan[1],
+                             cch1=center_chan_dim0,
+                             cch2=center_chan_dim1,
                              Nch1=img_x,
                              Nch2=img_y,
                              chpdeg1=chan_per_deg_dim0,
@@ -210,7 +256,7 @@ def img_2_qpeak(data_h5f,
 
         for entry_idx, entry in enumerate(entries):
             # TODO : handle the case when all the data is contained
-            # in a single file
+            # in a single file?
             entry_file = master_h5[entry].file.filename
             if not os.path.isabs(entry_file):
                 entry_file = os.path.abspath(os.path.join(base_dir,

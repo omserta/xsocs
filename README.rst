@@ -9,7 +9,8 @@ Installation
 
 The latest development version can be obtained from the git repository::
 
-    git clone http://gitlab.esrf.fr/kmap/kmap.git
+    git clone git@gitlab.esrf.fr:kmap/kmap.git
+    .. http://gitlab.esrf.fr/kmap/kmap.git
     cd kmap
     pip install . [--user]
 
@@ -22,24 +23,26 @@ Dependencies
 * `silx <https://pypi.python.org/pypi/silx>`_
 .. * A Qt binding: `PyQt5, PyQt4 <https://riverbankcomputing.com/software/pyqt/intro>`_ or `PySide <https://pypi.python.org/pypi/PySide/>`_
 
-Supported platforms: Linux, Windows, Mac OS X.
+Supported platforms: Linux
+.. , Windows, Mac OS X.
 
 Documentation
 -------------
 
-To build the documentation from the source (requires `Sphinx <http://www.sphinx-doc.org>`_), run::
+..
+    To build the documentation from the source (requires `Sphinx <http://www.sphinx-doc.org>`_), run::
 
     python setup.py build build_doc
-
+..
 Testing
 -------
+..
+    |Travis Status| |Appveyor Status|
 
-|Travis Status| |Appveyor Status|
+    To run the tests, from the source directory, run::
 
-To run the tests, from the source directory, run::
-
-    python run_tests.py
-
+        python run_tests.py
+..
 License
 -------
 

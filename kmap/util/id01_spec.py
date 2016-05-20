@@ -32,6 +32,8 @@ import re
 import glob
 import os.path
 
+import numpy as np
+
 from multiprocessing import Pool, Event, Lock, cpu_count
 from functools import partial
 
@@ -545,19 +547,19 @@ def _add_edf_data(scan_id,
 
             # setting the nexus classes
             grp = entry_grp.require_group('instrument')
-            grp.attrs['NX_class'] = 'NXinstrument'
+            grp.attrs['NX_class'] = np.string_('NXinstrument')
 
             grp = entry_grp.require_group('instrument/image_detector')
-            grp.attrs['NX_class'] = 'NXdetector'
+            grp.attrs['NX_class'] = np.string_('NXdetector')
 
             grp = entry_grp.require_group('instrument/positioners')
-            grp.attrs['NX_class'] = 'NXcollection'
+            grp.attrs['NX_class'] = np.string_('NXcollection')
 
             grp = entry_grp.require_group('measurement')
-            grp.attrs['NX_class'] = 'NXcollection'
+            grp.attrs['NX_class'] = np.string_('NXcollection')
 
             grp = entry_grp.require_group('measurement/image_data')
-            grp.attrs['NX_class'] = 'NXcollection'
+            grp.attrs['NX_class'] = np.string_('NXcollection')
 
     except Exception as ex:
         print(ex)

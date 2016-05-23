@@ -399,17 +399,19 @@ def img_2_qpeak(data_h5f,
                 self.t_fit = 0.
                 self.t_mask = 0.
                 self.t_read = 0.
+                self.t_lock = 0.
                 self.t_dnsamp = 0.
                 self.t_medfilt = 0.
                 self.t_write = 0.
 
             def update(self, arg):
-                (t_read_, t_dnsamp_, t_medfilt_, t_histo_,
+                (t_read_, t_lock_, t_dnsamp_, t_medfilt_, t_histo_,
                  t_mask_, t_fit_, t_write_) = arg
                 self.t_histo += t_histo_
                 self.t_fit += t_fit_
                 self.t_mask += t_mask_
                 self.t_read += t_read_
+                self.t_lock += t_lock_
                 self.t_dnsamp += t_dnsamp_
                 self.t_medfilt += t_medfilt_
                 self.t_write += t_write_
@@ -452,14 +454,14 @@ def img_2_qpeak(data_h5f,
     tb = time.time()
 
     if(disp_times):
-        print('TOTAL', tb - ta)
-        print('Read', res_times.t_read)
-        print('Dn Sample', res_times.t_dnsamp)
-        print('Medfilt', res_times.t_medfilt)
-        print('Histo', res_times.t_histo)
-        print('Mask', res_times.t_mask)
-        print('Fit', res_times.t_fit)
-        print('Write', res_times.t_write)
+        print('TOTAL {0}'.format(tb - ta))
+        print('Read {0} ({1})'.format(res_times.t_read, res_times.t_lock))
+        print('Dn Sample {0}'.format(res_times.t_dnsamp))
+        print('Medfilt {0}'.format(res_times.t_medfilt))
+        print('Histo {0}'.format(res_times.t_histo))
+        print('Mask {0}'.format(res_times.t_mask))
+        print('Fit {0}'.format(res_times.t_fit))
+        print('Write {0}'.format(res_times.t_write))
 
     return final_results
 
@@ -547,6 +549,7 @@ def _get_q_peak(th_idx):
     t_fit = 0.
     t_mask = 0.
     t_read = 0.
+    t_lock = 0.
     t_dnsamp = 0.
     t_medfilt = 0.
     t_write = 0.
@@ -555,11 +558,11 @@ def _get_q_peak(th_idx):
         image_idx = idx_queue.get()
         if image_idx is None:
             print('Thread {0} is done. Times={1}'
-                  ''.format(th_idx, (t_read, t_dnsamp,
+                  ''.format(th_idx, (t_read, t_lock, t_dnsamp,
                                      t_medfilt, t_histo,
                                      t_mask, t_fit, t_write)))
             if disp_times:
-                return (t_read, t_dnsamp,
+                return (t_read, t_lock, t_dnsamp,
                         t_medfilt, t_histo,
                         t_mask, t_fit, t_write,)
             else:
@@ -576,6 +579,7 @@ def _get_q_peak(th_idx):
             t0 = time.time()
 
             entry_locks[entry_idx].acquire()
+            t_lock += time.time() - t0
             try:
                 with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
                     img_data = entry_h5[img_data_tpl.format(entry)]

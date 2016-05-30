@@ -25,9 +25,8 @@
 # ###########################################################################*/
 
 __authors__ = ["Jérôme Kieffer", "Thomas Vincent", "D. Naudet"]
-__date__ = "20/04/2016"
+__date__ = "30/05/2016"
 __license__ = "MIT"
-
 
 import sys
 import os
@@ -36,12 +35,12 @@ import platform
 from numpy.distutils.misc_util import Configuration
 
 try:
-    from setuptools import setup
+    from setuptools import setup, Command
     from setuptools.command.build_py import build_py as _build_py
     from setuptools.command.build_ext import build_ext
     from setuptools.command.sdist import sdist
 except ImportError:
-    from numpy.distutils.core import setup
+    from numpy.distutils.core import setup, Command
     from distutils.command.build_py import build_py as _build_py
     from distutils.command.build_ext import build_ext
     from distutils.command.sdist import sdist
@@ -55,6 +54,7 @@ DRY_RUN = len(sys.argv) == 1 or (len(sys.argv) >= 2 and (
     '--help' in sys.argv[1:] or
     sys.argv[1] in ('--help-commands', 'egg_info', '--version',
                     'clean', '--name')))
+
 
 def get_version():
     import version
@@ -109,6 +109,26 @@ class build_py(_build_py):
 cmdclass['build_py'] = build_py
 
 
+########
+# Test #
+########
+
+class PyTest(Command):
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        import subprocess
+        errno = subprocess.call([sys.executable, 'run_tests.py', '-i'])
+        if errno != 0:
+            raise SystemExit(errno)
+cmdclass['test'] = PyTest
+
 # ################### #
 # build_doc commandes #
 # ################### #
@@ -131,7 +151,19 @@ else:
 
             build = self.get_finalized_command('build')
             sys.path.insert(0, os.path.abspath(build.build_lib))
-            
+
+#             # Copy .ui files to the path:
+#             dst = os.path.join(
+#                 os.path.abspath(build.build_lib), "silx", "gui")
+#             if not os.path.isdir(dst):
+#                 os.makedirs(dst)
+#             for i in os.listdir("gui"):
+#                 if i.endswith(".ui"):
+#                     src = os.path.join("gui", i)
+#                     idst = os.path.join(dst, i)
+#                     if not os.path.exists(idst):
+#                         shutil.copy(src, idst)
+
             # Build the Users Guide in HTML and TeX format
             for builder in ('html', 'latex'):
                 self.builder = builder
@@ -140,28 +172,6 @@ else:
                 BuildDoc.run(self)
             sys.path.pop(0)
     cmdclass['build_doc'] = build_doc
-
-
-# ############################# #
-# numpy.distutils Configuration #
-# ############################# #
-
-def configuration(parent_package='', top_path=None):
-    """Recursive construction of package info to be used in setup().
-
-    See http://docs.scipy.org/doc/numpy/reference/distutils.html#numpy.distutils.misc_util.Configuration
-    """  # noqa
-    config = Configuration(None, parent_package, top_path)
-    config.set_options(
-        ignore_setup_xxx_py=True,
-        assume_default_configuration=True,
-        delegate_options_to_subpackages=True,
-        quiet=True)
-    config.add_subpackage(PROJECT)
-    return config
-
-
-config = configuration()
 
 
 # ############## #
@@ -202,44 +212,6 @@ def check_openmp():
 
 
 USE_OPENMP = check_openmp()
-
-
-# ############## #
-# Compiler flags #
-# ############## #
-
-class BuildExtFlags(build_ext):
-    """Handle compiler and linker flags.
-
-    If OpenMP is disabled, it removes OpenMP compile flags.
-    If building with MSVC, compiler flags are converted from gcc flags.
-    """
-
-    COMPILE_ARGS_CONVERTER = {'-fopenmp': '/openmp'}
-
-    LINK_ARGS_CONVERTER = {'-fopenmp': ' '}
-
-    def build_extensions(self):
-        # Remove OpenMP flags if OpenMP is disabled
-        if not USE_OPENMP:
-            for ext in self.extensions:
-                ext.extra_compile_args = [
-                    f for f in ext.extra_compile_args if f != '-fopenmp']
-                ext.extra_link_args = [
-                    f for f in ext.extra_link_args if f != '-fopenmp']
-
-        # Convert flags from gcc to MSVC if required
-        if self.compiler.compiler_type == 'msvc':
-            for ext in self.extensions:
-                ext.extra_compile_args = [self.COMPILE_ARGS_CONVERTER.get(f, f)
-                                          for f in ext.extra_compile_args]
-                ext.extra_link_args = [self.LINK_ARGS_CONVERTER.get(f, f)
-                                       for f in ext.extra_link_args]
-
-        build_ext.build_extensions(self)
-
-
-cmdclass['build_ext'] = BuildExtFlags
 
 
 # ############## #
@@ -289,6 +261,66 @@ def check_cython():
 
 
 USE_CYTHON = check_cython()
+
+
+# ############################# #
+# numpy.distutils Configuration #
+# ############################# #
+
+def configuration(parent_package='', top_path=None):
+    """Recursive construction of package info to be used in setup().
+
+    See http://docs.scipy.org/doc/numpy/reference/distutils.html#numpy.distutils.misc_util.Configuration
+    """  # noqa
+    config = Configuration(None, parent_package, top_path)
+    config.set_options(
+        ignore_setup_xxx_py=True,
+        assume_default_configuration=True,
+        delegate_options_to_subpackages=True,
+        quiet=True)
+    config.add_subpackage(PROJECT)
+    return config
+
+
+config = configuration()
+
+
+# ############## #
+# Compiler flags #
+# ############## #
+
+class BuildExtFlags(build_ext):
+    """Handle compiler and linker flags.
+
+    If OpenMP is disabled, it removes OpenMP compile flags.
+    If building with MSVC, compiler flags are converted from gcc flags.
+    """
+
+    COMPILE_ARGS_CONVERTER = {'-fopenmp': '/openmp'}
+
+    LINK_ARGS_CONVERTER = {'-fopenmp': ' '}
+
+    def build_extensions(self):
+        # Remove OpenMP flags if OpenMP is disabled
+        if not USE_OPENMP:
+            for ext in self.extensions:
+                ext.extra_compile_args = [
+                    f for f in ext.extra_compile_args if f != '-fopenmp']
+                ext.extra_link_args = [
+                    f for f in ext.extra_link_args if f != '-fopenmp']
+
+        # Convert flags from gcc to MSVC if required
+        if self.compiler.compiler_type == 'msvc':
+            for ext in self.extensions:
+                ext.extra_compile_args = [self.COMPILE_ARGS_CONVERTER.get(f, f)
+                                          for f in ext.extra_compile_args]
+                ext.extra_link_args = [self.LINK_ARGS_CONVERTER.get(f, f)
+                                       for f in ext.extra_link_args]
+
+        build_ext.build_extensions(self)
+
+
+cmdclass['build_ext'] = BuildExtFlags
 
 
 def fake_cythonize(extensions):
@@ -387,21 +419,26 @@ cmdclass['debian_src'] = sdist_debian
 
 setup_kwargs = config.todict()
 
-install_requires = ["numpy", "h5py"]
+install_requires = ["numpy"]
 setup_requires = ["numpy"]
 
 setup_kwargs.update(
-    name=PROJECT,
-    version=get_version(),
-    url="https://github.com/kmap/kmap",
-    author="data analysis unit",
-    author_email="kmap@esrf.fr",
-    classifiers=classifiers,
-    description="Software library for X-Ray data analysis",
-    long_description=get_readme(),
-    install_requires=install_requires,
-    setup_requires=setup_requires,
-    cmdclass=cmdclass,
-    )
+                    name=PROJECT,
+                    version=get_version(),
+                    url="http://gitlab.esrf.fr/kmap/kmap",
+                    author="data analysis unit",
+                    author_email="silx@esrf.fr",
+                    classifiers=classifiers,
+                    description="Software library for X-Ray data analysis",
+                    long_description=get_readme(),
+                    install_requires=install_requires,
+                    setup_requires=setup_requires,
+                    cmdclass=cmdclass,
+                    package_data={'kmap.resources': [
+                        # Add here all resources files
+                        'gui/icons/*.png',
+                        ]},
+                    zip_safe=False,
+                    )
 
 setup(**setup_kwargs)

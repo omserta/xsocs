@@ -436,7 +436,8 @@ def _merge_data(output_dir,
             if not finished:
                 raise Exception('TODO : there was an error while merging'
                                 'scan ID {0}'.format(scan_id))
-            m_h5f[entry] = h5py.ExternalLink(entry_fn, entry)
+            relative_entry_fn = os.path.relpath(entry_fn, output_dir)
+            m_h5f[entry] = h5py.ExternalLink(relative_entry_fn, entry)
 
 
 # #######################################################################
@@ -565,6 +566,7 @@ def _add_edf_data(scan_id,
         print(ex)
         return ex
 
+    print('Entry {0} merged.'.format(entry))
     return (entry, entry_fn, True)
 
 

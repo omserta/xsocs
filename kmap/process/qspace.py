@@ -557,7 +557,7 @@ def _create_result_file(h5_fn,
                         chunks=None):
     with h5py.File(h5_fn, 'w') as h5f:
         h5f.create_dataset('qspace', shape, dtype=dtype,
-                           shuffle=True, compression='lzf',
+                           shuffle=True, compression=compression,
                            chunks=chunks)
         h5f.create_dataset('bins_edges/x', data=bins_x)
         h5f.create_dataset('bins_edges/y', data=bins_y)

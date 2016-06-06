@@ -335,18 +335,21 @@ def img_2_qspace(data_h5f,
         sample_y = measurement['adcY'][:]
 
     output_shape = (n_images,) + histo.shape
+    chunks = (1, output_shape[1]/4, output_shape[2]/4, output_shape[3]/4,)
     _create_result_file(output_fn,
                         output_shape,
                         np.float64,
                         qx_idx,
                         qy_idx,
-                        qz_idx)
+                        qz_idx,
+                        compression='lzf',
+                        chunks=chunks)
 
     manager = mp.Manager()
 
     # array to store the results
     # qx_peak, qy_peak, qz_peak, ||q||, I_peak
-    shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_xy_pos*5)
+    shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_xy_pos * 5)
 
     entry_locks = [manager.Lock() for n in range(n_entries)]
     write_lock = manager.Lock()
@@ -438,14 +441,14 @@ def img_2_qspace(data_h5f,
         if isinstance(res_val, Exception):
             raise res_val
 
-    t0 = time.time()
-    final_results = np.ndarray((n_xy_pos, 7), dtype=np.float64)
-    results = np.frombuffer(shared_res).copy()
-    results.shape = n_xy_pos, 5
-    final_results[:, 0] = sample_x
-    final_results[:, 1] = sample_y
-    final_results[:, 2:] = results
-    print('final time', time.time() - t0)
+    #t0 = time.time()
+    #final_results = np.ndarray((n_xy_pos, 7), dtype=np.float64)
+    #results = np.frombuffer(shared_res).copy()
+    #results.shape = n_xy_pos, 5
+    #final_results[:, 0] = sample_x
+    #final_results[:, 1] = sample_y
+    #final_results[:, 2:] = results
+    #print('final time', time.time() - t0)
 
     tb = time.time()
 
@@ -549,9 +552,13 @@ def _create_result_file(h5_fn,
                         dtype,
                         bins_x,
                         bins_y,
-                        bins_z):
+                        bins_z,
+                        compression='lzf',
+                        chunks=None):
     with h5py.File(h5_fn, 'w') as h5f:
-        h5f.create_dataset('qspace', shape, dtype=dtype)
+        h5f.create_dataset('qspace', shape, dtype=dtype,
+                           shuffle=True, compression='lzf',
+                           chunks=chunks)
         h5f.create_dataset('bins_edges/x', data=bins_x)
         h5f.create_dataset('bins_edges/y', data=bins_y)
         h5f.create_dataset('bins_edges/z', data=bins_z)

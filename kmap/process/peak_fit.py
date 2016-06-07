@@ -38,6 +38,7 @@ import h5py
 import numpy as np
 
 from scipy.optimize import leastsq
+from silx.math import curve_fit
 
 disp_times = False
 
@@ -46,15 +47,16 @@ class FitTypes(object):
     GAUSSIAN, CENTROID = ALLOWED
 
 
-# 1d Gaussian func
-_gauss_fn = lambda p, x: (p[0] * (1 / np.sqrt(2 * np.pi * (p[2]**2))) *
-                          np.exp(-(x - p[1])**2/(2 * p[2]**2)))
-# 1d Gaussian fit
-_gauss_fit_err = lambda p, x, y: (_gauss_fn(p, x) - y)
+_const_inv_2_pi_ = np.sqrt(2 * np.pi)
 
+# 1d Gaussian func
+_gauss_fn = lambda p, x: (p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
+                          np.exp(-0.5 * ((x - p[1])/p[2])**2))
+# 1d Gaussian fit
+_gauss_fit_err = lambda p, x, y: (p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
+                                    np.exp(-0.5 * ((x - p[1])/p[2])**2) - y)
 
 def _qspace_gauss_fit(x, y, v0):
-    # TODO : throw exception if fit failed
     result = leastsq(_gauss_fit_err,
                      v0,
                      args=(x, y,),
@@ -63,16 +65,20 @@ def _qspace_gauss_fit(x, y, v0):
     if result[4] not in [1, 2, 3, 4]:
         raise ValueError('Failed to fit : {0}.'.format(result[3]))
 
-    return result[0]
+    result = result[0]
+    result[0] = _gauss_fn(result, result[1])
+    return result
 
+def _qspace_centroid(x, y, v0):
+    # TODO : throw exception if fit failed
+    com = x.dot(y) / y.sum()
+    idx = np.abs(x - com).argmin()
+    return [y[idx], com, np.nan]
 
 def get_peaks(qspace_f,
               fit_type=FitTypes.GAUSSIAN,
               indices=None,
               n_proc=None):
-        #:returns: a list of tuples (x_pos, y_pos, qx_peak, qy_peak, qz_peak,
-        #||q||, i_peak)
-    #:rtype: *list*
 
     t_total = time.time()
 
@@ -81,6 +87,8 @@ def get_peaks(qspace_f,
         
     if fit_type == FitTypes.GAUSSIAN:
         fit_fn = _qspace_gauss_fit
+    if fit_type == FitTypes.CENTROID:
+        fit_fn = _qspace_centroid
 
     with h5py.File(qspace_f, 'r') as qspace_h5:
 
@@ -95,7 +103,7 @@ def get_peaks(qspace_f,
             indices = range(n_points)
 
         n_indices = len(indices)
-        
+
         shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
         # TODO : find something better
         shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
@@ -126,12 +134,14 @@ def get_peaks(qspace_f,
                 self.t_fit = 0.
                 self.t_read = 0.
                 self.t_lock = 0.
+                self.t_write = 0.
 
             def update(self, arg):
-                (t_read_, t_lock_, t_fit_) = arg
+                (t_read_, t_lock_, t_fit_, t_write_) = arg
                 self.t_fit += t_fit_
                 self.t_read += t_read_
                 self.t_lock += t_lock_
+                self.t_write += t_write_
         res_times = myTimes()
         callback = res_times.update
     else:
@@ -172,6 +182,7 @@ def get_peaks(qspace_f,
         print('Total : {0}.'.format(t_total))
         print('Read {0} (lock : {1})'.format(res_times.t_read, res_times.t_lock))
         print('Fit {0}'.format(res_times.t_fit))
+        print('Write {0}'.format(res_times.t_write))
     return fit_x, fit_y, fit_z, success
         
 def _init_thread(shared_res_,
@@ -200,6 +211,8 @@ def _init_thread(shared_res_,
 
 def _fit_process(th_idx):
 
+
+    print('Thread {0} started.'.format(th_idx))
     try:
         t_read = 0.
         t_lock = 0.
@@ -225,7 +238,7 @@ def _fit_process(th_idx):
         x_0 = [1.0, q_x.mean(), 1.0]
         y_0 = [1.0, q_y.mean(), 1.0]
         z_0 = [1.0, q_z.mean(), 1.0]
-        
+
         while True:
             # TODO : timeout
             i_cube = idx_queue.get()
@@ -276,6 +289,8 @@ def _fit_process(th_idx):
 
             t_fit += time.time() - t0
 
+            t0 = time.time()
+
             success[i_cube] = True
 
             if success_x:
@@ -295,53 +310,12 @@ def _fit_process(th_idx):
             else:
                 results[i_cube, 6:9] = np.nan
                 success[i_cube] = False
+
+            t_write = time.time() - t0
+
     except Exception as ex:
         print 'EX', ex
-        
-    times = (t_read, t_lock, t_fit)
+
+    times = (t_read, t_lock, t_fit, t_write)
     print('Thread {0} done ({1}).'.format(th_idx, times))
     return times
-#t_total = time.time() - t_total
-#if disp_times:
-    #print('Times : total={t_total}, read={t_read}, fit={t_fit}.'
-          #''.format(t_total=t_total, t_read=t_read, t_fit=t_fit))
-
-#return res_x, res_y, res_z, success
-
-    #t0 = time.time()
-
-    #v0 = [1.0, qz.mean(), 1.0]
-    #qz_peak = leastsq(e_gauss_fit,
-                      #v0[:],
-                      #args=(qz_idx, (cumul.sum(axis=0)).sum(axis=0)),
-                      #maxfev=100000,
-                      #full_output=1)[0][1]
-    #v0 = [1.0, qy.mean(), 1.0]
-    #qy_peak = leastsq(e_gauss_fit,
-                      #v0[:],
-                      #args=(qy_idx, (cumul.sum(axis=2)).sum(axis=0)),
-                      #maxfev=100000,
-                      #full_output=1)[0][1]
-    #v0 = [1.0, qx.mean(), 1.0]
-    #qx_peak = leastsq(e_gauss_fit,
-                      #v0[:],
-                      #args=(qx_idx, (cumul.sum(axis=2)).sum(axis=1)),
-                      #maxfev=100000,
-                      #full_output=1)[0][1]
-    #i_peak = leastsq(e_gauss_fit,
-                     #v0[:],
-                     #args=(qx_idx, (cumul.sum(axis=2)).sum(axis=1)),
-                     #maxfev=100000,
-                     #full_output=1)[0][0]
-    #t_fit += time.time() - t0
-
-    #q = np.sqrt(qx_peak**2 + qy_peak**2 + qz_peak**2)
-
-    #t0 = time.time()
-    #results = np.frombuffer(g_shared_res)
-    #results.shape = n_xy_pos, 5
-    #results[image_idx] = (qx_peak,
-                          #qy_peak,
-                          #qz_peak,
-                          #q,
-                          #i_peak)

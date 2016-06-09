@@ -441,15 +441,6 @@ def img_2_qspace(data_h5f,
         if isinstance(res_val, Exception):
             raise res_val
 
-    #t0 = time.time()
-    #final_results = np.ndarray((n_xy_pos, 7), dtype=np.float64)
-    #results = np.frombuffer(shared_res).copy()
-    #results.shape = n_xy_pos, 5
-    #final_results[:, 0] = sample_x
-    #final_results[:, 1] = sample_y
-    #final_results[:, 2:] = results
-    #print('final time', time.time() - t0)
-
     tb = time.time()
 
     if(disp_times):
@@ -578,7 +569,7 @@ def _to_qspace(th_idx):
     t_write = 0.
     t_w_lock = 0.
     
-    #img = np.ascontiguousarray(np.zeros((516, 516)), dtype=np.float64)
+    # img = np.ascontiguousarray(np.zeros((516, 516)), dtype=np.float64)
 
     while True:
         image_idx = idx_queue.get()
@@ -609,9 +600,9 @@ def _to_qspace(th_idx):
             try:
                 with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
                     img_data = entry_h5[img_data_tpl.format(entry)]
-                    #img_data.read_direct(img,
-                                         #source_sel=np.s_[image_idx],
-                                         #dest_sel=None)
+                    # img_data.read_direct(img,
+                                         # source_sel=np.s_[image_idx],
+                                         # dest_sel=None)
                     img = img_data[image_idx].astype(np.float64)
             except Exception as ex:
                 print('Error in proc {0} while reading img {1} from entry '
@@ -647,19 +638,9 @@ def _to_qspace(th_idx):
                 print 'EX', ex
                 raise ex
 
-#            histo, cumul = histogramnd(q_ar[entry_idx, ...],
-#                                       bins_rng,
-#                                       n_bins,
-#                                       weights=intensity.reshape(-1),
-#                                       cumul=cumul,
-#                                       histo=histo,
-#                                       last_bin_closed=True)
-
             t_histo += time.time() - t0
 
         t0 = time.time()
-
-        # mask = histo > 0
 
         cumul[mask] = cumul[mask]/histo[mask]
 

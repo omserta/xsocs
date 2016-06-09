@@ -38,13 +38,13 @@ import h5py
 import numpy as np
 
 from scipy.optimize import leastsq
-from silx.math import curve_fit
+#from silx.math import curve_fit
 
 disp_times = False
 
 class FitTypes(object):
     ALLOWED = range(2)
-    GAUSSIAN, CENTROID = ALLOWED
+    LEASTSQ, CENTROID = ALLOWED
 
 
 _const_inv_2_pi_ = np.sqrt(2 * np.pi)
@@ -65,9 +65,9 @@ def _qspace_gauss_fit(x, y, v0):
     if result[4] not in [1, 2, 3, 4]:
         raise ValueError('Failed to fit : {0}.'.format(result[3]))
 
-    result = result[0]
-    result[0] = _gauss_fn(result, result[1])
-    return result
+    #result = result[0]
+    #result[0] = _gauss_fn(result, result[1])
+    return result[0]
 
 def _qspace_centroid(x, y, v0):
     # TODO : throw exception if fit failed
@@ -76,7 +76,7 @@ def _qspace_centroid(x, y, v0):
     return [y[idx], com, np.nan]
 
 def get_peaks(qspace_f,
-              fit_type=FitTypes.GAUSSIAN,
+              fit_type=FitTypes.LEASTSQ,
               indices=None,
               n_proc=None):
 
@@ -84,8 +84,8 @@ def get_peaks(qspace_f,
 
     if fit_type not in FitTypes.ALLOWED:
         raise ValueError('Unknown fit type : {0}')
-        
-    if fit_type == FitTypes.GAUSSIAN:
+
+    if fit_type == FitTypes.LEASTSQ:
         fit_fn = _qspace_gauss_fit
     if fit_type == FitTypes.CENTROID:
         fit_fn = _qspace_centroid
@@ -174,7 +174,6 @@ def get_peaks(qspace_f,
     fit_x = results[..., 0:3]
     fit_y = results[..., 3:6]
     fit_z = results[..., 6:9]
-    #success = np.frombuffer(shared_success)
     success = np.ndarray((n_indices,), dtype=np.bool)
     
     t_total = time.time() - t_total
@@ -209,6 +208,16 @@ def _init_thread(shared_res_,
         qspace_f = qspace_f_
         read_lock = read_lock_
 
+def _gauss_first_guess(x, y):
+    i_max = y.argmax()
+    y_max = y[i_max]
+    p1 = x[i_max]
+    i_fwhm = np.where(y >= y_max / 2.)[0]
+    fwhm = (x[1]-x[0]) * len(i_fwhm)
+    p2 = fwhm/np.sqrt(2*np.log(2)) #2.35482
+    p0 = y_max * np.sqrt(2*np.pi) * p2
+    return [p0, p1, p2]
+
 def _fit_process(th_idx):
 
 
@@ -235,9 +244,9 @@ def _fit_process(th_idx):
         cube = np.ascontiguousarray(np.zeros(q_shape[1:]),
                                     dtype=q_dtype)
 
-        x_0 = [1.0, q_x.mean(), 1.0]
-        y_0 = [1.0, q_y.mean(), 1.0]
-        z_0 = [1.0, q_z.mean(), 1.0]
+        x_0 = None
+        y_0 = None
+        z_0 = None
 
         while True:
             # TODO : timeout
@@ -267,25 +276,49 @@ def _fit_process(th_idx):
             success_z = True
 
             z_sum = cube.sum(axis=0).sum(axis=0)
+
+            if z_0 is None:
+                z_0 = _gauss_first_guess(q_z, z_sum)
+
             try:
                 fit_z = fit_fn(q_z, z_sum, z_0)
+                z_0 = fit_z
             except Exception as ex:
+                z_0 = None
                 print 'failed z', ex
                 success_z = False
+
+            z_sum = 0
 
             cube_sum_z = cube.sum(axis=2)
 
             y_sum = cube_sum_z.sum(axis=0)
+
+            if y_0 is None:
+                y_0 = _gauss_first_guess(q_y, y_sum)
+
             try:
                 fit_y = fit_fn(q_y, y_sum, y_0)
+                y_0 = fit_y
             except:
+                y_0 = None
                 success_y = False
 
+            y_sum = 0
+
             x_sum = cube_sum_z.sum(axis=1)
+
+            if x_0 is None:
+                x_0 = _gauss_first_guess(q_x, x_sum)
+
             try:
                 fit_x = fit_fn(q_x, x_sum, x_0)
+                x_0 = fit_x
             except:
+                x_0 = None
                 success_x = False
+
+            x_sum = 0
 
             t_fit += time.time() - t0
 

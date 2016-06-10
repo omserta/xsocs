@@ -232,14 +232,14 @@ def _fit_process(th_idx):
         success = np.frombuffer(shared_success, dtype=bool)
 
         #TODO : timeout to check if it has been canceled
-        read_lock.acquire()
+        #read_lock.acquire()
         with h5py.File(qspace_f, 'r') as qspace_h5:
             q_x = qspace_h5['bins_edges/x'][:]
             q_y = qspace_h5['bins_edges/y'][:]
             q_z = qspace_h5['bins_edges/z'][:]
             q_shape = qspace_h5['qspace'].shape
             q_dtype = qspace_h5['qspace'].dtype
-        read_lock.release()
+        #read_lock.release()
 
         cube = np.ascontiguousarray(np.zeros(q_shape[1:]),
                                     dtype=q_dtype)
@@ -259,14 +259,14 @@ def _fit_process(th_idx):
                 print('Processing cube {0}/{1}.'.format(i_cube, result_shape[0]))
 
             t0 = time.time()
-            read_lock.acquire()
+            #read_lock.acquire()
             t_lock = time.time() - t0
             t0 = time.time()
             with h5py.File(qspace_f, 'r') as qspace_h5:
                 qspace_h5['qspace'].read_direct(cube,
                                                 source_sel=np.s_[i_cube],
                                                 dest_sel=None)
-            read_lock.release()
+            #read_lock.release()
             t_read += time.time() - t0
 
             t0 = time.time()

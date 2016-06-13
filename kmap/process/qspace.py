@@ -334,8 +334,13 @@ def img_2_qspace(data_h5f,
         sample_x = measurement['adcX'][:]
         sample_y = measurement['adcY'][:]
 
+        positioners = 0
+        measurement = 0
+        img_data = 0
+        detector = 0
+
     output_shape = (n_images,) + histo.shape
-    chunks = (1, output_shape[1]/4, output_shape[2]/4, output_shape[3]/4,)
+    chunks = (1, output_shape[1]//4, output_shape[2]//4, output_shape[3]//4,)
     _create_result_file(output_fn,
                         output_shape,
                         np.float64,
@@ -454,8 +459,6 @@ def img_2_qspace(data_h5f,
         print('Write {0}'.format(res_times.t_write))
         print('(lock : {0})'.format(res_times.t_w_lock))
 
-    return final_results
-
 
 def _init_thread(shared_res_,
                  idx_queue_,
@@ -569,7 +572,7 @@ def _to_qspace(th_idx):
     t_write = 0.
     t_w_lock = 0.
     
-    # img = np.ascontiguousarray(np.zeros((516, 516)), dtype=np.float64)
+    #img = np.ascontiguousarray(np.zeros((516, 516)), dtype=np.float64)
 
     while True:
         image_idx = idx_queue.get()
@@ -595,20 +598,20 @@ def _to_qspace(th_idx):
 
             t0 = time.time()
 
-            entry_locks[entry_idx].acquire()
+            #entry_locks[entry_idx].acquire()
             t_lock += time.time() - t0
             try:
                 with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
                     img_data = entry_h5[img_data_tpl.format(entry)]
-                    # img_data.read_direct(img,
-                                         # source_sel=np.s_[image_idx],
-                                         # dest_sel=None)
+                    #img_data.read_direct(img,
+                                         #source_sel=np.s_[image_idx],
+                                         #dest_sel=None)
                     img = img_data[image_idx].astype(np.float64)
             except Exception as ex:
                 print('Error in proc {0} while reading img {1} from entry '
                       '{2} ({3}) : {4}.'
                       ''.format(th_idx, image_idx, entry_idx, entry, ex))
-            entry_locks[entry_idx].release()
+            #entry_locks[entry_idx].release()
 
             t_read += time.time() - t0
             t0 = time.time()

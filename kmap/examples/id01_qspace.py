@@ -6,6 +6,9 @@ import numpy as np
 # output directory (some temporary files will also be written there)
 workdir = '/path/to/output/'
 
+# output HDF5 file name, default is qspace.h5 if not set
+output_f = 'my_qspace.h5'
+
 # path to the hdf5 "master" file (see id01_spec function)
 master_f ='/path/to/master.h5'
 
@@ -33,6 +36,7 @@ nav = [4, 4]
 qspace.img_2_qspace(master_f,
                     workdir,
                     n_bins,
+                    output_f=output_f,
                     # beam_energy=beam_energy,
                     # center_chan=center_chan,
                     # chan_per_deg=chan_per_deg,

@@ -56,6 +56,7 @@ detector_tpl = '/{0}/instrument/image_detector'
 def img_2_qspace(data_h5f,
                  output_dir,
                  n_bins,
+                 output_f=None,
                  beam_energy=None,
                  center_chan=None,
                  chan_per_deg=None,
@@ -63,9 +64,6 @@ def img_2_qspace(data_h5f,
                  img_indices=None,
                  n_proc=None):
     """
-    TODO : use histogram_lut when available in silx
-    TBD
-
     :param data_h5f: path to the HDF5 file containing the scan counters
         and images
     :type data_h5f: `str`
@@ -76,6 +74,11 @@ def img_2_qspace(data_h5f,
 
     :param n_bins: number of "bins" for the qspace cube (TODO : rephrase)
     :type n_bins: `array_like`
+
+    :param output_f: Name of the output file the results will written to. This
+        file will be created in *output_dir*. If not set, the file will be
+        named 'qspace.h5'. This file will be overwritten if it already exists.
+    :type output_f: *optional* str
 
     :param beam_energy: energy (in ...) of the beam used during the data
         acquisition. If set, this will overwrite the one found (if any) in
@@ -113,8 +116,10 @@ def img_2_qspace(data_h5f,
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    #TODO : overwrite warning
-    output_fn = os.path.join(output_dir, 'qspace.h5')
+    if output_f is None:
+        output_fn = os.path.join(output_dir, 'qspace.h5')
+    else:
+        output_fn = os.path.join(output_dir, output_f)
 
     with h5py.File(data_h5f, 'r') as master_h5:
 
@@ -334,16 +339,20 @@ def img_2_qspace(data_h5f,
         sample_x = measurement['adcX'][:]
         sample_y = measurement['adcY'][:]
 
-        positioners = 0
-        measurement = 0
-        img_data = 0
-        detector = 0
+        # this has to be done otherwise h5py complains about not being
+        # able to open compressed datasets from other processes
+        del positioners
+        del measurement
+        del img_data
+        del detector
 
     output_shape = (n_images,) + histo.shape
     chunks = (1, output_shape[1]//4, output_shape[2]//4, output_shape[3]//4,)
     _create_result_file(output_fn,
                         output_shape,
                         np.float64,
+                        sample_x,
+                        sample_y,
                         qx_idx,
                         qy_idx,
                         qz_idx,
@@ -544,6 +553,8 @@ def _init_thread(shared_res_,
 def _create_result_file(h5_fn,
                         shape,
                         dtype,
+                        pos_x,
+                        pos_y,
                         bins_x,
                         bins_y,
                         bins_z,
@@ -556,6 +567,8 @@ def _create_result_file(h5_fn,
         h5f.create_dataset('bins_edges/x', data=bins_x)
         h5f.create_dataset('bins_edges/y', data=bins_y)
         h5f.create_dataset('bins_edges/z', data=bins_z)
+        h5f.create_dataset('geom/x', data=pos_x)
+        h5f.create_dataset('geom/y', data=pos_y)
 
 
 def _to_qspace(th_idx):

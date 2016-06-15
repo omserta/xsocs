@@ -65,8 +65,6 @@ def _qspace_gauss_fit(x, y, v0):
     if result[4] not in [1, 2, 3, 4]:
         raise ValueError('Failed to fit : {0}.'.format(result[3]))
 
-    #result = result[0]
-    #result[0] = _gauss_fn(result, result[1])
     return result[0]
 
 def _qspace_centroid(x, y, v0):
@@ -74,6 +72,7 @@ def _qspace_centroid(x, y, v0):
     com = x.dot(y) / y.sum()
     idx = np.abs(x - com).argmin()
     return [y[idx], com, np.nan]
+
 
 def get_peaks(qspace_f,
               fit_type=FitTypes.LEASTSQ,
@@ -98,17 +97,28 @@ def get_peaks(qspace_f,
         qdata = qspace_h5['qspace']
 
         n_points = qdata.shape[0]
-        
+
         if indices is None:
             indices = range(n_points)
 
         n_indices = len(indices)
 
+        x_pos = qspace_h5['geom/x'][indices]
+        y_pos = qspace_h5['geom/y'][indices]
+
         shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
         # TODO : find something better
         shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
+        success = np.ndarray((n_indices,), dtype=np.bool)
+        success[:] = True
 
-        qdata = 0
+        # this has to be done otherwise h5py complains about not being
+        # able to open compressed datasets from other processes
+        del qdata
+
+    results = np.ndarray((n_indices, 11), dtype=np.double)
+    results[:, 0] = x_pos
+    results[:, 1] = y_pos
 
     manager = mp.Manager()
 
@@ -133,14 +143,12 @@ def get_peaks(qspace_f,
             def __init__(self):
                 self.t_fit = 0.
                 self.t_read = 0.
-                self.t_lock = 0.
                 self.t_write = 0.
 
             def update(self, arg):
-                (t_read_, t_lock_, t_fit_, t_write_) = arg
+                (t_read_, t_fit_, t_write_) = arg
                 self.t_fit += t_fit_
                 self.t_read += t_read_
-                self.t_lock += t_lock_
                 self.t_write += t_write_
         res_times = myTimes()
         callback = res_times.update
@@ -161,28 +169,27 @@ def get_peaks(qspace_f,
     # sending the None value to let the threads know that they should return
     for th_idx in range(n_proc):
         idx_queue.put(None)
-        
+
     pool.close()
     pool.join()
 
-    #t0 = time.time()
     fit_x = np.ndarray((n_indices, 3), dtype=np.float64)
     fit_y = np.ndarray((n_indices, 3), dtype=np.float64)
     fit_z = np.ndarray((n_indices, 3), dtype=np.float64)
-    results = np.frombuffer(shared_res)
-    results.shape = n_indices, 9
-    fit_x = results[..., 0:3]
-    fit_y = results[..., 3:6]
-    fit_z = results[..., 6:9]
-    success = np.ndarray((n_indices,), dtype=np.bool)
-    
+    results_np = np.frombuffer(shared_res)
+    results_np.shape = n_indices, 9
+
+    results[:, 2:5] = results_np[:, 0:3]
+    results[:, 5:8] = results_np[:, 3:6]
+    results[:, 8:11] = results_np[:, 6:9]
+
     t_total = time.time() - t_total
     if disp_times:
         print('Total : {0}.'.format(t_total))
-        print('Read {0} (lock : {1})'.format(res_times.t_read, res_times.t_lock))
+        print('Read {0}'.format(res_times.t_read))
         print('Fit {0}'.format(res_times.t_fit))
         print('Write {0}'.format(res_times.t_write))
-    return fit_x, fit_y, fit_z, success
+    return results, success
         
 def _init_thread(shared_res_,
                  shared_success_,
@@ -224,7 +231,6 @@ def _fit_process(th_idx):
     print('Thread {0} started.'.format(th_idx))
     try:
         t_read = 0.
-        t_lock = 0.
         t_fit = 0.
         
         results = np.frombuffer(shared_res)
@@ -259,14 +265,10 @@ def _fit_process(th_idx):
                 print('Processing cube {0}/{1}.'.format(i_cube, result_shape[0]))
 
             t0 = time.time()
-            #read_lock.acquire()
-            t_lock = time.time() - t0
-            t0 = time.time()
             with h5py.File(qspace_f, 'r') as qspace_h5:
                 qspace_h5['qspace'].read_direct(cube,
                                                 source_sel=np.s_[i_cube],
                                                 dest_sel=None)
-            #read_lock.release()
             t_read += time.time() - t0
 
             t0 = time.time()
@@ -284,8 +286,8 @@ def _fit_process(th_idx):
                 fit_z = fit_fn(q_z, z_sum, z_0)
                 z_0 = fit_z
             except Exception as ex:
+                print('Z Failed', ex)
                 z_0 = None
-                print 'failed z', ex
                 success_z = False
 
             z_sum = 0
@@ -300,7 +302,8 @@ def _fit_process(th_idx):
             try:
                 fit_y = fit_fn(q_y, y_sum, y_0)
                 y_0 = fit_y
-            except:
+            except Exception as ex:
+                print('Y Failed', ex)
                 y_0 = None
                 success_y = False
 
@@ -314,7 +317,8 @@ def _fit_process(th_idx):
             try:
                 fit_x = fit_fn(q_x, x_sum, x_0)
                 x_0 = fit_x
-            except:
+            except Exception as ex:
+                print('X Failed', ex)
                 x_0 = None
                 success_x = False
 
@@ -349,6 +353,6 @@ def _fit_process(th_idx):
     except Exception as ex:
         print 'EX', ex
 
-    times = (t_read, t_lock, t_fit, t_write)
+    times = (t_read, t_fit, t_write)
     print('Thread {0} done ({1}).'.format(th_idx, times))
     return times

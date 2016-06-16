@@ -455,7 +455,7 @@ def img_2_qspace(data_h5f,
 
     if(disp_times):
         print('TOTAL {0}'.format(tb - ta))
-        print('Read {0} (lock : {1})'.format(res_times.t_read, res_times.t_lock))
+        print('Read {0}'.format(res_times.t_read))
         print('Dn Sample {0}'.format(res_times.t_dnsamp))
         print('Medfilt {0}'.format(res_times.t_medfilt))
         print('Histo {0}'.format(res_times.t_histo))
@@ -572,7 +572,6 @@ def _to_qspace(th_idx):
     t_fit = 0.
     t_mask = 0.
     t_read = 0.
-    t_lock = 0.
     t_dnsamp = 0.
     t_medfilt = 0.
     t_write = 0.

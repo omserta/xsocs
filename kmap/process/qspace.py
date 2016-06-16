@@ -378,7 +378,6 @@ def img_2_qspace(data_h5f,
                              entries,
                              entry_files,
                              output_fn,
-                             entry_locks,
                              write_lock,
                              q_ar,
                              bins_rng,
@@ -471,7 +470,6 @@ def _init_thread(shared_res_,
                  entries_,
                  entry_files_,
                  output_fn_,
-                 entry_locks_,
                  write_lock_,
                  q_ar_,
                  bins_rng_,
@@ -498,7 +496,6 @@ def _init_thread(shared_res_,
             entries,\
             entry_files,\
             output_fn,\
-            entry_locks,\
             write_lock,\
             q_ar,\
             bins_rng,\
@@ -524,7 +521,6 @@ def _init_thread(shared_res_,
         entries = entries_
         entry_files = entry_files_
         output_fn = output_fn_
-        entry_locks = entry_locks_
         write_lock = write_lock_
         q_ar = q_ar_
         bins_rng = bins_rng_

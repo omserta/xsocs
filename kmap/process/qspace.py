@@ -409,20 +409,18 @@ def img_2_qspace(data_h5f,
                 self.t_fit = 0.
                 self.t_mask = 0.
                 self.t_read = 0.
-                self.t_lock = 0.
                 self.t_dnsamp = 0.
                 self.t_medfilt = 0.
                 self.t_write = 0.
                 self.t_w_lock = 0.
 
             def update(self, arg):
-                (t_read_, t_lock_, t_dnsamp_, t_medfilt_, t_histo_,
+                (t_read_, t_dnsamp_, t_medfilt_, t_histo_,
                  t_mask_, t_fit_, t_write_, t_w_lock_) = arg
                 self.t_histo += t_histo_
                 self.t_fit += t_fit_
                 self.t_mask += t_mask_
                 self.t_read += t_read_
-                self.t_lock += t_lock_
                 self.t_dnsamp += t_dnsamp_
                 self.t_medfilt += t_medfilt_
                 self.t_write += t_write_
@@ -590,11 +588,11 @@ def _to_qspace(th_idx):
         image_idx = idx_queue.get()
         if image_idx is None:
             print('Thread {0} is done. Times={1}'
-                  ''.format(th_idx, (t_read, t_lock, t_dnsamp,
+                  ''.format(th_idx, (t_read, t_dnsamp,
                                      t_medfilt, t_histo,
                                      t_mask, t_fit, t_write, t_w_lock)))
             if disp_times:
-                return (t_read, t_lock, t_dnsamp,
+                return (t_read, t_dnsamp,
                         t_medfilt, t_histo,
                         t_mask, t_fit, t_write, t_w_lock,)
             else:
@@ -610,8 +608,6 @@ def _to_qspace(th_idx):
 
             t0 = time.time()
 
-            #entry_locks[entry_idx].acquire()
-            t_lock += time.time() - t0
             try:
                 with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
                     img_data = entry_h5[img_data_tpl.format(entry)]
@@ -623,7 +619,6 @@ def _to_qspace(th_idx):
                 print('Error in proc {0} while reading img {1} from entry '
                       '{2} ({3}) : {4}.'
                       ''.format(th_idx, image_idx, entry_idx, entry, ex))
-            #entry_locks[entry_idx].release()
 
             t_read += time.time() - t0
             t0 = time.time()

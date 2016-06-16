@@ -97,10 +97,9 @@ def img_2_qspace(data_h5f,
         the images (TODO : rephrase)
     :type nav: *optional* `array_like`
 
-    :param img_indices: indices of the images for which the qx/qy/qz peaks
-        coordinates will be computed. E.g : if the array [1, 2, 3] is provided,
-        only the first 3 acquisitions of each scans will be used.
-        (TODO : give example)
+    :param img_indices: indices of the positions (on the sample) that have
+        to be converted to qspace. E.g : if the array [1, 2, 3] is provided,
+        only the first 3 sample scans positions will be converted to qspace.
     :type img_indices: *optional* `array_like`
 
     :param n_proc: number of process to use. If None, the number of process

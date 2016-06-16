@@ -74,10 +74,26 @@ def _qspace_centroid(x, y, v0):
     return [y[idx], com, np.nan]
 
 
-def get_peaks(qspace_f,
+def peak_fit(qspace_f,
               fit_type=FitTypes.LEASTSQ,
               indices=None,
               n_proc=None):
+    """
+    :param qspace_f: path to the HDF5 file containing the qspace cubes
+    :type data_h5f: `str`
+
+    :param fit_type:
+    :type img_indices: *optional*
+
+    :param indices: indices of the cubes (in the input HDF5 dataset) for which
+        the qx/qy/qz peaks coordinates will be computed. E.g : if the array
+        [1, 2, 3] is provided, only those cubes will be fitted.
+    :type img_indices: *optional* `array_like`
+
+    :param n_proc: number of process to use. If None, the number of process
+        used will be the one returned by multiprocessing.cpu_count().
+    :type n_proc: `int`
+    """
 
     t_total = time.time()
 

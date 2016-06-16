@@ -12,10 +12,10 @@ qspace_f = '/path/to/qspace.h5'
 # result file
 result_file = os.path.join(workdir, 'results.txt')
 
-results, success = peak_fit.get_peaks(qspace_f,
-                                      indices=range(10),
-                                      fit_type=peak_fit.FitTypes.LEASTSQ,
-                                      n_proc=None)
+results, success = peak_fit.peak_fit(qspace_f,
+                                     indices=range(10),
+                                     fit_type=peak_fit.FitTypes.LEASTSQ,
+                                     n_proc=None)
 
 with open(result_file, 'w+') as res_f:
     res_f.write('# X Y qx qy qz q I valid\n')

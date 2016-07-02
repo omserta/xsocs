@@ -48,6 +48,7 @@ from silx.io import spectoh5
 _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
                            'dir\[(?P<dir>[^\]]*)\] '
                            'prefix\[(?P<prefix>[^\]]*)\] '
+                           #'(idxFmt\[(?P<idxFmt>[^\]]*)\] ){0, 1}'
                            'nextNr\[(?P<nextNr>[^\]]*)\] '
                            'suffix\[(?P<suffix>[^\]]*)\]$')
 
@@ -226,11 +227,15 @@ class Id01DataMerger(object):
                              'Please call set_output_dir() first.')
         file_pattern = ('{0}{{0}}.h5'
                         ''.format(self.__prefix))
-        files = [file_pattern.format('master')]
-        ids = sorted(list(self.__selected_ids))
 
-        files.extend([file_pattern.format(scan.split('.')[0])
-                      for scan in ids])
+        files = []
+
+        if len(self.__selected_ids) > 0:
+            files.append(file_pattern.format('master'))
+            ids = sorted(list(self.__selected_ids))
+
+            files.extend([file_pattern.format(scan.split('.')[0])
+                          for scan in ids])
         return files
 
     matched_ids = property(lambda self: self.__matched_ids)
@@ -399,7 +404,7 @@ def _spec_get_img_filenames(spec_h5_filename):
         for k_scan, v_scan in h5_f.items():
             header = v_scan['instrument/specfile/scan_header']
             imgfile_match = [m for line in header
-                             if line.startswith('#C')
+                             if line.startswith('#C imageFile')
                              for m in [regx.match(line.strip())] if m]
 
             # expecting only one imagefile line per scan

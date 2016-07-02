@@ -30,6 +30,7 @@ __license__ = "MIT"
 
 import re
 import glob
+import copy
 import os.path
 
 import numpy as np
@@ -56,6 +57,195 @@ _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
 # #######################################################################
 
 
+class Id01DataMerger(object):
+    def __init__(self,
+                 spec_fname,
+                 work_dir,
+                 img_dir_base=None,
+                 version=1):
+
+        if not os.path.exists(work_dir):
+            os.makedirs(work_dir)
+
+        spec_h5 = os.path.join(work_dir, 'temp_spec.h5')
+
+        self.__spec_fname = spec_fname
+        self.__img_dir_base = img_dir_base
+        self.__spec_h5 = spec_h5
+        self.__tmp_dir = work_dir
+        self.__version = version
+        self.__master_file = 'master.h5'
+
+        self.__parsed = False
+        self.__merged = False
+
+        self.__default_prefix = None
+        self.__prefix = None
+        self._output_dir = None
+
+    def parse(self):
+        _spec_to_h5(self.__spec_fname, self.__spec_h5)
+
+        match_results = _find_scan_img_files(self.__spec_h5,
+                                             img_dir=self.__img_dir_base,
+                                             version=self.__version)
+
+        self.__matched_scans = match_results[0]
+        self.__no_match_scans = match_results[1]
+        self.__no_img_scans = match_results[2]
+        self.__on_error_scans = match_results[3]
+        self.__selected_ids = set(self.__matched_scans.keys())
+
+        self.__matched_ids = sorted(self.__matched_scans.keys())
+        self.__no_match_ids = sorted(self.__no_match_scans.keys())
+        self.__no_img_ids = sorted(self.__no_img_scans)
+        self.__on_error_ids = sorted(self.__on_error_scans)
+
+        if len(self.__matched_ids) > 0:
+            scan = self.__matched_scans[self.__matched_ids[0]]
+            self.__default_prefix = scan['spec']['prefix']
+            self.__prefix = self.__default_prefix
+
+        self.__parsed = True
+
+    def __check_parsed(self):
+        if not self.__parsed:
+            raise ValueError('Error : parse() has not been called yet.')
+
+    def set_output_dir(self, output_dir):
+        if not isinstance(output_dir, str):
+            raise TypeError('output_dir must be a valid path.')
+        self.__output_dir = output_dir
+
+    def merge(self,
+              beam_energy,
+              chan_per_deg,
+              output_dir=None,
+              pixelsize=(-1., -1.),
+              center_chan=(-1., -1.),
+              scan_ids=None,
+              n_proc=None,
+              compression='lzf'):
+
+        self.__check_parsed()
+
+        if output_dir is None:
+            output_dir = self.__output_dir
+
+        if output_dir is None:
+            raise ValueError('output_dir has not been set.')
+
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        matched_scans = self.__matched_scans
+
+        if scan_ids is None:
+            scans = matched_scans
+        else:
+            try:
+                scans = {'{0}.1'.format(scan_id):
+                         matched_scans['{0}.1'.format(scan_id)]['image']
+                         for scan_id in scan_ids}
+            except KeyError:
+                msg = 'Scan ID {0} not found.'.format(scan_id)  # noqa
+                raise ValueError(msg)
+
+        print('Merging scan IDs : {}.'
+              ''.format(', '.join(scans.keys())))
+
+        _merge_data(output_dir,
+                    self.__spec_h5,
+                    scans,
+                    beam_energy,
+                    chan_per_deg,
+                    pixelsize,
+                    center_chan,
+                    master_f=self.__master_file,
+                    overwrite=True,
+                    n_proc=n_proc,
+                    compression=compression)
+
+        self.__merged = True
+
+    def select(self, scan_ids):
+
+        self.__check_parsed()
+
+        if not issubclass(scan_ids, (list, tuple)):
+            scan_ids = [scan_ids]
+
+        scan_ids = set(scan_ids)
+        unknown_scans = scan_ids - set(self.__matched_scans)
+
+        if len(unknown_scans) != 0:
+            err_ids = '; '.join('{0}'.format(scan for scan in unknown_scans))
+            raise ValueError('Unknown scan ID : {0}.'.format(err_ids))
+
+        self.__selected_ids += scan_ids
+
+    def unselect(self, scan_ids):
+
+        self.__check_parsed()
+
+        if not issubclass(scan_ids, (list, tuple)):
+            scan_ids = [scan_ids]
+
+        self.__selected_ids -= set(scan_ids)
+
+    def get_scan_info(self, scan_id, key=None):
+        try:
+            scan_info = self.__matched_scans[scan_id]
+        except KeyError:
+            raise ValueError('Scan ID {0} is not one of the valid scans.'
+                             ''.format(scan_id))
+        if key is not None:
+            return copy.deepcopy(scan_info['spec'][key])
+        else:
+            return copy.deepcopy(scan_info['spec'])
+
+    def prefix(self):
+        self.__check_parsed()
+        return self.__prefix
+
+    def set_prefix(self, prefix):
+        self.__check_parsed()
+
+        if prefix is None or len(prefix) == 0:
+            self.__prefix = self.__default_prefix
+        elif isinstance(prefix, str):
+            self.__prefix = prefix
+        else:
+            raise TypeError('prefix must be a string, or None.')
+
+    def summary(self):
+        self.__check_parsed()
+        if self.__output_dir is None:
+            raise ValueError('output_summary() cannot be called '
+                             'before an output directory has been set.'
+                             'Please call set_output_dir() first.')
+        file_pattern = ('{0}{{0}}.h5'
+                        ''.format(self.__prefix))
+        files = [file_pattern.format('master')]
+        ids = sorted(list(self.__selected_ids))
+
+        files.extend([file_pattern.format(scan.split('.')[0])
+                      for scan in ids])
+        return files
+
+    matched_ids = property(lambda self: self.__matched_ids)
+    selected_ids = property(lambda self: sorted(self.__selected_ids))
+    no_match_ids = property(lambda self: self.__no_match_ids)
+    no_img_ids = property(lambda self: self.__no_img_ids)
+    on_error_ids = property(lambda self: self.__on_error_ids)
+    output_dir = property(lambda self: self.__output_dir)
+
+
+# #######################################################################
+# #######################################################################
+# #######################################################################
+
+
 def merge_scan_data(output_dir,
                     spec_fname,
                     beam_energy,
@@ -68,7 +258,6 @@ def merge_scan_data(output_dir,
                     n_proc=None,
                     version=1,
                     compression='lzf'):
-
     """
     Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
     contain spec data (from *spec_fname*) as well as the associated
@@ -129,62 +318,24 @@ def merge_scan_data(output_dir,
     :rtype: *list*
     """
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    id01_merger = Id01DataMerger(spec_fname,
+                                 output_dir,
+                                 img_dir_base=img_dir_base,
+                                 version=version)
 
-    temporary_dir = os.path.join(output_dir, 'xsocs_tmp')
-    if not os.path.exists(temporary_dir):
-        os.makedirs(temporary_dir)
+    id01_merger.parse()
 
-    temp_h5 = os.path.join(temporary_dir, 'temp_spec.h5')
+    id01_merger.set_output_dir(output_dir)
 
-    _spec_to_h5(spec_fname, temp_h5)
+    merged = id01_merger.merge(beam_energy,
+                               chan_per_deg,
+                               pixelsize=pixelsize,
+                               center_chan=center_chan,
+                               scan_ids=scan_ids,
+                               n_proc=n_proc,
+                               compression=compression)
 
-    scans_results = _find_scan_img_files(temp_h5,
-                                         img_dir=img_dir_base,
-                                         version=version)
-
-    complete_scans = scans_results[0]
-
-    if len(complete_scans) == 0:
-        print('No complete scans found (scan + image file).')
-        return None
-
-    print('Complete scans (scan + image file) : {0}'
-          ''.format(', '.join(complete_scans.keys())))
-
-    # a declaration to quiet down flake8 complaining about the scan_id in
-    # the except clause
-    scan_id = 0
-
-    if scan_ids is None:
-        scans = complete_scans
-    else:
-        try:
-            scans = {'{0}.1'.format(scan_id):
-                     complete_scans['{0}.1'.format(scan_id)]
-                     for scan_id in scan_ids}
-        except KeyError:
-            msg = 'Scan ID {0} not found.'.format(scan_id)
-            raise ValueError(msg)
-
-    print('Merging scan IDs : {}.'
-          ''.format(', '.join(scans.keys())))
-
-    _merge_data(output_dir,
-                temp_h5,
-                scans,
-                beam_energy,
-                chan_per_deg,
-                pixelsize,
-                center_chan,
-                master_f='master.h5',
-                overwrite=True,
-                n_proc=n_proc,
-                compression=compression)
-
-    return scans.keys()
-
+    return merged
 
 # #######################################################################
 # #######################################################################
@@ -304,7 +455,7 @@ def _find_scan_img_files(spec_h5_filename,
     :rtype: *list* (*dict*, *dict*, *list*, *list*)
     """
 
-    if not os.path.exists(img_dir):
+    if img_dir and not os.path.exists(img_dir):
         raise ValueError('Image folder not found : {0}'
                          ''.format(img_dir))
 
@@ -340,9 +491,9 @@ def _find_scan_img_files(spec_h5_filename,
                 img_file = edf_fullpath[0]
 
         if img_file:
-            complete_scans[scan_id] = img_file
+            complete_scans[scan_id] = {'spec': infos, 'image': img_file}
         else:
-            incomplete_scans[scan_id] = infos
+            incomplete_scans[scan_id] = {'spec': infos, 'image': None}
 
     result = [complete_scans, incomplete_scans]
     result.extend(elem for elem in imgfile_info[1:])
@@ -414,7 +565,7 @@ def _merge_data(output_dir,
 
         results = {}
         for scan_id in sorted(scans.keys()):
-            img_f = scans[scan_id]
+            img_f = scans[scan_id]['image']
             args = (scan_id, spec_h5_fname, output_dir, img_f,
                     beam_energy, chan_per_deg, pixelsize,
                     center_chan, compression)

@@ -48,7 +48,7 @@ from silx.io import spectoh5
 _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
                            'dir\[(?P<dir>[^\]]*)\] '
                            'prefix\[(?P<prefix>[^\]]*)\] '
-                           #'(idxFmt\[(?P<idxFmt>[^\]]*)\] ){0, 1}'
+                           '(idxFmt\[(?P<idxFmt>[^\]]*)\] ){0,1}'
                            'nextNr\[(?P<nextNr>[^\]]*)\] '
                            'suffix\[(?P<suffix>[^\]]*)\]$')
 

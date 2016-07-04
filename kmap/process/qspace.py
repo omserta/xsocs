@@ -628,7 +628,7 @@ def _to_qspace(th_idx):
             t0 = time.time()
 
             # intensity = medfilt2d(intensity, 3)
-            intensity = medfilt2D(intensity, kernel=[3, 3], n_threads=None)
+            # intensity = medfilt2D(intensity, kernel=[3, 3], n_threads=None)
 
             t_medfilt += time.time() - t0
             t0 = time.time()

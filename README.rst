@@ -9,9 +9,14 @@ Installation
 
 The latest development version can be obtained from the git repository::
 
-    git clone git@gitlab.esrf.fr:kmap/kmap.git
+    git clone git://gitlab.esrf.fr:kmap/kmap.git
     cd kmap
+
+And then install::
     pip install . [--user]
+
+Or, if pip is not available (not recommended):
+    python setup.py install [--user]
 
 Dependencies
 ------------

@@ -48,7 +48,7 @@ from ..util.histogramnd_lut import histogramnd_get_lut, histogramnd_from_lut
 disp_times = False
 
 positioners_tpl = '/{0}/instrument/positioners'
-img_data_tpl = '/{0}/measurement/image_data/data'
+img_data_tpl = '/{0}/measurement/image/data'
 measurement_tpl = '/{0}/measurement'
 detector_tpl = '/{0}/instrument/image_detector'
 
@@ -618,6 +618,7 @@ def _to_qspace(th_idx):
             t_read += time.time() - t0
             t0 = time.time()
 
+            # todo : do not perform this step if nav = [1, 1]
             intensity = img.reshape(img_shape_1).\
                 sum(axis=sum_axis_1).reshape(img_shape_2).\
                 sum(axis=sum_axis_2) *\

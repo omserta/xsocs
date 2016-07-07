@@ -33,13 +33,14 @@ import glob
 import copy
 import os.path
 
-import numpy as np
-
-from multiprocessing import Pool, Event, Lock, cpu_count
+import ctypes
+from threading import Thread
 from functools import partial
+import multiprocessing.sharedctypes as mp_sharedctypes
+from multiprocessing import Pool, Event, Lock, cpu_count, Manager
 
 import h5py
-
+import numpy as np
 from PyMca5 import EdfFile
 from silx.io import spectoh5
 
@@ -80,9 +81,14 @@ class Id01DataMerger(object):
         self.__parsed = False
         self.__merged = False
 
-        self.__default_prefix = None
-        self.__prefix = None
+        self.__thread = None
+
+        self.__master = ''
         self._output_dir = None
+
+        self.__compression = 'lzf'
+
+        self.__n_proc = None
 
     def parse(self):
         _spec_to_h5(self.__spec_fname, self.__spec_h5)
@@ -104,10 +110,11 @@ class Id01DataMerger(object):
 
         if len(self.__matched_ids) > 0:
             scan = self.__matched_scans[self.__matched_ids[0]]
-            self.__default_prefix = scan['spec']['prefix']
-            self.__prefix = self.__default_prefix
 
         self.__parsed = True
+
+        if len(self.__master) == 0:
+            self.set_master_file(None)
 
     def __check_parsed(self):
         if not self.__parsed:
@@ -119,19 +126,16 @@ class Id01DataMerger(object):
         self.__output_dir = output_dir
 
     def merge(self,
-              beam_energy,
-              chan_per_deg,
-              output_dir=None,
-              pixelsize=(-1., -1.),
-              center_chan=(-1., -1.),
-              scan_ids=None,
-              n_proc=None,
-              compression='lzf'):
+              blocking=True,
+              overwrite=False,
+              callback=None): # TODO : check if files exist
 
         self.__check_parsed()
 
-        if output_dir is None:
-            output_dir = self.__output_dir
+        if len(self.__selected_ids) == 0:
+            raise ValueError('No scans selected for merge.')
+
+        output_dir = self.__output_dir
 
         if output_dir is None:
             raise ValueError('output_dir has not been set.')
@@ -139,41 +143,65 @@ class Id01DataMerger(object):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
+        selected_scans = self.selected_ids
         matched_scans = self.__matched_scans
 
-        if scan_ids is None:
-            scans = matched_scans
-        else:
-            try:
-                scans = {'{0}.1'.format(scan_id):
-                         matched_scans['{0}.1'.format(scan_id)]['image']
-                         for scan_id in scan_ids}
-            except KeyError:
-                msg = 'Scan ID {0} not found.'.format(scan_id)  # noqa
-                raise ValueError(msg)
+        output_files = self.summary()
+        master_f = output_files['master']
+        del output_files['master']
+
+        #scans = {scan_id:{'image':matched_scans[scan_id]['image'],
+                          #'output':
+                 #for scan_id in selected_scans}
+        scans_infos = {scan_id:{'image':matched_scans[scan_id]['image'],
+                                'output':output_files[scan_id]}
+                       for scan_id in selected_scans}
 
         print('Merging scan IDs : {}.'
-              ''.format(', '.join(scans.keys())))
+              ''.format(', '.join(self.selected_ids)))
 
-        _merge_data(output_dir,
-                    self.__spec_h5,
-                    scans,
-                    beam_energy,
-                    chan_per_deg,
-                    pixelsize,
-                    center_chan,
-                    master_f=self.__master_file,
-                    overwrite=True,
-                    n_proc=n_proc,
-                    compression=compression)
+        self.__thread = _MergeThread(self.__output_dir,
+                                     self.__spec_h5,
+                                     scans_infos,
+                                     self.__beam_energy,
+                                     self.__chan_per_deg,
+                                     self.__pixelsize,
+                                     self.__center_chan,
+                                     self.__detector_orient,
+                                     master_f=master_f,
+                                     overwrite=overwrite,
+                                     n_proc=self.__n_proc,
+                                     compression=self.__compression,
+                                     callback=callback)
+        self.__thread.start()
 
-        self.__merged = True
+        if blocking:
+            self.__thread.wait()
 
-    def select(self, scan_ids):
+    def wait_merge(self):
+        if self.__thread is not None:
+            self.__thread.wait()
+    
+    def abort_merge(self, wait=True):
+        if self.__thread is not None:
+            self.__thread.abort(wait=wait)
+
+    def merge_results(self):
+        if self.__thread is not None:
+            return self.__thread.results()
+        else:
+            return None
+
+    def progress(self):
+        if self.__thread is not None:
+            return self.__thread.progress()
+        return None
+
+    def select(self, scan_ids, clear=False):
 
         self.__check_parsed()
 
-        if not issubclass(scan_ids, (list, tuple)):
+        if not isinstance(scan_ids, (list, tuple)):
             scan_ids = [scan_ids]
 
         scan_ids = set(scan_ids)
@@ -181,9 +209,12 @@ class Id01DataMerger(object):
 
         if len(unknown_scans) != 0:
             err_ids = '; '.join('{0}'.format(scan for scan in unknown_scans))
-            raise ValueError('Unknown scan ID : {0}.'.format(err_ids))
+            raise ValueError('Unknown scan IDs : {0}.'.format(err_ids))
 
-        self.__selected_ids += scan_ids
+        if clear:
+            self.__selected_ids = scan_ids
+        else:
+            self.__selected_ids |= scan_ids
 
     def unselect(self, scan_ids):
 
@@ -195,6 +226,8 @@ class Id01DataMerger(object):
         self.__selected_ids -= set(scan_ids)
 
     def get_scan_info(self, scan_id, key=None):
+        self.__check_parsed()
+
         try:
             scan_info = self.__matched_scans[scan_id]
         except KeyError:
@@ -205,38 +238,123 @@ class Id01DataMerger(object):
         else:
             return copy.deepcopy(scan_info['spec'])
 
-    def prefix(self):
-        self.__check_parsed()
-        return self.__prefix
-
-    def set_prefix(self, prefix):
+    def get_scan_image(self, scan_id):
         self.__check_parsed()
 
-        if prefix is None or len(prefix) == 0:
-            self.__prefix = self.__default_prefix
-        elif isinstance(prefix, str):
-            self.__prefix = prefix
+        try:
+            scan_info = self.__matched_scans[scan_id]
+        except KeyError:
+            raise ValueError('Scan ID {0} is not one of the valid scans.'
+                             ''.format(scan_id))
+        return copy.deepcopy(scan_info['image'])
+
+    def common_prefix(self):
+        self.__check_parsed()
+
+        scan_ids = self.__selected_ids
+
+        if len(scan_ids)==0:
+            return ''
+
+        prefixes = [self.__matched_scans[scan_id]['spec']['prefix']
+                    for scan_id in scan_ids]
+        common = os.path.commonprefix(prefixes)
+        
+        if len(prefixes[0]) > len(common) and not common.endswith('_'):
+            common = common.rpartition('_')[0]
+
+        return common
+
+    def set_master_file(self, master):
+        # self.__check_parsed()
+
+        if master is None or len(master) == 0:
+            master = self.common_prefix()
+            if len(master) == 0:
+                self.__master = 'master'
+            else:
+                self.__master = master + '_master'
+
+        elif isinstance(master, str):
+            self.__master = master
         else:
-            raise TypeError('prefix must be a string, or None.')
+            raise TypeError('master must be a string, or None.')
 
-    def summary(self):
+    def __gen_scan_filename(self, scan_id, fullpath=False):
+        pattern = '{img_file}_{scan_id}.h5'
+        img_file = self.__matched_scans[scan_id]['image']
+        img_file = os.path.basename(img_file).split('.')[0]
+        merged_file = pattern.format(img_file=img_file, scan_id=scan_id)
+
+        if fullpath:
+            merged_file = os.path.join(self.output_dir, merged_file)
+        return merged_file
+    
+    def __gen_master_filename(self, fullpath=False):
+        master = self.__master
+        if not master.endswith('.h5'):
+            master += '.h5'
+        if fullpath:
+            master = os.path.join(self.output_dir, master)
+        return master
+
+    def summary(self, fullpath=False):
         self.__check_parsed()
         if self.__output_dir is None:
             raise ValueError('output_summary() cannot be called '
                              'before an output directory has been set.'
                              'Please call set_output_dir() first.')
-        file_pattern = ('{0}{{0}}.h5'
-                        ''.format(self.__prefix))
 
-        files = []
+        master = self.__gen_master_filename(fullpath=fullpath)
+        files = {'master':master}
 
-        if len(self.__selected_ids) > 0:
-            files.append(file_pattern.format('master'))
-            ids = sorted(list(self.__selected_ids))
+        sel_ids = list(self.__selected_ids)
+        {files.update({scan_id:self.__gen_scan_filename(scan_id,
+                                                        fullpath=fullpath)
+                       for scan_id in sel_ids})}
 
-            files.extend([file_pattern.format(scan.split('.')[0])
-                          for scan in ids])
         return files
+    
+    beam_energy = property(lambda self: self.__beam_energy)
+    @beam_energy.setter
+    def beam_energy(self, value):
+        self.__beam_energy = value
+
+    pixelsize = property(lambda self: self.__pixelsize)
+    @pixelsize.setter
+    def pixelsize(self, value):
+        # TODO : check input
+        self.__pixelsize = value
+
+    chan_per_deg = property(lambda self: self.__chan_per_deg)
+    @chan_per_deg.setter
+    def chan_per_deg(self, value):
+        # TODO : check input
+        self.__chan_per_deg = value
+
+    center_chan = property(lambda self: self.__center_chan)
+    @center_chan.setter
+    def center_chan(self, value):
+        # TODO : check input
+        self.__center_chan = value
+
+    detector_orient = property(lambda self: self.__detector_orient)
+    @detector_orient.setter
+    def detector_orient(self, value):
+        # TODO : check input
+        self.__detector_orient = value
+
+    compression = property(lambda self: self.__compression)
+    @compression.setter
+    def compression(self, value):
+        # TODO : check input
+        self.__compression = value
+
+    n_proc = property(lambda self: self.__n_proc)
+    @n_proc.setter
+    def n_proc(self, value):
+        # TODO : check input
+        self.__n_proc = value
 
     matched_ids = property(lambda self: self.__matched_ids)
     selected_ids = property(lambda self: sorted(self.__selected_ids))
@@ -244,6 +362,7 @@ class Id01DataMerger(object):
     no_img_ids = property(lambda self: self.__no_img_ids)
     on_error_ids = property(lambda self: self.__on_error_ids)
     output_dir = property(lambda self: self.__output_dir)
+    master_file = property(lambda self: self.__master)
 
 
 # #######################################################################
@@ -253,16 +372,18 @@ class Id01DataMerger(object):
 
 def merge_scan_data(output_dir,
                     spec_fname,
-                    beam_energy,
-                    chan_per_deg,
-                    pixelsize=(-1., -1.),
-                    center_chan=(-1., -1.),
+                    beam_energy=None,
+                    chan_per_deg=None,
+                    pixelsize=None,
+                    center_chan=None,
+                    detector_orient=None,
                     scan_ids=None,
                     master_f=None,
                     img_dir_base=None,
                     n_proc=None,
                     version=1,
-                    compression='lzf'):
+                    compression='lzf',
+                    overwrite=False):
     """
     Creates a "master" HDF5 file and one HDF5 per scan. Those scan HDF5 files
     contain spec data (from *spec_fname*) as well as the associated
@@ -332,13 +453,15 @@ def merge_scan_data(output_dir,
 
     id01_merger.set_output_dir(output_dir)
 
-    merged = id01_merger.merge(beam_energy,
-                               chan_per_deg,
-                               pixelsize=pixelsize,
-                               center_chan=center_chan,
-                               scan_ids=scan_ids,
-                               n_proc=n_proc,
-                               compression=compression)
+    id01_merger.beam_energy = beam_energy
+    id01_merger.center_chan = center_chan
+    id01_merger.chan_per_deg = chan_per_deg
+    id01_merger.pixelsize = pixelsize
+    id01_merger.detector_orient = detector_orient
+    id01_merger.n_proc = n_proc
+    id01_merger.compression=compression
+
+    merged = id01_merger.merge(overwrite=overwrite)
 
     return merged
 
@@ -407,6 +530,7 @@ def _spec_get_img_filenames(spec_h5_filename):
                              if line.startswith('#C imageFile')
                              for m in [regx.match(line.strip())] if m]
 
+            # TODO : provide some more info
             # expecting only one imagefile line per scan
             if len(imgfile_match) > 1:
                 error_scans.append(k_scan)
@@ -419,8 +543,10 @@ def _spec_get_img_filenames(spec_h5_filename):
 
             # extracting the named subgroups
             imgfile_grpdict = imgfile_match[0].groupdict()
+            #line = imgfile_match.string()
 
             with_file[k_scan] = imgfile_grpdict
+            #with_file[k_scan].update('_spec_line_':line)
 
         return with_file, without_file, error_scans
 
@@ -511,6 +637,161 @@ def _find_scan_img_files(spec_h5_filename,
 # #######################################################################
 
 
+class _MergeThread(Thread):
+    def __init__(self,
+                 output_dir,
+                 spec_h5_fname,
+                 scans,
+                 beam_energy,
+                 chan_per_deg,
+                 pixelsize,
+                 center_chan,
+                 detector_orient,
+                 master_f,
+                 overwrite=True,
+                 n_proc=None,
+                 compression='lzf',
+                 callback=None):
+        super(_MergeThread, self).__init__()
+        self.__output_dir = output_dir
+        self.__scans = scans
+        self.__spec_h5_fname = spec_h5_fname
+        self.__output_dir = output_dir
+        self.__beam_energy = beam_energy
+        self.__chan_per_deg = chan_per_deg
+        self.__pixelsize = pixelsize
+        self.__center_chan = center_chan
+        self.__detector_orient = detector_orient
+        self.__n_proc=n_proc
+        self.__compression = compression
+        self.__master_f = master_f
+        self.__overwrite = overwrite
+        self.__callback = callback
+
+        self.__results = None
+        self.__proc_indices = None
+        self.__shared_progress = mp_sharedctypes.RawArray(ctypes.c_int32,
+                                                          len(scans))
+
+        manager = Manager()
+        self.__term_evt = manager.Event()
+        self.__manager = manager
+
+    def run(self):
+        output_dir = os.path.realpath(self.__output_dir)
+
+        master_f = os.path.join(self.__output_dir, self.__master_f)
+
+        if not self.__overwrite:
+            mode = 'w-'
+        else:
+            mode = 'w'
+
+        #trying to access the file (erasing it if necessary)
+        with h5py.File(master_f, mode) as m_h5f:
+            pass
+
+        if self.__n_proc is None:
+            n_proc = cpu_count()
+
+        def init(term_evt_, shared_progress_):
+            global g_term_evt
+            global g_shared_progress
+            g_term_evt = term_evt_
+            g_shared_progress = shared_progress_
+        
+        np.frombuffer(self.__shared_progress, dtype='int32')[:] = 0
+
+        pool = Pool(n_proc,
+                    initializer=init,
+                    initargs=(self.__term_evt,
+                              self.__shared_progress),
+                    maxtasksperchild=2)
+
+        def callback(result_):
+            scan, finished, info = result_
+            print('{0} finished.'.format(scan))
+            if not finished:
+                self.__term_evt.set()
+
+        results = {}
+        proc_indices = {}
+        for proc_idx, (scan_id, infos) in enumerate(self.__scans.items()):
+            args = (scan_id,
+                    proc_idx,
+                    self.__spec_h5_fname,
+                    self.__output_dir,
+                    infos['output'], infos['image'],
+                    self.__beam_energy, self.__chan_per_deg,
+                    self.__pixelsize, self.__center_chan,
+                    self.__detector_orient,
+                    self.__compression, master_f,
+                    mode)
+            results[scan_id] = pool.apply_async(_add_edf_data,
+                                                args,
+                                                callback=callback)
+            proc_indices[scan_id] = proc_idx
+
+        pool.close()
+
+        self.__results = results
+        self.__proc_indices = proc_indices
+        pool.join()
+
+        valid = all(result[1] for result in results)
+        if valid:
+            with h5py.File(master_f, 'a') as m_h5f:
+                for proc_idx, (scan_id, infos) in enumerate(self.__scans.items()):
+                    entry_fn = infos['output']
+                    entry = entry_fn.rpartition('.')[0]
+                    m_h5f[entry] = h5py.ExternalLink(entry_fn, entry)
+
+        if self.__callback:
+            self.__callback()
+
+    def wait(self):
+        self.join()
+
+    def abort(self, wait=True):
+        if self.is_alive():
+            self.__term_evt.set()
+            if wait:
+                self.wait()
+
+    def progress(self):
+        progress = np.frombuffer(self.__shared_progress, dtype='int32')
+        proc_indices = self.__proc_indices
+        if proc_indices:
+            merge_progress = {scan_id:progress[proc_idx]
+                              for scan_id, proc_idx in proc_indices.items()}
+        else:
+            merge_progress = {scan_id:0 for scan_id in self.__scans.keys()}
+        return merge_progress
+
+    def results(self, wait=True):
+        if self.is_alive():
+            if not wait:
+                raise RuntimeError('Merge is still running. Please call '
+                                   'wait() or abort() before asking for the '
+                                   'results.')
+            else:
+                self.wait()
+
+        if self.__results is None:
+            raise RuntimeError('No restults available : start() has to be '
+                               'called first.')
+
+        errors = []
+        completed = []
+        for scan_id, async_res in self.__results.items():
+            scan, finished, info = async_res.get()
+            if finished:
+                completed.append(scan)
+            else:
+                errors.append((scan, info))
+
+        return completed, errors
+
 def _merge_data(output_dir,
                 spec_h5_fname,
                 scans,
@@ -549,12 +830,9 @@ def _merge_data(output_dir,
         n_proc = cpu_count()
 
     def init(lock, evt):
-        global g_spec_lock
         global g_term_evt
-        g_spec_lock = lock
         g_term_evt = evt
 
-    spec_lock = Lock()
     term_evt = Event()
 
     pool = Pool(n_proc,
@@ -563,7 +841,8 @@ def _merge_data(output_dir,
                 maxtasksperchild=2)
 
     def callback(scan_id, result):
-        if isinstance(result, Exception):
+        scan_id, finished, info
+        if isinstance(info, Exception):
             term_evt.set()
 
     with h5py.File(master_f, mode) as m_h5f:
@@ -602,14 +881,19 @@ def _merge_data(output_dir,
 
 
 def _add_edf_data(scan_id,
+                  proc_idx,
                   spec_h5_fn,
                   output_dir,
+                  output_f,
                   img_f,
                   beam_energy,
                   chan_per_deg,
                   pixelsize,
                   center_chan,
-                  compression):
+                  detector_orient,
+                  compression,
+                  master_f,
+                  mode):
 
     """
     Creates an entry_*.h5 file with scan data from the provided
@@ -617,26 +901,32 @@ def _add_edf_data(scan_id,
     image file. This function is meant to be called in from _merge_data.
     """
 
-    global g_spec_lock
     global g_term_evt
+    global g_master_lock
+    global g_shared_progress
 
-    entry = 'entry_{0:0>5}'.format(scan_id.split('.')[0])
-    entry_fn = os.path.join(output_dir, entry + '.h5')
+    entry = output_f.rpartition('.')[0]
+    entry_fn = os.path.join(output_dir, output_f)
 
     if pixelsize is None:
         pixelsize = [-1., -1.]
+
+    progress = np.frombuffer(g_shared_progress, dtype='int32')
+    progress[proc_idx] = 0
+
+    complete = False
 
     try:
         print('Merging scan ID {0}'.format(scan_id))
 
         if g_term_evt.is_set():
-            return (entry, entry_fn, False)
+            raise Exception('Merge of scan {0} aborted.'.format(scan_id))
+            #return (scan_id, False, None)
 
         with h5py.File(entry_fn, 'w') as entry_h5f:
+            progress[proc_idx] = 1
             entry_grp = entry_h5f.create_group(entry)
-            g_spec_lock.acquire()
             with h5py.File(spec_h5_fn) as s_h5f:
-
                 scan_grp = s_h5f[scan_id]
 
                 for grp_name in scan_grp:
@@ -647,9 +937,8 @@ def _add_edf_data(scan_id,
                                   expand_external=True,
                                   expand_refs=True,
                                   without_attrs=False)
-            g_spec_lock.release()
             img_det_grp = entry_grp.require_group('instrument/image_detector')
-            img_data_grp = entry_grp.require_group('measurement/image_data')
+            img_data_grp = entry_grp.require_group('measurement/image')
 
             img_det_grp.create_dataset('pixelsize_dim0',
                                        data=float(pixelsize[0]))
@@ -668,8 +957,13 @@ def _add_edf_data(scan_id,
                                            data=float(center_chan[0]))
                 img_det_grp.create_dataset('center_chan_dim1',
                                            data=float(center_chan[1]))
+            if detector_orient is not None:
+                img_det_grp.create_dataset('detector_orient',
+                                           data=np.string_(detector_orient))
 
+            progress[proc_idx] = 2
             edf_file = EdfFile.EdfFile(img_f, access='r', fastedf=True)
+            progress[proc_idx] = 5
 
             n_images = edf_file.GetNumImages()
 
@@ -686,20 +980,12 @@ def _add_edf_data(scan_id,
                                                      compression=compression,
                                                      shuffle=True)
 
-            for i in range(n_images):
-                if i % 500 == 0:
-                    if g_term_evt.is_set():
-                        return (entry, entry_fn, False)
-
-                data = edf_file.GetData(i)
-                image_dset[i, :, :] = data
-
             # creating some links
             img_data_grp['info'] = img_det_grp
             img_det_grp['data'] = image_dset
 
             # attributes
-            grp = entry_grp.require_group('measurement/image_data')
+            grp = entry_grp.require_group('measurement/image')
             grp.attrs['interpretation'] = 'image'
 
             # setting the nexus classes
@@ -715,19 +1001,43 @@ def _add_edf_data(scan_id,
             grp = entry_grp.require_group('measurement')
             grp.attrs['NX_class'] = np.string_('NXcollection')
 
-            grp = entry_grp.require_group('measurement/image_data')
+            grp = entry_grp.require_group('measurement/image')
             grp.attrs['NX_class'] = np.string_('NXcollection')
+
+            for i in range(n_images):
+                if i % 500 == 0:
+                    progress[proc_idx] = round(5. + (95.0 * i) / n_images)
+                    if g_term_evt.is_set():
+                        raise Exception('Merge of scan {0} aborted.'
+                                        ''.format(scan_id))
+
+                data = edf_file.GetData(i)
+                image_dset[i, :, :] = data
 
     except Exception as ex:
         print(ex)
-        return ex
+        result = (scan_id, False, str(ex))
+    else:
+        print('Entry {0} merged.'.format(entry))
+        result = (scan_id, True, None)
 
-    print('Entry {0} merged.'.format(entry))
-    return (entry, entry_fn, True)
-
+    if result[1]:
+        progress[proc_idx] = 100
+    else:
+        progress[proc_idx] = -1
+    return result
 
 if __name__ == '__main__':
-    # just adding those lines to make flake8 happy
-    g_term_evt = 0
-    g_spec_lock = 0
-    pass
+    import time
+    base = os.path.expanduser('~/data/xsocs/id01_data/psic_nano_20150314_fast_00007')
+    #spec_file = os.path.join(base, 'psic_nano_20150314_fast_00007.spec')
+    spec_file='/users/naudet/workspace/dau/id01/tests/gui/test_spec2.spec'
+    output_dir='/users/naudet/workspace/dau/id01/tests/gui/out'
+    img_dir='/users/naudet/data/xsocs/id01_data/psic_nano_20150314_fast_00007/004_200'
+    t0 = time.time()
+    merge_scan_data(output_dir,
+                    spec_file,
+                    version=0,
+                    img_dir_base=img_dir,
+                    overwrite=True)
+    print('Total : {0}.\n'.format(time.time() - t0))

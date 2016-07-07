@@ -295,8 +295,9 @@ def _fit_process(th_idx):
 
             z_sum = cube.sum(axis=0).sum(axis=0)
 
-            if z_0 is None:
-                z_0 = _gauss_first_guess(q_z, z_sum)
+            #if z_0 is None:
+                #z_0 = _gauss_first_guess(q_z, z_sum)
+            z_0 = [1.0, q_z.mean(), 1.0]  
 
             try:
                 fit_z = fit_fn(q_z, z_sum, z_0)
@@ -312,8 +313,9 @@ def _fit_process(th_idx):
 
             y_sum = cube_sum_z.sum(axis=0)
 
-            if y_0 is None:
-                y_0 = _gauss_first_guess(q_y, y_sum)
+            #if y_0 is None:
+                #y_0 = _gauss_first_guess(q_y, y_sum)
+            y_0 = [1.0, q_y.mean(), 1.0]  
 
             try:
                 fit_y = fit_fn(q_y, y_sum, y_0)
@@ -327,8 +329,9 @@ def _fit_process(th_idx):
 
             x_sum = cube_sum_z.sum(axis=1)
 
-            if x_0 is None:
-                x_0 = _gauss_first_guess(q_x, x_sum)
+            #if x_0 is None:
+                #x_0 = _gauss_first_guess(q_x, x_sum)
+            x_0 = [1.0, q_x.mean(), 1.0]  
 
             try:
                 fit_x = fit_fn(q_x, x_sum, x_0)

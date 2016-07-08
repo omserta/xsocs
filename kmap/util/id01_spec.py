@@ -32,6 +32,7 @@ import re
 import glob
 import copy
 import os.path
+import functools
 
 import ctypes
 from threading import Thread
@@ -111,7 +112,7 @@ class Id01DataMerger(object):
 
         self.__set_parse_results(reset=True)
 
-    def __set_parse_results(self, reset=False):
+    def __set_parse_results(self, reset=False, callback=None):
         if reset is False and self.__parse_thread is None:
             # shouldnt even be here
             raise RuntimeError('This should be called from an active'
@@ -149,6 +150,9 @@ class Id01DataMerger(object):
         self.__merged = False
         self.set_master_file(None)
 
+        if callback:
+            callback()
+
     def __running_exception(self):
         if self.is_running():
             raise RuntimeError('Operation not permitted while '
@@ -168,22 +172,18 @@ class Id01DataMerger(object):
 
         self.__parsed = False
         
+        callback = functools.partial(self.__set_parse_results,
+                                     callback=callback)
         self.__parse_thread = _ParseThread(self.__spec_fname,
                                            self.__spec_h5,
                                            img_dir=self.__img_dir,
                                            version=self.__version,
-                                           callback=self.__set_parse_results)
+                                           callback=callback)
 
         self.__parse_thread.start()
 
         if blocking:
             self.wait()
-
-        #_spec_to_h5(self.__spec_fname, self.__spec_h5)
-
-        #match_results = _find_scan_img_files(self.__spec_h5,
-                                             #img_dir=self.__img_dir,
-                                             #version=self.__version
 
     def __check_parsed(self):
         if not self.__parsed:

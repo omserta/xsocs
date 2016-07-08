@@ -153,7 +153,6 @@ class _ScansSelectDialog(Qt.QDialog):
 
         self.__table_widget = table_widget
         self.__merger = merger
-        self.__sig_merge_done.connect(self.__merge_done)
 
     def __on_accept(self, *args, **kwags):
         table_widget = self.__table_widget
@@ -697,7 +696,7 @@ class MergeWidget(Qt.QWidget):
         h_layout.addLayout(v_layout)
         layout.addWidget(Qt.QLabel('Pixel size :'), row, 0)
         layout.addLayout(h_layout, row, 1)
-        layout.addWidget(Qt.QLabel('TBD'), row, 2)
+        layout.addWidget(Qt.QLabel('um'), row, 2)
 
         # ===
 
@@ -956,30 +955,28 @@ class MergeWidget(Qt.QWidget):
         try:
             name = 'Beam Energy'
             beam_energy = to_double_or_none(widgets.beam_nrg_edit.text())
+            if beam_energy is None:
+                raise ValueError('parameter is mandatory.')
 
             name = 'Direct beam'
             dir_beam_h = to_double_or_none(widgets.dir_beam_h_edit.text())
             dir_beam_v = to_double_or_none(widgets.dir_beam_v_edit.text())
-            if (dir_beam_h is None) ^ (dir_beam_v is None):
-                raise ValueError('both values must be set (or none of them).')
+            if (dir_beam_h is None) or (dir_beam_v is None):
+                raise ValueError('parameter is mandatory.')
             center_chan = [dir_beam_h, dir_beam_v]
-            if None in center_chan:
-                center_chan = None
 
             name = 'Channel per degree'
             chpdeg_h = to_double_or_none(widgets.chpdeg_h_edit.text())
             chpdeg_v = to_double_or_none(widgets.chpdeg_v_edit.text())
-            if (chpdeg_h is None) ^ (chpdeg_v is None):
-                raise ValueError('both values must be set (or none of them).')
+            if (chpdeg_h is None) or (chpdeg_v is None):
+                raise ValueError('parameter is mandatory.')
             chan_per_deg = [chpdeg_h, chpdeg_v]
-            if None in chan_per_deg:
-                chan_per_deg = None
 
-            name = 'Pixe size'
+            name = 'Pixel size'
             pixelsize_h = to_double_or_none(widgets.pixelsize_h_edit.text())
             pixelsize_v = to_double_or_none(widgets.pixelsize_v_edit.text())
-            if (pixelsize_h is None) ^ (pixelsize_v is None):
-                raise ValueError('both values must be set (or none of them).')
+            if (pixelsize_h is None) or (pixelsize_v is None):
+                raise ValueError('parameter is mandatory.')
             pixelsize = [pixelsize_h, pixelsize_v]
             if None in pixelsize:
                 pixelsize = None
@@ -990,7 +987,7 @@ class MergeWidget(Qt.QWidget):
             elif widgets.det_phi_rb.isChecked():
                 det_orientation = 'phi'
             else:
-                det_orientation = None
+                raise ValueError('parameter is mandatory.')
 
             name = 'master'
             master = widgets.master_edit.text()
@@ -1132,15 +1129,12 @@ class MergeWidget(Qt.QWidget):
         if merger is None:
             enable = False
         else:
-            selected_ids = merger.selected_ids
-            if len(selected_ids) > 0:
-                enable = True
-            else:
-                enable = False
+            matched_ids = merger.matched_ids
+            enable = merger.parsed and len(merger.matched_ids) > 0
+
         widgets.output_gbx.setEnabled(enable)
         
         if enable:
-            selected = merger.selected_ids[0]
             master = merger.master_file
             # improve on this
             master = widgets.master_edit.text()
@@ -1229,23 +1223,21 @@ class MergeWidget(Qt.QWidget):
             selected_ids = []
             no_match_ids = []
             no_img_ids = []
+            enable = False
         else:
             matched_ids = merger.matched_ids
             selected_ids = merger.selected_ids
             no_match_ids = merger.no_match_ids
             no_img_ids = merger.no_img_ids
+            enable = merger.parsed
 
         n_total = len(matched_ids)
         n_selected = len(selected_ids)
         n_no_match = len(no_match_ids)
         n_no_img = len(no_img_ids)
         
-        if n_selected > 0:
-            widgets.scans_gbx.setEnabled(True)
-            widgets.params_gbx.setEnabled(True)
-        else:
-            widgets.scans_gbx.setEnabled(False)
-            widgets.params_gbx.setEnabled(False)
+        widgets.scans_gbx.setEnabled(enable)
+        widgets.params_gbx.setEnabled(len(matched_ids)>0)
 
         widgets.total_scans_edit.setText(str(n_total))
         widgets.selected_scans_edit.setText(str(n_selected))

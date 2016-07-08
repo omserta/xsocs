@@ -110,7 +110,6 @@ class _SpinBoxLayout(Qt.QHBoxLayout):
 
 
 class _ScansSelectDialog(Qt.QDialog):
-    merge_done = Qt.Signal()
     
     def __init__(self, merger, **kwargs):
         super(_ScansSelectDialog, self).__init__(**kwargs)
@@ -154,6 +153,7 @@ class _ScansSelectDialog(Qt.QDialog):
 
         self.__table_widget = table_widget
         self.__merger = merger
+        self.__sig_merge_done.connect(self.__merge_done)
 
     def __on_accept(self, *args, **kwags):
         table_widget = self.__table_widget
@@ -208,15 +208,13 @@ class _ScansInfoDialog(Qt.QDialog):
         bn_box.rejected.connect(self.reject)
 
 class _MergeProcessDialog(Qt.QDialog):
-    merge_done = Qt.Signal()
+    __sig_merge_done = Qt.Signal()
     
-    def __init__(self, merge_worker, **kwargs):
+    def __init__(self, merger, **kwargs):
         super(_MergeProcessDialog, self).__init__(**kwargs)
         layout = Qt.QVBoxLayout(self)
 
-        merger = merge_worker.merger
-
-        files = merge_worker.merger.summary()
+        files = merger.summary()
         output_dir = merger.output_dir
 
         label = Qt.QLabel('<html><head/><body><p align="center">'
@@ -262,15 +260,16 @@ class _MergeProcessDialog(Qt.QDialog):
         layout.addWidget(bn_box)
         bn_box.accepted.connect(self.__on_accept)
         bn_box.rejected.connect(self.reject)
+        self.__sig_merge_done.connect(self.__merge_done)
 
-        merge_worker.merge_done.connect(self.__merge_done)
-        self.__merge_worker = merge_worker
+        #merger.merge_done.connect(self.__merge_done)
         self.__tree_widget = tree_widget
         self.__bn_box = bn_box
         self.__abort_diag = None
+        self.__merger = merger
 
     def __on_accept(self, *args, **kwargs):
-        merger = self.__merge_worker.merger
+        merger = self.__merger
         files = merger.summary(fullpath=True)
 
         warn = any(os.path.exists(f) for f in files.values())
@@ -295,7 +294,9 @@ class _MergeProcessDialog(Qt.QDialog):
 
         self.__qtimer = Qt.QTimer()
         self.__qtimer.timeout.connect(self.__on_progress)
-        self.__merge_worker.merge()
+        self.__merger.merge(overwrite=True,
+                            blocking=False,
+                            callback=self.__sig_merge_done.emit)
         self.__on_progress()
         self.__qtimer.start(1000)
 
@@ -312,7 +313,7 @@ class _MergeProcessDialog(Qt.QDialog):
         abort_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
         abort_diag.setStandardButtons(Qt.QMessageBox.NoButton)
         abort_diag.show()
-        self.__merge_worker.merger.abort_merge(wait=False)
+        self.__merger.abort_merge(wait=False)
 
     def __merge_done(self):
         print 'TOTAL', time.time() - self.__time
@@ -326,7 +327,7 @@ class _MergeProcessDialog(Qt.QDialog):
         self.__bn_box.rejected.connect(self.accept)
 
     def __on_progress(self, *args, **kwargs):
-        progress = self.__merge_worker.merger.progress()
+        progress = self.__merger.merge_progress()
         if progress is None:
             return
         tree_wid = self.__tree_widget
@@ -341,16 +342,6 @@ class _MergeProcessDialog(Qt.QDialog):
                 item = item[0]
                 wid = tree_wid.itemWidget(item, 1)
                 wid.setValue(prog)
-                #if prog > 0:
-                    #if not isinstance(wid, Qt.QProgressBar):
-                        #wid = Qt.QProgressBar()
-                        #tree_wid.setItemWidget(item, 1, wid)
-                    #wid.setValue(prog)
-                #elif prog < 0:
-                    #if isinstance(wid, Qt.QProgressBar):
-                        ##wid = Qt.QLabel('Err')
-                        #tree_wid.setItemWidget(item, 1, None)
-                        #item.setText(1, 'err')
         item = tree_wid.findItems('master',
                                   flags,
                                   column=2)
@@ -361,6 +352,8 @@ class _MergeProcessDialog(Qt.QDialog):
 
 
 class MergeWidget(Qt.QWidget):
+    
+    __sig_parse_done = Qt.Signal()
 
     def __init__(self,
                  spec_file=None,
@@ -802,8 +795,7 @@ class MergeWidget(Qt.QWidget):
         merge_bn.setEnabled(False)
         parse_bn.setEnabled(False)
 
-        self.__merge_worker = _MergeWorker()
-        self.__merge_worker.parse_done.connect(self.__parse_spec_done)
+        self.__merger = None
         self.info_wid = None
 
         # named tuple with references to all the important widgets
@@ -886,7 +878,9 @@ class MergeWidget(Qt.QWidget):
 
         self.__tmp_dir_merge = tmp_dir
 
-        print('Using temporary fold : {0}.'.format(tmp_dir))
+        print('Using temporary folder : {0}.'.format(tmp_dir))
+        
+        self.__sig_parse_done.connect(self.__parse_spec_done)
 
         spec_file_edit.textChanged.connect(self.__input_edit_textChanged)
         spec_file_bn.clicked.connect(self.__pick_specfile)
@@ -928,13 +922,11 @@ class MergeWidget(Qt.QWidget):
             shutil.rmtree(self.__tmp_root, ignore_errors=True)
         elif os.path.exists(self.__tmp_dir_merge):
             shutil.rmtree(self.__tmp_dir_merge, ignore_errors=True)
-        if self.__merge_worker:
-            self.__merge_worker.exit(0)
         super(MergeWidget, self).closeEvent(event)
 
     def __reset_master(self, *args, **kwargs):
         widgets = self.__widgets
-        merger = self.__merge_worker.merger
+        merger = self.merger
         if merger is None:
             return
         merger.set_master_file(None)
@@ -943,8 +935,7 @@ class MergeWidget(Qt.QWidget):
 
     def __merge_bn_clicked(self, *args, **kwargs):
         widgets = self.__widgets
-        merge_worker = self.__merge_worker
-        merger = self.__merge_worker.merger
+        merger = self.__merger
 
         if merger is None:
             # this part shouldn't even be called, just putting this
@@ -1019,7 +1010,7 @@ class MergeWidget(Qt.QWidget):
                                     '{0} : {1}.'.format(name, str(ex)))
             return
 
-        process_diag = _MergeProcessDialog(merge_worker, parent=self)
+        process_diag = _MergeProcessDialog(merger, parent=self)
         process_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
         process_diag.accepted.connect(self.__merge_done)
         process_diag.rejected.connect(self.__merge_done)
@@ -1110,7 +1101,7 @@ class MergeWidget(Qt.QWidget):
         self.__update_output_gbx()
 
     def __edit_scans(self, *args, **kwargs):
-        merger = self.__merge_worker.merger
+        merger = self.__merger
         if merger is None:
             return
         ans = _ScansSelectDialog(merger, parent=self).exec_()
@@ -1118,7 +1109,7 @@ class MergeWidget(Qt.QWidget):
             self.__update_scans_infos()
 
     def __view_other_scans(self, *args, **kwargs):
-        merger = self.__merge_worker.merger
+        merger = self.__merger
         if merger is None:
             return
         ans = _ScansInfoDialog(merger, parent=self).exec_()
@@ -1170,18 +1161,23 @@ class MergeWidget(Qt.QWidget):
 
         version = widgets.version_cbx.currentIndex()
         spec_file = widgets.spec_file_edit.text()
-        img_file = widgets.img_dir_edit.text()
+        img_dir = widgets.img_dir_edit.text()
 
-        if len(img_file) == 0:
-            img_file = None
+        if len(img_dir) == 0:
+            img_dir = None
         else:
-            img_file = str(img_file)
+            img_dir = str(img_dir)
 
         try:
-            id01_merger = Id01DataMerger(str(spec_file),
-                                         self.__tmp_dir_merge,
-                                         img_dir_base=img_file,
-                                         version=version)
+            if self.__merger is None:
+                self.__merger = Id01DataMerger(str(spec_file),
+                                               self.__tmp_dir_merge,
+                                               img_dir=img_dir,
+                                               version=version)
+            else:
+                self.__merger.reset(str(spec_file),
+                                    img_dir=img_dir,
+                                    version=version)
         except Exception as ex:
             msg = ('Parsing failed: {0}.\n'
                    'Message : {1}.'
@@ -1205,10 +1201,8 @@ class MergeWidget(Qt.QWidget):
         info_wid.setStandardButtons(Qt.QMessageBox.NoButton)
         info_wid.show()
         self.info_wid = info_wid
-
-        self.__merger = id01_merger
-        self.__merge_worker.setMerger(id01_merger)
-        self.__merge_worker.parse()
+        self.__merger.parse(blocking=False,
+                            callback=self.__sig_parse_done.emit)
 
     def __parse_spec_done(self, *args, **kwargs):
         widgets = self.__widgets
@@ -1265,59 +1259,6 @@ def before_after(f):
         f(*args, **kwargs)  
         print('after', f.func_name)  
     return decorator  
-
-class _MergeWorker(Qt.QObject):
-    """
-    WARNING : NOT thread safe!!
-    """
-    parse_done = Qt.Signal()
-    merge_done = Qt.Signal()
-    parse_started = Qt.Signal()
-    merge_started = Qt.Signal()
-
-    def __init__(self,
-                 merger_obj=None):
-        super(_MergeWorker, self).__init__()
-        self.__thread = Qt.QThread(self)
-
-        self.merger = merger_obj
-
-        self.moveToThread(self.__thread)
-        
-        self.__thread.start()
-
-        self.parse_started.connect(self.__do_parse)
-        self.merge_started.connect(self.__do_merge)
-
-    def setMerger(self, merger):
-        self.merger = merger
-
-    def parse(self):
-        if self.merger is None:
-            raise ValueError('No merger set.')
-        self.parse_started.emit()
-
-    def merge(self):
-        if self.merger is None:
-            raise ValueError('No merger set.')
-        self.merge_started.emit()
-
-    def __do_parse(self):
-        self.merger.parse()
-        self.parse_done.emit()
-
-    def __do_merge(self):
-        self.merger.merge(overwrite=True,
-                          blocking=False,
-                          callback=self.__on_done)
-
-    def __on_done(self):
-        self.merge_done.emit()
-
-    def exit(self, code):
-        self.__thread.exit(code)
-        
-
 
 if __name__ == '__main__':
     app = Qt.QApplication(sys.argv)

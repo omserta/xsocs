@@ -60,15 +60,15 @@ _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
 
 
 class Id01DataMerger(object):
+    """
+    NOT thread safe
+    """
+
     def __init__(self,
                  spec_fname,
                  work_dir,
                  img_dir=None,
                  version=1):
-
-    """
-    NOT thread safe
-    """
 
         if not os.path.exists(work_dir):
             os.makedirs(work_dir)

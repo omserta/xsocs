@@ -63,25 +63,41 @@ class Id01DataMerger(object):
     def __init__(self,
                  spec_fname,
                  work_dir,
-                 img_dir_base=None,
+                 img_dir=None,
                  version=1):
+
+    """
+    NOT thread safe
+    """
 
         if not os.path.exists(work_dir):
             os.makedirs(work_dir)
 
         spec_h5 = os.path.join(work_dir, 'temp_spec.h5')
+        self.__spec_h5 = spec_h5
+
+        self.__tmp_dir = work_dir
+
+        self.__merge_thread = None
+        self.__parse_thread = None
+
+        self.reset(spec_fname,
+                   img_dir=img_dir,
+                   version=version)
+
+    def reset(self,
+              spec_fname,
+              img_dir=None,
+              version=1):
+        self.__running_exception()
 
         self.__spec_fname = spec_fname
-        self.__img_dir_base = img_dir_base
-        self.__spec_h5 = spec_h5
-        self.__tmp_dir = work_dir
+        self.__img_dir = img_dir
         self.__version = version
         self.__master_file = 'master.h5'
 
         self.__parsed = False
         self.__merged = False
-
-        self.__thread = None
 
         self.__master = ''
         self._output_dir = None
@@ -90,31 +106,84 @@ class Id01DataMerger(object):
 
         self.__n_proc = None
 
-    def parse(self):
-        _spec_to_h5(self.__spec_fname, self.__spec_h5)
+        self.__merge_thread = None
+        self.__parse_thread = None
 
-        match_results = _find_scan_img_files(self.__spec_h5,
-                                             img_dir=self.__img_dir_base,
-                                             version=self.__version)
+        self.__set_parse_results(reset=True)
 
-        self.__matched_scans = match_results[0]
-        self.__no_match_scans = match_results[1]
-        self.__no_img_scans = match_results[2]
-        self.__on_error_scans = match_results[3]
-        self.__selected_ids = set(self.__matched_scans.keys())
+    def __set_parse_results(self, reset=False):
+        if reset is False and self.__parse_thread is None:
+            # shouldnt even be here
+            raise RuntimeError('This should be called from an active'
+                               '_ParseThread.')
+        if reset:
+            self.__matched_scans = None
+            self.__no_match_scans = None
+            self.__no_img_scans = None
+            self.__on_error_scans = None
+            self.__selected_ids = set()
 
-        self.__matched_ids = sorted(self.__matched_scans.keys())
-        self.__no_match_ids = sorted(self.__no_match_scans.keys())
-        self.__no_img_ids = sorted(self.__no_img_scans)
-        self.__on_error_ids = sorted(self.__on_error_scans)
+            self.__matched_ids = []
+            self.__no_match_ids = []
+            self.__no_img_ids = []
+            self.__on_error_ids = []
+            self.__parsed = False
+        else:
+            match_results = self.__parse_thread.results()
+            self.__matched_scans = match_results[0]
+            self.__no_match_scans = match_results[1]
+            self.__no_img_scans = match_results[2]
+            self.__on_error_scans = match_results[3]
+            self.__selected_ids = set(self.__matched_scans.keys())
 
-        if len(self.__matched_ids) > 0:
-            scan = self.__matched_scans[self.__matched_ids[0]]
+            self.__matched_ids = sorted(self.__matched_scans.keys())
+            self.__no_match_ids = sorted(self.__no_match_scans.keys())
+            self.__no_img_ids = sorted(self.__no_img_scans)
+            self.__on_error_ids = sorted(self.__on_error_scans)
 
-        self.__parsed = True
+            if len(self.__matched_ids) > 0:
+                scan = self.__matched_scans[self.__matched_ids[0]]
 
-        if len(self.__master) == 0:
-            self.set_master_file(None)
+            self.__parsed = True
+
+        self.__merged = False
+        self.set_master_file(None)
+
+    def __running_exception(self):
+        if self.is_running():
+            raise RuntimeError('Operation not permitted while '
+                               'a parse or merge in running.')
+
+    def is_running(self):
+        return ((self.__merge_thread and self.__merge_thread.is_alive()) or
+                self.__parse_thread and self.__parse_thread.is_alive())
+
+    def parse(self, blocking=True, callback=None):
+
+        if self.__parse_thread is not None and self.__parse_thread.is_alive():
+            raise RuntimeError('A parse is already in progress.')
+
+        if self.__merge_thread is not None and self.__merge_thread.is_alive():
+            raise RuntimeError('A merge is already in progress.')
+
+        self.__parsed = False
+        
+        self.__parse_thread = _ParseThread(self.__spec_fname,
+                                           self.__spec_h5,
+                                           img_dir=self.__img_dir,
+                                           version=self.__version,
+                                           callback=self.__set_parse_results)
+
+        self.__parse_thread.start()
+
+        if blocking:
+            self.wait()
+
+        #_spec_to_h5(self.__spec_fname, self.__spec_h5)
+
+        #match_results = _find_scan_img_files(self.__spec_h5,
+                                             #img_dir=self.__img_dir,
+                                             #version=self.__version
 
     def __check_parsed(self):
         if not self.__parsed:
@@ -129,6 +198,12 @@ class Id01DataMerger(object):
               blocking=True,
               overwrite=False,
               callback=None): # TODO : check if files exist
+
+        if self.__parse_thread is not None and self.__parse_thread.is_alive():
+            raise RuntimeError('A parse is already in progress.')
+
+        if self.__merge_thread is not None and self.__merge_thread.is_alive():
+            raise RuntimeError('A merge is already in progress.')
 
         self.__check_parsed()
 
@@ -160,7 +235,7 @@ class Id01DataMerger(object):
         print('Merging scan IDs : {}.'
               ''.format(', '.join(self.selected_ids)))
 
-        self.__thread = _MergeThread(self.__output_dir,
+        self.__merge_thread = _MergeThread(self.__output_dir,
                                      self.__spec_h5,
                                      scans_infos,
                                      self.__beam_energy,
@@ -173,28 +248,30 @@ class Id01DataMerger(object):
                                      n_proc=self.__n_proc,
                                      compression=self.__compression,
                                      callback=callback)
-        self.__thread.start()
+        self.__merge_thread.start()
 
         if blocking:
-            self.__thread.wait()
+            self.wait()
 
-    def wait_merge(self):
-        if self.__thread is not None:
-            self.__thread.wait()
+    def wait(self):
+        if self.__merge_thread is not None:
+            self.__merge_thread.wait()
+        if self.__parse_thread is not None:
+            self.__parse_thread.wait()
     
     def abort_merge(self, wait=True):
-        if self.__thread is not None:
-            self.__thread.abort(wait=wait)
+        if self.__merge_thread is not None:
+            self.__merge_thread.abort(wait=wait)
 
     def merge_results(self):
-        if self.__thread is not None:
-            return self.__thread.results()
+        if self.__merge_thread is not None:
+            return self.__merge_thread.results()
         else:
             return None
 
-    def progress(self):
-        if self.__thread is not None:
-            return self.__thread.progress()
+    def merge_progress(self):
+        if self.__merge_thread is not None:
+            return self.__merge_thread.progress()
         return None
 
     def select(self, scan_ids, clear=False):
@@ -249,7 +326,7 @@ class Id01DataMerger(object):
         return copy.deepcopy(scan_info['image'])
 
     def common_prefix(self):
-        self.__check_parsed()
+        #self.__check_parsed()
 
         scan_ids = self.__selected_ids
 
@@ -379,7 +456,7 @@ def merge_scan_data(output_dir,
                     detector_orient=None,
                     scan_ids=None,
                     master_f=None,
-                    img_dir_base=None,
+                    img_dir=None,
                     n_proc=None,
                     version=1,
                     compression='lzf',
@@ -446,7 +523,7 @@ def merge_scan_data(output_dir,
 
     id01_merger = Id01DataMerger(spec_fname,
                                  output_dir,
-                                 img_dir_base=img_dir_base,
+                                 img_dir=img_dir,
                                  version=version)
 
     id01_merger.parse()
@@ -630,6 +707,48 @@ def _find_scan_img_files(spec_h5_filename,
     result.extend(elem for elem in imgfile_info[1:])
 
     return tuple(result)
+
+
+# #######################################################################
+# #######################################################################
+# #######################################################################
+
+
+class _ParseThread(Thread):
+    def __init__(self,
+                 spec_fname,
+                 spec_h5,
+                 img_dir,
+                 version,
+                 callback=None):
+        super(_ParseThread, self).__init__()
+
+        self.__spec_fname = spec_fname
+        self.__spec_h5 = spec_h5
+        self.__callback = callback
+        self.__img_dir = img_dir
+        self.__version = version
+
+        self.__results = None
+
+    def run(self):
+        _spec_to_h5(self.__spec_fname, self.__spec_h5)
+
+        self.__results = _find_scan_img_files(self.__spec_h5,
+                                                    img_dir=self.__img_dir,
+                                                    version=self.__version)
+
+        if self.__callback:
+            self.__callback()
+
+    def results(self):
+        return self.__results
+
+    def progress(self):
+        return None
+
+    def wait(self):
+        self.join()
 
 
 # #######################################################################

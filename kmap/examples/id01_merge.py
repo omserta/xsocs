@@ -58,7 +58,7 @@ merge_scan_data(workdir,
                     center_chan=center_chan,
                     scan_ids=scan_ids,
                     master_f=master_f,
-                    img_dir_base=img_base,
+                    img_dir=img_base,
                     n_proc=None,
                     version=version)
 

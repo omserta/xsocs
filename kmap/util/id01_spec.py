@@ -112,7 +112,17 @@ class Id01DataMerger(object):
 
         self.__set_parse_results(reset=True)
 
-    def __set_parse_results(self, reset=False, callback=None):
+    def __on_merge_done(self, callback=None):
+        self.__merged = True
+        if callback:
+            callback()
+
+    def __on_parse_done(self, callback=None):
+        self.__set_parse_results()
+        if callback:
+            callback()
+
+    def __set_parse_results(self, reset=False):
         if reset is False and self.__parse_thread is None:
             # shouldnt even be here
             raise RuntimeError('This should be called from an active'
@@ -150,9 +160,6 @@ class Id01DataMerger(object):
         self.__merged = False
         self.set_master_file(None)
 
-        if callback:
-            callback()
-
     def __running_exception(self):
         if self.is_running():
             raise RuntimeError('Operation not permitted while '
@@ -171,8 +178,9 @@ class Id01DataMerger(object):
             raise RuntimeError('A merge is already in progress.')
 
         self.__parsed = False
+        self.__merged = False
         
-        callback = functools.partial(self.__set_parse_results,
+        callback = functools.partial(self.__on_parse_done,
                                      callback=callback)
         self.__parse_thread = _ParseThread(self.__spec_fname,
                                            self.__spec_h5,
@@ -206,6 +214,8 @@ class Id01DataMerger(object):
             raise RuntimeError('A merge is already in progress.')
 
         self.__check_parsed()
+        
+        self.__merged = False
 
         if len(self.__selected_ids) == 0:
             raise ValueError('No scans selected for merge.')
@@ -234,6 +244,9 @@ class Id01DataMerger(object):
 
         print('Merging scan IDs : {}.'
               ''.format(', '.join(self.selected_ids)))
+
+        callback = functools.partial(self.__on_merge_done,
+                                     callback=callback)
 
         self.__merge_thread = _MergeThread(self.__output_dir,
                                      self.__spec_h5,
@@ -440,6 +453,8 @@ class Id01DataMerger(object):
     on_error_ids = property(lambda self: self.__on_error_ids)
     output_dir = property(lambda self: self.__output_dir)
     master_file = property(lambda self: self.__master)
+    parsed = property(lambda self: self.__parsed)
+    merged = property(lambda self: self.__merged)
 
 
 # #######################################################################

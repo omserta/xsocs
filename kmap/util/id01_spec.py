@@ -349,8 +349,9 @@ class Id01DataMerger(object):
         prefixes = [self.__matched_scans[scan_id]['spec']['prefix']
                     for scan_id in scan_ids]
         common = os.path.commonprefix(prefixes)
-        
-        if len(prefixes[0]) > len(common) and not common.endswith('_'):
+
+        # this has to be tests and made more robust
+        if len(prefixes[0]) > len(common) or common.endswith('_'):
             common = common.rpartition('_')[0]
 
         return common
@@ -404,7 +405,7 @@ class Id01DataMerger(object):
                        for scan_id in sel_ids})}
 
         return files
-    
+
     beam_energy = property(lambda self: self.__beam_energy)
     @beam_energy.setter
     def beam_energy(self, value):

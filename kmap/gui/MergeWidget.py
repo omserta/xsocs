@@ -1,13 +1,8 @@
-#!/users/naudet/bin/python_id01
-
 import os
-import sys
 import time
 import shutil
-import threading
 from collections import namedtuple
 
-import kmap as xsocs
 from kmap.util.id01_spec import Id01DataMerger
 
 from silx.gui import qt as Qt
@@ -23,13 +18,13 @@ _HELP_WIDGET_STYLE = """
                 padding: 1px 4px;
                 background-color: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:1, fx:0.5, fy:0.5, stop:0 rgba(0, 0, 255, 255), stop:1 rgba(255, 255, 255, 255));
                 color: rgb(255, 255, 255);
-            }"""
+            }"""  # noqa
 
 
 def _create_tmp_dir():
-    
+
     qt_tmp_tpl = os.path.join(Qt.QDir.tempPath(),
-                               'tmpXsocsXXXXXX')
+                              'tmpXsocsXXXXXX')
     try:
         tmp_dir = Qt.QTemporaryDir(qt_tmp_tpl)
         isValid = tmp_dir.isValid()
@@ -43,6 +38,7 @@ def _create_tmp_dir():
         delete_tmp = True
 
     return tmp_dir, delete_tmp
+
 
 class _AdjustedPushButton(Qt.QPushButton):
     """
@@ -88,7 +84,7 @@ class _SpinBoxLayout(Qt.QHBoxLayout):
                  **kwargs):
         super(_SpinBoxLayout, self).__init__(**kwargs)
         spinbox = self.__spinbox = klass()
-        label = self.__label = Qt.QLabel(unit)
+        self.__label = Qt.QLabel(unit)
 
         if min_value is not None:
             spinbox.setMinimum(min_value)
@@ -110,7 +106,7 @@ class _SpinBoxLayout(Qt.QHBoxLayout):
 
 
 class _ScansSelectDialog(Qt.QDialog):
-    
+
     def __init__(self, merger, **kwargs):
         super(_ScansSelectDialog, self).__init__(**kwargs)
         layout = Qt.QVBoxLayout(self)
@@ -123,9 +119,9 @@ class _ScansSelectDialog(Qt.QDialog):
         for num, scan_id in enumerate(matched):
             item = Qt.QTableWidgetItem()
             item.setFlags(Qt.Qt.ItemIsUserCheckable |
-                            Qt.Qt.ItemIsEditable |
-                            Qt.Qt.ItemIsSelectable |
-                            Qt.Qt.ItemIsEnabled)
+                          Qt.Qt.ItemIsEditable |
+                          Qt.Qt.ItemIsSelectable |
+                          Qt.Qt.ItemIsEnabled)
             state = Qt.Qt.Checked if scan_id in selected else Qt.Qt.Unchecked
             item.setCheckState(state)
             table_widget.setItem(num, 0, item)
@@ -148,13 +144,13 @@ class _ScansSelectDialog(Qt.QDialog):
         bn_box.button(Qt.QDialogButtonBox.Ok).setText('Apply')
 
         layout.addWidget(bn_box)
-        bn_box.accepted.connect(self.__on_accept)
+        bn_box.accepted.connect(self.__onAccept)
         bn_box.rejected.connect(self.reject)
 
         self.__table_widget = table_widget
         self.__merger = merger
 
-    def __on_accept(self, *args, **kwags):
+    def __onAccept(self, *args, **kwags):
         table_widget = self.__table_widget
         rowCount = table_widget.rowCount()
         selected = []
@@ -168,7 +164,6 @@ class _ScansSelectDialog(Qt.QDialog):
 
 
 class _ScansInfoDialog(Qt.QDialog):
-    merge_done = Qt.Signal()
 
     def __init__(self, merger, **kwargs):
         super(_ScansInfoDialog, self).__init__(**kwargs)
@@ -206,9 +201,10 @@ class _ScansInfoDialog(Qt.QDialog):
         layout.addWidget(bn_box)
         bn_box.rejected.connect(self.reject)
 
+
 class _MergeProcessDialog(Qt.QDialog):
-    __sig_merge_done = Qt.Signal()
-    
+    __sigMergeDone = Qt.Signal()
+
     def __init__(self, merger, **kwargs):
         super(_MergeProcessDialog, self).__init__(**kwargs)
         layout = Qt.QVBoxLayout(self)
@@ -237,19 +233,21 @@ class _MergeProcessDialog(Qt.QDialog):
         tree_widget.setColumnHidden(2, True)
         # TODO improve
         master_item = Qt.QTreeWidgetItem([files['master'], '', 'master'])
-        {master_item.addChild(Qt.QTreeWidgetItem([files[scan_id], '', scan_id]))
+        {master_item.addChild(Qt.QTreeWidgetItem([files[scan_id],
+                                                  '',
+                                                  scan_id]))
          for scan_id in sorted(files.keys()) if scan_id != 'master'}
         tree_widget.addTopLevelItem(master_item)
-        wid = Qt.QProgressBar()
         tree_widget.setItemWidget(master_item, 1, Qt.QProgressBar())
         {tree_widget.setItemWidget(master_item.child(i_child),
-                                                     1,
-                                                     Qt.QProgressBar())
+                                   1,
+                                   Qt.QProgressBar())
          for i_child in range(master_item.childCount())}
         master_item.setExpanded(True)
         tree_widget.resizeColumnToContents(0)
         tree_widget.resizeColumnToContents(1)
-        width = tree_widget.sizeHintForColumn(0) + tree_widget.sizeHintForColumn(1) + 10
+        width = (tree_widget.sizeHintForColumn(0) +
+                 tree_widget.sizeHintForColumn(1) + 10)
         tree_widget.setMinimumWidth(width)
         layout.addWidget(tree_widget, stretch=1, alignment=Qt.Qt.AlignHCenter)
 
@@ -257,56 +255,53 @@ class _MergeProcessDialog(Qt.QDialog):
                                      Qt.QDialogButtonBox.Cancel)
         bn_box.button(Qt.QDialogButtonBox.Ok).setText('Merge')
         layout.addWidget(bn_box)
-        bn_box.accepted.connect(self.__on_accept)
+        bn_box.accepted.connect(self.__onAccept)
         bn_box.rejected.connect(self.reject)
-        self.__sig_merge_done.connect(self.__merge_done)
+        self.__sigMergeDone.connect(self.__mergeDone)
 
-        #merger.merge_done.connect(self.__merge_done)
         self.__tree_widget = tree_widget
         self.__bn_box = bn_box
         self.__abort_diag = None
         self.__merger = merger
 
-    def __on_accept(self, *args, **kwargs):
+    def __onAccept(self, *args, **kwargs):
         merger = self.__merger
-        files = merger.summary(fullpath=True)
-
-        warn = any(os.path.exists(f) for f in files.values())
+        warn = merger.check_overwrite()
 
         if warn:
             ans = Qt.QMessageBox.warning(self,
-                                        'Overwrite?',
-                                        ('Some files already exist.'
-                                        '\nDo you want to overwrite them?'),
-                                        buttons=Qt.QMessageBox.Yes |
-                                        Qt.QMessageBox.No)
+                                         'Overwrite?',
+                                         ('Some files already exist.'
+                                          '\nDo you want to overwrite them?'),
+                                         buttons=Qt.QMessageBox.Yes |
+                                         Qt.QMessageBox.No)
             if ans == Qt.QMessageBox.No:
                 return
 
-        self.__merge_start()
-    
-    def __merge_start(self):
+        self.__mergeStart()
+
+    def __mergeStart(self):
         self.__bn_box.rejected.disconnect(self.reject)
-        self.__bn_box.rejected.connect(self.__on_abort)
+        self.__bn_box.rejected.connect(self.__onAbort)
         self.__bn_box.button(Qt.QDialogButtonBox.Ok).setEnabled(False)
         self.__bn_box.button(Qt.QDialogButtonBox.Cancel).setText('Abort')
 
         self.__qtimer = Qt.QTimer()
-        self.__qtimer.timeout.connect(self.__on_progress)
+        self.__qtimer.timeout.connect(self.__onProgress)
         self.__merger.merge(overwrite=True,
                             blocking=False,
-                            callback=self.__sig_merge_done.emit)
-        self.__on_progress()
+                            callback=self.__sigMergeDone.emit)
+        self.__onProgress()
         self.__qtimer.start(1000)
 
         self.__time = time.time()
 
-    def __on_abort(self, *args, **kwargs):
+    def __onAbort(self, *args, **kwargs):
         abort_diag = Qt.QMessageBox(Qt.QMessageBox.Information,
-                                  'Aborting...',
-                                  '<b>Cancelling merge.</b>'
-                                  '<center>Please wait...</center>',
-                                  parent=self)
+                                    'Aborting...',
+                                    '<b>Cancelling merge.</b>'
+                                    '<center>Please wait...</center>',
+                                    parent=self)
         self.__abort_diag = abort_diag
         abort_diag.setTextFormat(Qt.Qt.RichText)
         abort_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
@@ -314,18 +309,18 @@ class _MergeProcessDialog(Qt.QDialog):
         abort_diag.show()
         self.__merger.abort_merge(wait=False)
 
-    def __merge_done(self):
+    def __mergeDone(self):
         print 'TOTAL', time.time() - self.__time
         self.__qtimer.stop()
         self.__qtimer = None
-        self.__on_progress()
+        self.__onProgress()
         if self.__abort_diag is not None:
             self.__abort_diag.done(0)
             self.__abort_diag = None
         self.__bn_box.button(Qt.QDialogButtonBox.Cancel).setText('Close')
         self.__bn_box.rejected.connect(self.accept)
 
-    def __on_progress(self, *args, **kwargs):
+    def __onProgress(self, *args, **kwargs):
         progress = self.__merger.merge_progress()
         if progress is None:
             return
@@ -337,22 +332,22 @@ class _MergeProcessDialog(Qt.QDialog):
             item = tree_wid.findItems(scan_id,
                                       flags,
                                       column=2)
-            if len(item)>0:
+            if len(item) > 0:
                 item = item[0]
                 wid = tree_wid.itemWidget(item, 1)
                 wid.setValue(prog)
         item = tree_wid.findItems('master',
                                   flags,
                                   column=2)
-        if len(item)>0:
+        if len(item) > 0:
             item = item[0]
             wid = tree_wid.itemWidget(item, 1)
             wid.setValue(total / len(progress))
 
 
 class MergeWidget(Qt.QWidget):
-    
-    __sig_parse_done = Qt.Signal()
+
+    __sigParseDone = Qt.Signal()
 
     def __init__(self,
                  spec_file=None,
@@ -379,7 +374,6 @@ class MergeWidget(Qt.QWidget):
         line_edit_col = 1
         file_bn_col = 4
         vers_help_col = 2
-        vers_spacer_col = 3
         last_col = file_bn_col + 1
 
         spec_row = 0
@@ -504,7 +498,7 @@ class MergeWidget(Qt.QWidget):
         # ===
 
         v_line = Qt.QFrame()
-        v_line.setFrameShape(Qt.QFrame.VLine);
+        v_line.setFrameShape(Qt.QFrame.VLine)
         v_line.setFrameShadow(Qt.QFrame.Sunken)
         grp_layout.addWidget(v_line)
 
@@ -549,41 +543,13 @@ class MergeWidget(Qt.QWidget):
 
         scan_layout.addWidget(label, 2, 0, Qt.Qt.AlignLeft)
         scan_layout.addWidget(no_img_info_edit, 2, 1, Qt.Qt.AlignLeft)
-        
+
         # ===
 
         v_line = Qt.QFrame()
-        v_line.setFrameShape(Qt.QFrame.VLine);
+        v_line.setFrameShape(Qt.QFrame.VLine)
         v_line.setFrameShadow(Qt.QFrame.Sunken)
         grp_layout.addWidget(v_line)
-
-        ## ===========
-        ## parsing errors scans
-        ## ===========
-
-        #scan_layout = Qt.QGridLayout()
-        #grp_layout.addLayout(scan_layout)
-
-        #h_layout = Qt.QHBoxLayout()
-        #label = Qt.QLabel('<span style=" font-weight:600; color:#ff6600;">'
-                          #'Invalid scans</span>')
-        #invalid_scans_bn = _AdjustedPushButton('View')
-        #h_layout.addWidget(label)
-        #h_layout.addWidget(invalid_scans_bn)
-
-        #scan_layout.addLayout(h_layout, 0, 0, 1, 2)
-
-        #label = Qt.QLabel('Errors :')
-        #unmatched_scans_edit = Qt.QLineEdit('0')
-        #unmatched_scans_edit.setReadOnly(True)
-        #fm = unmatched_scans_edit.fontMetrics()
-        #width = (fm.boundingRect('0123456').width() +
-                 #fm.boundingRect('00').width())
-        #unmatched_scans_edit.setMaximumWidth(width)
-        #unmatched_scans_edit.setAlignment(Qt.Qt.AlignRight)
-
-        #scan_layout.addWidget(label, 1, 0, Qt.Qt.AlignLeft)
-        #scan_layout.addWidget(unmatched_scans_edit, 1, 1, Qt.Qt.AlignLeft)
 
         # ################
         # parameters
@@ -601,15 +567,9 @@ class MergeWidget(Qt.QWidget):
         # beam energy
         # ===========
 
-        # could put the unit in the spinbox using setSuffix, but I feel like
-        # it's more readable if it's outside.
-        # TODO : clear button?
         row = 0
-        beam_nrg_edit = _AdjustedLineEdit(8)#Qt.QLineEdit()#Qt.QDoubleSpinBox()
+        beam_nrg_edit = _AdjustedLineEdit(8)
         beam_nrg_edit.setValidator(Qt.QDoubleValidator(beam_nrg_edit))
-        #beam_nrg_spin.setSpecialValueText('N/A')
-        #beam_nrg_spin.setMaximum(_MAX_BEAM_ENERGY_EV)
-        #beam_nrg_spin.setMinimum(0.)
         beam_nrg_edit.setAlignment(Qt.Qt.AlignRight)
         layout.addWidget(Qt.QLabel('Beam energy :'), row, 0)
         layout.addWidget(beam_nrg_edit, row, 1, Qt.Qt.AlignRight)
@@ -619,7 +579,7 @@ class MergeWidget(Qt.QWidget):
 
         row += 1
         h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine);
+        h_line.setFrameShape(Qt.QFrame.HLine)
         h_line.setFrameShadow(Qt.QFrame.Sunken)
         layout.addWidget(h_line, row, 0, 1, 3)
 
@@ -646,7 +606,7 @@ class MergeWidget(Qt.QWidget):
 
         row += 1
         h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine);
+        h_line.setFrameShape(Qt.QFrame.HLine)
         h_line.setFrameShadow(Qt.QFrame.Sunken)
         layout.addWidget(h_line, row, 0, 1, 3)
 
@@ -674,7 +634,7 @@ class MergeWidget(Qt.QWidget):
 
         row += 1
         h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine);
+        h_line.setFrameShape(Qt.QFrame.HLine)
         h_line.setFrameShadow(Qt.QFrame.Sunken)
         layout.addWidget(h_line, row, 0, 1, 3)
 
@@ -702,7 +662,7 @@ class MergeWidget(Qt.QWidget):
 
         row += 1
         h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine);
+        h_line.setFrameShape(Qt.QFrame.HLine)
         h_line.setFrameShadow(Qt.QFrame.Sunken)
         layout.addWidget(h_line, row, 0, 1, 3)
 
@@ -861,7 +821,7 @@ class MergeWidget(Qt.QWidget):
                                      merge_bn=merge_bn,
                                      cancel_bn=cancel_bn)
 
-        self.__reset_state()
+        self.__resetState()
 
         if tmp_dir is None:
             tmp_dir, delete_tmp = _create_tmp_dir()
@@ -878,25 +838,25 @@ class MergeWidget(Qt.QWidget):
         self.__tmp_dir_merge = tmp_dir
 
         print('Using temporary folder : {0}.'.format(tmp_dir))
-        
-        self.__sig_parse_done.connect(self.__parse_spec_done)
 
-        spec_file_edit.textChanged.connect(self.__input_edit_textChanged)
-        spec_file_bn.clicked.connect(self.__pick_specfile)
-        img_dir_edit.textChanged.connect(self.__input_edit_textChanged)
-        img_dir_bn.clicked.connect(self.__pick_imgdir)
-        reset_bn.clicked.connect(self.__reset_master)
-        parse_bn.clicked.connect(self.__parse_spec_start,
+        self.__sigParseDone.connect(self.__parseSpecDone)
+
+        spec_file_edit.textChanged.connect(self.__inputEditTextChanged)
+        spec_file_bn.clicked.connect(self.__pickSpecfile)
+        img_dir_edit.textChanged.connect(self.__inputEditTextChanged)
+        img_dir_bn.clicked.connect(self.__pickImageDir)
+        reset_bn.clicked.connect(self.__resetMaster)
+        parse_bn.clicked.connect(self.__parseSpecStart,
                                  Qt.Qt.QueuedConnection)
-        outdir_edit.textChanged.connect(self.__update_output_gbx)
-        outdir_bn.clicked.connect(self.__pick_output_dir)
-        master_edit.textChanged.connect(self.__update_output_gbx)
-        master_edit.editingFinished.connect(self.__master_edit_editingFinished)
-        merge_bn.clicked.connect(self.__merge_bn_clicked)
+        outdir_edit.textChanged.connect(self.__updateOutputGroupBox)
+        outdir_bn.clicked.connect(self.__pickOutputDir)
+        master_edit.textChanged.connect(self.__updateOutputGroupBox)
+        master_edit.editingFinished.connect(self.__masterEditingFinished)
+        merge_bn.clicked.connect(self.__mergeButtonClicked)
         cancel_bn.clicked.connect(self.close)
 
-        edit_scans_bn.clicked.connect(self.__edit_scans)
-        other_scans_bn.clicked.connect(self.__view_other_scans)
+        edit_scans_bn.clicked.connect(self.__editScans)
+        other_scans_bn.clicked.connect(self.__viewOtherScans)
 
         if img_dir is not None:
             img_dir_edit.setText(img_dir)
@@ -923,22 +883,22 @@ class MergeWidget(Qt.QWidget):
             shutil.rmtree(self.__tmp_dir_merge, ignore_errors=True)
         super(MergeWidget, self).closeEvent(event)
 
-    def __reset_master(self, *args, **kwargs):
+    def __resetMaster(self, *args, **kwargs):
         widgets = self.__widgets
-        merger = self.merger
+        merger = self.__merger
         if merger is None:
             return
-        merger.set_master_file(None)
+        merger.master_file = None
         master = merger.master_file
         widgets.master_edit.setText(master)
 
-    def __merge_bn_clicked(self, *args, **kwargs):
+    def __mergeButtonClicked(self, *args, **kwargs):
         widgets = self.__widgets
         merger = self.__merger
 
         if merger is None:
             # this part shouldn't even be called, just putting this
-            # in case someone decides to modify the code to enable the merge_bn 
+            # in case someone decides to modify the code to enable the merge_bn
             # even tho conditions are not met.
             Qt.QMessageBox.critical(self, 'Error',
                                     'No merger object found.',
@@ -947,79 +907,76 @@ class MergeWidget(Qt.QWidget):
 
         if len(merger.selected_ids) == 0:
             Qt.QMessageBox.warning(self,
-                                    'Selection error',
-                                    'At least one scan has to be selected.')
+                                   'Selection error',
+                                   'At least one scan has to be selected.')
             return
 
-        to_double_or_none = lambda txt: None if len(txt) == 0 else float(txt)
+        def assert_non_empty(txt):
+            if len(txt) == 0:
+                raise ValueError('parameter is mandatory.')
+            return txt
+
         try:
             name = 'Beam Energy'
-            beam_energy = to_double_or_none(widgets.beam_nrg_edit.text())
-            if beam_energy is None:
-                raise ValueError('parameter is mandatory.')
+            merger.beam_energy = assert_non_empty(widgets.beam_nrg_edit.text())
 
             name = 'Direct beam'
-            dir_beam_h = to_double_or_none(widgets.dir_beam_h_edit.text())
-            dir_beam_v = to_double_or_none(widgets.dir_beam_v_edit.text())
-            if (dir_beam_h is None) or (dir_beam_v is None):
-                raise ValueError('parameter is mandatory.')
-            center_chan = [dir_beam_h, dir_beam_v]
+            dir_beam_h = assert_non_empty(widgets.dir_beam_h_edit.text())
+            dir_beam_v = assert_non_empty(widgets.dir_beam_v_edit.text())
+            merger.center_chan = [dir_beam_h, dir_beam_v]
 
             name = 'Channel per degree'
-            chpdeg_h = to_double_or_none(widgets.chpdeg_h_edit.text())
-            chpdeg_v = to_double_or_none(widgets.chpdeg_v_edit.text())
-            if (chpdeg_h is None) or (chpdeg_v is None):
-                raise ValueError('parameter is mandatory.')
-            chan_per_deg = [chpdeg_h, chpdeg_v]
+            chpdeg_h = assert_non_empty(widgets.chpdeg_h_edit.text())
+            chpdeg_v = assert_non_empty(widgets.chpdeg_v_edit.text())
+            merger.chan_per_deg = [chpdeg_h, chpdeg_v]
 
             name = 'Pixel size'
-            pixelsize_h = to_double_or_none(widgets.pixelsize_h_edit.text())
-            pixelsize_v = to_double_or_none(widgets.pixelsize_v_edit.text())
-            if (pixelsize_h is None) or (pixelsize_v is None):
-                raise ValueError('parameter is mandatory.')
-            pixelsize = [pixelsize_h, pixelsize_v]
-            if None in pixelsize:
-                pixelsize = None
+            pixelsize_h = assert_non_empty(widgets.pixelsize_h_edit.text())
+            pixelsize_v = assert_non_empty(widgets.pixelsize_v_edit.text())
+            merger.pixelsize = [pixelsize_h, pixelsize_v]
 
             name = 'Detector orientation'
             if widgets.det_mu_rb.isChecked():
-                det_orientation = 'mu'
+                merger.detector_orient = 'mu'
             elif widgets.det_phi_rb.isChecked():
-                det_orientation = 'phi'
+                merger.detector_orient = 'phi'
             else:
                 raise ValueError('parameter is mandatory.')
 
             name = 'master'
-            master = widgets.master_edit.text()
-            if len(master) == 0:
-                raise ValueError('field is mandatory.')
+            master = assert_non_empty(str(widgets.master_edit.text()))
+            merger.master_file = master
 
-            output_dir = widgets.outdir_edit.text()
-            
-            merger.set_output_dir(str(output_dir))
-            merger.beam_energy = beam_energy
-            merger.center_chan = center_chan
-            merger.chan_per_deg = chan_per_deg
-            merger.pixelsize = pixelsize
-            merger.detector_orient = det_orientation
+            merger.output_dir = assert_non_empty(str(widgets.outdir_edit.text()))  # noqa
         except Exception as ex:
             Qt.QMessageBox.critical(self, 'Error',
                                     '{0} : {1}.'.format(name, str(ex)))
             return
 
+        param_errors = merger.check_parameters()
+        if len(param_errors) > 0:
+            txt = ('Please fix the following error(s) before merging :\n- {0}'
+                   ''.format('- '.join(param_errors)))
+            Qt.QMessageBox.critical(self, 'Parameters errors.', txt)
+            return
+        scans_errors = merger.check_consistency()
+        if len(scans_errors) > 0:
+            txt = ('Please fix the following error(s) before merging :\n- {0}'
+                   ''.format('- '.join(scans_errors)))
+            Qt.QMessageBox.critical(self, 'Selected scans errors.', txt)
+            return
+
         process_diag = _MergeProcessDialog(merger, parent=self)
         process_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        process_diag.accepted.connect(self.__merge_done)
-        process_diag.rejected.connect(self.__merge_done)
+        process_diag.accepted.connect(self.__mergeDone)
+        process_diag.rejected.connect(self.__mergeDone)
         self.__process_diag = process_diag
         process_diag.show()
 
-    def __merge_done(self, *args, **kwargs):
-        #self.__process_diag.done(0)
+    def __mergeDone(self, *args, **kwargs):
         self.__process_diag = None
-        print('TODO : DONE')
 
-    def __input_edit_textChanged(self, text):
+    def __inputEditTextChanged(self, text):
         """
         Checking if the provided paths exist.
         If not, disable the parse button.
@@ -1036,16 +993,16 @@ class MergeWidget(Qt.QWidget):
                 enabled = False
 
         elif sender == widgets.img_dir_edit:
-            if len(text)==0 or os.path.isdir(text):
+            if len(text) == 0 or os.path.isdir(text):
                 enabled = True
             else:
                 enabled = False
 
         widgets.parse_bn.setEnabled(enabled)
 
-        self.__reset_state()
+        self.__resetState()
 
-    def __reset_state(self):
+    def __resetState(self):
         """
         Sets the default state for the groupboxes
         - disables all but the input groupbox
@@ -1057,7 +1014,7 @@ class MergeWidget(Qt.QWidget):
         widgets.output_gbx.setEnabled(False)
         self.__merger = None
 
-    def __pick_specfile(self, *args, **kwargs):
+    def __pickSpecfile(self, *args, **kwargs):
         """
         Spec file picker
         """
@@ -1068,10 +1025,10 @@ class MergeWidget(Qt.QWidget):
                                         'Any files (*)'))
         dialog.setFileMode(Qt.QFileDialog.ExistingFile)
         if dialog.exec_():
-            file_name = dialog.selectedFiles()[0];
+            file_name = dialog.selectedFiles()[0]
             widgets.spec_file_edit.setText(file_name)
 
-    def __pick_imgdir(self, *args, **kwargs):
+    def __pickImageDir(self, *args, **kwargs):
         """
         Img dir file picker
         """
@@ -1080,10 +1037,10 @@ class MergeWidget(Qt.QWidget):
                                 'Select EDF folder')
         dialog.setFileMode(Qt.QFileDialog.Directory)
         if dialog.exec_():
-            dir_name = dialog.selectedFiles()[0];
+            dir_name = dialog.selectedFiles()[0]
             widgets.img_dir_edit.setText(dir_name)
 
-    def __pick_output_dir(self, *args, **kwargs):
+    def __pickOutputDir(self, *args, **kwargs):
         """
         Output dir file picker
         """
@@ -1092,48 +1049,46 @@ class MergeWidget(Qt.QWidget):
                                 'Select output directory')
         dialog.setFileMode(Qt.QFileDialog.Directory)
         if dialog.exec_():
-            dir_name = dialog.selectedFiles()[0];
+            dir_name = dialog.selectedFiles()[0]
             widgets.outdir_edit.setText(dir_name)
-        
-        self.__update_output_gbx()
 
-    def __edit_scans(self, *args, **kwargs):
+        self.__updateOutputGroupBox()
+
+    def __editScans(self, *args, **kwargs):
         merger = self.__merger
         if merger is None:
             return
         ans = _ScansSelectDialog(merger, parent=self).exec_()
         if ans == Qt.QDialog.Accepted:
-            self.__update_scans_infos()
+            self.__updateScansInfos()
 
-    def __view_other_scans(self, *args, **kwargs):
+    def __viewOtherScans(self, *args, **kwargs):
         merger = self.__merger
         if merger is None:
             return
-        ans = _ScansInfoDialog(merger, parent=self).exec_()
+        _ScansInfoDialog(merger, parent=self).exec_()
 
-    def __master_edit_editingFinished(self, *args, **kwargs):
-        widgets = self.__widgets
+    def __masterEditingFinished(self, *args, **kwargs):
         merger = self.__merger
         line_edit = self.sender()
-        
+
         if merger is None:
             return
-        merger.set_master_file(str(line_edit.text()))
+        merger.master_file = str(line_edit.text())
         master = merger.master_file
         line_edit.setText(master)
 
-    def __update_output_gbx(self, *args, **kwargs):
+    def __updateOutputGroupBox(self, *args, **kwargs):
         widgets = self.__widgets
         merger = self.__merger
 
         if merger is None:
             enable = False
         else:
-            matched_ids = merger.matched_ids
             enable = merger.parsed and len(merger.matched_ids) > 0
 
         widgets.output_gbx.setEnabled(enable)
-        
+
         if enable:
             master = merger.master_file
             # improve on this
@@ -1148,7 +1103,7 @@ class MergeWidget(Qt.QWidget):
         else:
             widgets.master_edit.clear()
 
-    def __parse_spec_start(self, *args, **kwargs):
+    def __parseSpecStart(self, *args, **kwargs):
         self.info_wid = None
 
         widgets = self.__widgets
@@ -1196,9 +1151,9 @@ class MergeWidget(Qt.QWidget):
         info_wid.show()
         self.info_wid = info_wid
         self.__merger.parse(blocking=False,
-                            callback=self.__sig_parse_done.emit)
+                            callback=self.__sigParseDone.emit)
 
-    def __parse_spec_done(self, *args, **kwargs):
+    def __parseSpecDone(self, *args, **kwargs):
         widgets = self.__widgets
 
         self.info_wid.done(0)
@@ -1207,10 +1162,10 @@ class MergeWidget(Qt.QWidget):
         widgets.parse_bn.setEnabled(True)
         widgets.parse_bn.setText('Parse file.')
 
-        self.__update_scans_infos()
-        self.__update_output_gbx()
+        self.__updateScansInfos()
+        self.__updateOutputGroupBox()
 
-    def __update_scans_infos(self):
+    def __updateScansInfos(self):
         """
         Fills the scans group box with the results
         of the scan.
@@ -1235,9 +1190,9 @@ class MergeWidget(Qt.QWidget):
         n_selected = len(selected_ids)
         n_no_match = len(no_match_ids)
         n_no_img = len(no_img_ids)
-        
+
         widgets.scans_gbx.setEnabled(enable)
-        widgets.params_gbx.setEnabled(len(matched_ids)>0)
+        widgets.params_gbx.setEnabled(len(matched_ids) > 0)
 
         widgets.total_scans_edit.setText(str(n_total))
         widgets.selected_scans_edit.setText(str(n_selected))
@@ -1245,38 +1200,18 @@ class MergeWidget(Qt.QWidget):
         widgets.no_img_info_edit.setText(str(n_no_img))
 
 
-def before_after(f):  
-    def decorator(*args, **kwargs):  
-        print('before', f.func_name)  
-        f(*args, **kwargs)  
-        print('after', f.func_name)  
-    return decorator  
+def before_after(f):
+    def decorator(*args, **kwargs):
+        print('before', f.func_name)
+        f(*args, **kwargs)
+        print('after', f.func_name)
+    return decorator
+
 
 if __name__ == '__main__':
-    app = Qt.QApplication(sys.argv)
-    #app.setStyleSheet('''QPushButton {
-                            #border: 2px solid #8f8f91;
-                            #border-radius: 6px;
-                            #background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                            #stop: 0 #f6f7fa, stop: 1 #dadbde);
-                            #padding: 1px 4px;
-                      #}''')
+    pass
 
-    k = Qt.QStyleFactory.keys()
-    base = os.path.expanduser('~/data/xsocs/id01_data/psic_nano_20150314_fast_00007')
-    #spec_file = os.path.join(base, 'psic_nano_20150314_fast_00007.spec')
-    spec_file='/users/naudet/workspace/dau/id01/tests/gui/test_spec2.spec'
-    mw = MergeWidget(spec_file=spec_file,
-                     img_dir='/users/naudet/data/xsocs/id01_data/psic_nano_20150314_fast_00007/004_200',
-                     output_dir='/users/naudet/workspace/dau/id01/tests/gui/out',
-                     spec_version=0)
-    #mw.setStyle(Qt.QStyleFactory.create(i))
-    mw.show()
-
-    app.exec_()
-
-
-#label.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Raised)
-#sp = total_line_edit.sizePolicy()
-#sp.setHorizontalPolicy(Qt.QSizePolicy.Minimum)
-#total_line_edit.setSizePolicy(sp)
+# label.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Raised)
+# sp = total_line_edit.sizePolicy()
+# sp.setHorizontalPolicy(Qt.QSizePolicy.Minimum)
+# total_line_edit.setSizePolicy(sp)

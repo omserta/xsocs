@@ -561,10 +561,15 @@ class Id01DataMerger(object):
 
     @n_proc.setter
     def n_proc(self, n_proc):
+        if n_proc is None:
+            self.__n_proc = None
+            return
+
         n_proc = int(n_proc)
         if n_proc <= 0:
-            raise ValueError('n_proc must be a non nul positive integer.')
-        self.__n_proc = n_proc
+            self.__n_proc = None
+        else:
+            self.__n_proc = n_proc
 
     matched_ids = property(lambda self: self.__matched_ids)
     selected_ids = property(lambda self: sorted(self.__selected_ids))

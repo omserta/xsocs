@@ -31,8 +31,11 @@ __license__ = "MIT"
 import os
 import time
 import ctypes
+from threading import Thread
 import multiprocessing as mp
 import multiprocessing.sharedctypes as mp_sharedctypes
+
+from functools import partial
 
 import h5py
 import numpy as np
@@ -51,6 +54,294 @@ positioners_tpl = '/{0}/instrument/positioners'
 img_data_tpl = '/{0}/measurement/image/data'
 measurement_tpl = '/{0}/measurement'
 detector_tpl = '/{0}/instrument/image_detector'
+
+
+class RecipSpaceConverter(object):
+    def __init__(self,
+                 data_h5f,
+                 output_f):
+        super(RecipSpaceConverter, self).__init__()
+
+        self.reset(data_h5f, output_f)
+
+    def reset(self,
+              data_h5f,
+              output_f):
+
+        self.__data_h5f = data_h5f
+        self.__output_f = output_f
+        self.__thread = None
+
+        self.__qspace_size = None
+        self.__img_binning = [1, 1]
+
+        self.__results = None
+
+    def __running_exception(self):
+        if self.is_running():
+            raise RuntimeError('Operation not permitted while '
+                               'a conversion is already in progress.')
+
+    def is_running(self):
+        return self.__thread and self.__thread.is_alive()
+
+    def convert(self,
+                blocking=True,
+                overwrite=False,
+                callback=None):
+
+        thread = self.__thread
+        if thread is not None and thread.is_running():
+            raise RuntimeError('A conversion is already in progress.')
+
+        if not overwrite and os.path.exists(self.__output_f):
+            raise RuntimeError('The file {0} already exists. Use the '
+                               'overwrite keyword to ignore this.'
+                               ''.format(self.__output_f))
+
+        callback = partial(self.__on_conversion_done,
+                           callback=callback)
+
+        thread = _ConvertThread(data_h5f,
+                                output_f,
+                                n_bins,
+                                callback=callback)
+
+        self.__thread = thread
+
+        thread.start()
+
+        if blocking:
+            self.wait()
+
+    def wait(self):
+        if self.__thread is not None:
+            self.__thread.wait()
+
+    def __on_conversion_done(self):
+        self.__results = self.__thread.results()
+
+    def check_overwrite(self):
+        """
+        Checks if the output file(s) already exist(s).
+        """
+        if os.path.exists(self.__output_f):
+            return [self.__output_f]
+        return []
+
+    def summary(self):
+        """
+        Gives an overview of the data found in the input file.
+        """
+        raise NotImplemented('')
+
+    def check_parameters(self):
+        """
+        Checks if the RecipSpaceConverter parameters are valid.
+        Returns a list of strings describing those errors, if any,
+        or an empty list.
+        """
+        errors = []
+        if self.__img_binning is None:
+            errors.append('invalid "image binning"')
+        if self.__qspace_size is None:
+            errors.append('invalid "qspace size"')
+        return errors
+
+    img_binning = property(lambda self: self.__img_binning)
+
+    def check_data(self):
+        """
+        Checks the input hdf5 file structure and its parameters.
+        Returns a list of strings describing those errors, if any,
+        or an empty list.
+        """
+        errors = []
+
+        params = _get_all_params(self.__data_h5f)
+
+        def check_values(dic, key, description, error):
+            values = dic[key]
+            if isinstance(values[0], (list, tuple)):
+                values = [tuple(val) for val in values]
+            values_set = set(values)
+            if len(values_set) != 1:
+                errors.append('Parameter inconsistency : '
+                              '"{0}" : {1}.'
+                              ''.format(description, '; '.join(str(m)
+                                        for m in values_set)))
+
+        check_values(params, 'n_images', 'Number of images', errors)
+        check_values(params, 'n_positions', 'Number of X/Y positions', errors)
+        check_values(params, 'img_size', 'Images size', errors)
+        check_values(params, 'beam_energy', 'Beam energy', errors)
+        check_values(params, 'chan_per_deg', 'Chan. per deg.', errors)
+        check_values(params, 'center_chan', 'Center channel', errors)
+        check_values(params, 'pixelsize', 'Pixel size', errors)
+        check_values(params, 'det_orient', 'Detector orientation', errors)
+
+        return errors
+
+    @img_binning.setter
+    def img_binning(self, img_binning):
+        """
+        Binning applied to the image before converting to qspace
+        """
+        if len(img_binning) != 2:
+            raise ValueError('img_binning must be a two elements array.')
+        self.__img_binning = [int(img_binning[0]), int(img_binning[1])]
+
+    qspace_size = property(lambda self: self.__qspace_size)
+
+    @qspace_size.setter
+    def qspace_size(self, qspace_size):
+        """
+        Size of the qspace volume.
+        """
+        if len(qspace_size) != 3:
+            raise ValueError('qspace_size must be a three elements array.')
+        self.__qspace_size = [int(qspace_size[0]),
+                              int(qspace_size[1]),
+                              int(qspace_size[2])]
+
+    n_proc = property(lambda self: self.__n_proc)
+
+    @n_proc.setter
+    def n_proc(self, n_proc):
+        if n_proc is None:
+            self.__n_proc = None
+            return
+
+        n_proc = int(n_proc)
+        if n_proc <= 0:
+            self.__n_proc = None
+        else:
+            self.__n_proc = n_proc
+
+
+class _ConvertThread(Thread):
+    def __init__(self,
+                 data_h5f,
+                 output_f,
+                 n_bins,
+                 n_proc=None,
+                 callback=None):
+        super(_ParseThread, self).__init__()
+
+        self.__data_h5f = data_h5f
+        self.__output_f = output_f
+        self.__n_bins = n_bins
+        self.__callback = callback
+        self.__n_proc = n_proc
+
+        self.__results = None
+
+    def results(self):
+        return self.__results
+
+    def progress(self):
+        return None
+
+    def wait(self):
+        self.join()
+
+    def run(self):
+        
+
+        if self.__callback:
+            self.__callback()
+
+
+def _get_all_params(data_h5f):
+    """
+    Read the whole data and returns the parameters for each entry.
+    """
+
+    n_images = []
+    n_positions = []
+    img_sizes = []
+    beam_energies = []
+    center_chans = []
+    pixel_sizes = []
+    chan_per_degs = []
+
+    det_orients = []
+
+    with h5py.File(data_h5f, 'r') as master_h5:
+        entries = sorted(master_h5.keys())
+        entry_files = []
+
+        n_entries = len(entries)
+
+        for entry_idx, entry in enumerate(entries):
+            imgnr_tpl = measurement_tpl.format(entry) + '/imgnr'
+            param_tpl = detector_tpl.format(entry) + '/{0}'
+
+            detector = master_h5.get(detector_tpl.format(entry), None)
+            img_data = master_h5.get(img_data_tpl.format(entry), None)
+
+            if img_data is not None:
+                if len(img_data.shape) == 2:
+                    n_image = 1
+                    img_x, img_y = img_data.shape
+                else:
+                    n_image = img_data.shape[0]
+                    img_x, img_y = img_data.shape[1:3]
+            else:
+                n_image = None
+                img_x = img_y = None
+
+            img_size = [img_x, img_y]
+
+            del img_data
+
+            imgnr = master_h5.get(imgnr_tpl.format(entry), None)
+            n_position = len(imgnr) if imgnr is not None else None
+
+            del imgnr
+
+            path = param_tpl.format('beam_energy')
+            beam_energy = master_h5.get(path, np.array(None))[()]
+
+            path = param_tpl.format('chan_per_deg_dim0')
+            chan_per_deg_dim0 = master_h5.get(path, np.array(None))[()]
+            path = param_tpl.format('chan_per_deg_dim1')
+            chan_per_deg_dim1 = master_h5.get(path, np.array(None))[()]
+            chan_per_deg = [chan_per_deg_dim0, chan_per_deg_dim1]
+
+            path = param_tpl.format('center_chan_dim0')
+            center_chan_dim0 = master_h5.get(path, np.array(None))[()]
+            path = param_tpl.format('center_chan_dim1')
+            center_chan_dim1 = master_h5.get(path, np.array(None))[()]
+            center_chan = [center_chan_dim0, center_chan_dim1]
+
+            path = param_tpl.format('pixelsize_dim0')
+            pixel_size_dim0 = master_h5.get(path, np.array(None))[()]
+            path = param_tpl.format('pixel_size_dim1')
+            pixel_size_dim1 = master_h5.get(path, np.array(None))[()]
+            pixel_size = [pixel_size_dim0, pixel_size_dim1]
+
+            path = param_tpl.format('detector_orient')
+            det_orient = master_h5.get(path, np.array(None))[()]
+
+            n_images.append(n_image)
+            n_positions.append(n_position)
+            img_sizes.append(img_size)
+            beam_energies.append(beam_energy)
+            chan_per_degs.append(chan_per_deg)
+            center_chans.append(center_chan)
+            pixel_sizes.append(pixel_size)
+            det_orients.append(det_orient)
+    result = dict(scans=entries,
+                  n_images=n_images,
+                  n_positions=n_positions,
+                  img_size=img_sizes,
+                  beam_energy=beam_energies,
+                  chan_per_deg=chan_per_degs,
+                  center_chan=center_chans,
+                  pixelsize=pixel_sizes,
+                  det_orient=det_orients)
+    return result
 
 
 def img_2_qspace(data_h5f,

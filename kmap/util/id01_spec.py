@@ -586,7 +586,7 @@ def merge_scan_data(output_dir,
                     chan_per_deg=None,
                     pixelsize=None,
                     center_chan=None,
-                    detector_orient=None,
+                    detector_orient='',
                     scan_ids=None,
                     master_f=None,
                     img_dir=None,
@@ -661,7 +661,7 @@ def merge_scan_data(output_dir,
 
     id01_merger.parse()
 
-    id01_merger.set_output_dir(output_dir)
+    id01_merger.output_dir = output_dir
 
     id01_merger.beam_energy = beam_energy
     id01_merger.center_chan = center_chan

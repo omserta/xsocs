@@ -561,6 +561,9 @@ class Id01DataMerger(object):
 
     @n_proc.setter
     def n_proc(self, n_proc):
+        if n_proc is None:
+            self.__n_proc = None
+            return
         n_proc = int(n_proc)
         if n_proc <= 0:
             raise ValueError('n_proc must be a non nul positive integer.')
@@ -940,6 +943,8 @@ class _MergeThread(Thread):
 
         if self.__n_proc is None:
             n_proc = cpu_count()
+        else:
+            n_proc = self.__n_proc
 
         def init(term_evt_, shared_progress_):
             global g_term_evt

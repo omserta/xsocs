@@ -565,7 +565,7 @@ def _img_2_qspace(data_h5f,
     # shape of the array that will store the qx/qy/qz for all
     # rocking angles
     q_shape = (n_entries,
-               img_size[0] // img_binning[0] * img_size[1] // img_binning[1],
+               (img_size[0] // img_binning[0]) * (img_size[1] // img_binning[1]),
                3)
 
     # then the array
@@ -633,8 +633,15 @@ def _img_2_qspace(data_h5f,
     qy_idx = qy_min + step_y * np.arange(0, ny, dtype=np.float64)
     qz_idx = qz_min + step_z * np.arange(0, nz, dtype=np.float64)
 
-    histo = np.zeros([nx, ny, nz], dtype=np.int32)
-    h_lut = []
+    # shared histo used by all processes
+    histo_shared = mp_sharedctypes.RawArray(ctypes.c_int32, nx * ny * nz)
+    histo = np.frombuffer(histo_shared, dtype='int32')
+    histo.shape = nx, ny, nz
+    histo[:] = 0
+
+    # shared LUT used by all processes
+    h_lut = None
+    h_lut_shared = None
 
     for h_idx in range(n_entries):
         lut = histogramnd_get_lut(q_ar[h_idx, ...],
@@ -642,7 +649,24 @@ def _img_2_qspace(data_h5f,
                                   [nx, ny, nz],
                                   last_bin_closed=True)
 
-        h_lut.append(lut[0])
+        if h_lut_shared is None:
+            lut_dtype = lut[0].dtype
+            if lut_dtype == np.int16:
+                lut_ctype = ctypes.c_int16
+            elif lut_dtype == np.int32:
+                lut_ctype = ctypes.c_int32
+            elif lut_dtype == np.int64:
+                lut_ctype == ctypes.c_int64
+            else:
+                raise TypeError('Unknown type returned by '
+                                'histogramnd_get_lut : {0}.'
+                                ''.format(lut.dtype))
+            h_lut_shared = mp_sharedctypes.RawArray(lut_ctype,
+                                                    n_images * lut[0].size)
+            h_lut = np.frombuffer(h_lut_shared, dtype=lut_dtype)
+            h_lut.shape = (n_images, -1)
+
+        h_lut[h_idx, ...] = lut[0]
         histo += lut[1]
 
     del q_ar
@@ -677,9 +701,10 @@ def _img_2_qspace(data_h5f,
                              write_lock,
                              bins_rng,
                              qspace_size,
-                             h_lut,
+                             h_lut_shared,
+                             lut_dtype,
                              n_xy,
-                             histo,))
+                             histo_shared,))
 
     res_list = []
 
@@ -755,25 +780,28 @@ def _init_thread(idx_queue_,
                  write_lock_,
                  bins_rng_,
                  qspace_size_,
-                 h_lut_,
+                 h_lut_shared_,
+                 h_lut_dtype_,
                  n_xy_,
-                 histo_):
+                 histo_shared_):
 
         global idx_queue,\
             write_lock,\
             bins_rng,\
             qspace_size,\
-            h_lut,\
+            h_lut_shared,\
+            h_lut_dtype,\
             n_xy,\
-            histo
+            histo_shared
 
         idx_queue = idx_queue_
         write_lock = write_lock_
         bins_rng = bins_rng_
         qspace_size = qspace_size_
-        h_lut = h_lut_
+        h_lut_shared = h_lut_shared_
+        h_lut_dtype = h_lut_dtype_
         n_xy = n_xy_
-        histo = histo_
+        histo_shared = histo_shared_
 
 
 def _create_result_file(h5_fn,
@@ -828,7 +856,12 @@ def _to_qspace(th_idx,
     t_write = 0.
     t_w_lock = 0.
 
+    histo = np.frombuffer(histo_shared, dtype='int32')
+    histo.shape = qspace_size
     mask = histo > 0
+    
+    h_lut = np.frombuffer(h_lut_shared, dtype=h_lut_dtype)
+    h_lut.shape = (n_xy, -1)
 
     img = np.ascontiguousarray(np.zeros((516, 516)), dtype=np.float64)
 

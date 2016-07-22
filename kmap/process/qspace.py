@@ -59,14 +59,14 @@ detector_tpl = '/{0}/instrument/image_detector'
 class RecipSpaceConverter(object):
     def __init__(self,
                  data_h5f,
-                 output_f):
+                 output_f=None):
         super(RecipSpaceConverter, self).__init__()
 
         self.reset(data_h5f, output_f)
 
     def reset(self,
               data_h5f,
-              output_f):
+              output_f=None):
 
         self.__data_h5f = data_h5f
         self.__output_f = output_f
@@ -81,13 +81,18 @@ class RecipSpaceConverter(object):
         if self.is_running():
             raise RuntimeError('Operation not permitted while '
                                'a conversion is already in progress.')
-    
+
     def __get_output_f(self):
         if self.__output_f.endswith('.h5'):
             return self.__output_f
         # TODO : get the prefix from input file
         prefix = os.path.basename(self.__data_h5f).rsplit('.')[0]
         return os.path.join(self.__output_f, '{0}_qspace.h5'.format(prefix))
+
+    output_f = property(__get_output_f)
+    @output_f.setter
+    def output_f(self, output_f):
+        self.__output_f = output_f
 
     def is_running(self):
         return self.__thread and self.__thread.is_alive()
@@ -178,7 +183,7 @@ class RecipSpaceConverter(object):
         params = _get_all_params(self.__data_h5f)
 
         def check_values(dic, key, description, error):
-            values = dic[key]
+            values = [dic[scan][key] for scan in sorted(dic.keys())]
             if isinstance(values[0], (list, tuple)):
                 values = [tuple(val) for val in values]
             values_set = set(values)
@@ -197,14 +202,22 @@ class RecipSpaceConverter(object):
         check_values(params, 'pixelsize', 'Pixel size', errors)
         check_values(params, 'detector_orient', 'Detector orientation', errors)
 
-        n_images = params['n_images'][0]
-        n_positions = params['n_positions'][0]
+        n_images = params[params.keys()[0]]['n_images']
+        n_positions = params[params.keys()[0]]['n_positions']
         if n_images != n_positions:
             errors.append('number of images != number of X/Y coordinates'
                           'on sample :'
                           '{0} != {1}'.format(n_images, n_positions))
 
         return errors
+
+    def scan_params(self, scan):
+        params = _get_all_params(self.__data_h5f)
+        return params[scan]
+
+    def __get_scans(self):
+        params = _get_all_params(self.__data_h5f)
+        return sorted(params.keys())
 
     @img_binning.setter
     def img_binning(self, img_binning):
@@ -242,7 +255,7 @@ class RecipSpaceConverter(object):
         else:
             self.__n_proc = n_proc
 
-    output_f = property(__get_output_f)
+    scans = property(__get_scans)
 
 
 class _ConvertThread(Thread):
@@ -292,8 +305,8 @@ class _ConvertThread(Thread):
 def _get_all_params(data_h5f):
     """
     Read the whole data and returns the parameters for each entry.
-    Returns a dictionary will the following fields :
-    scans, n_images, n_positions, img_size, beam_energy, chan_per_deg,
+    Returns a dictionary will the scans as keys and the following fields :
+    n_images, n_positions, img_size, beam_energy, chan_per_deg,
     center_chan, pixelsize, det_orient.
     Each of those fields are N elements arrays, where N is the number of
     scans found in the file.
@@ -306,8 +319,8 @@ def _get_all_params(data_h5f):
     center_chans = []
     pixel_sizes = []
     chan_per_degs = []
-
     det_orients = []
+    angles = []
 
     with h5py.File(data_h5f, 'r') as master_h5:
         entries = sorted(master_h5.keys())
@@ -318,6 +331,7 @@ def _get_all_params(data_h5f):
         for entry_idx, entry in enumerate(entries):
             imgnr_tpl = measurement_tpl.format(entry) + '/imgnr'
             param_tpl = detector_tpl.format(entry) + '/{0}'
+            angle_path = positioners_tpl.format(entry) + '/eta'
 
             img_data = master_h5.get(img_data_tpl.format(entry), None)
 
@@ -365,6 +379,8 @@ def _get_all_params(data_h5f):
             path = param_tpl.format('detector_orient')
             det_orient = master_h5.get(path, np.array(None))[()]
 
+            angle = master_h5.get(angle_path, np.array(None))[()]##angle_path = np.float64(positioners['eta'][()])
+
             n_images.append(n_image)
             n_positions.append(n_position)
             img_sizes.append(img_size)
@@ -373,15 +389,18 @@ def _get_all_params(data_h5f):
             center_chans.append(center_chan)
             pixel_sizes.append(pixel_size)
             det_orients.append(det_orient)
-    result = dict(scans=entries,
-                  n_images=n_images,
-                  n_positions=n_positions,
-                  img_size=img_sizes,
-                  beam_energy=beam_energies,
-                  chan_per_deg=chan_per_degs,
-                  center_chan=center_chans,
-                  pixelsize=pixel_sizes,
-                  detector_orient=det_orients)
+            angles.append(angle)
+    result = {scan:dict(scans=entries[idx],
+                        n_images=n_images[idx],
+                        n_positions=n_positions[idx],
+                        img_size=img_sizes[idx],
+                        beam_energy=beam_energies[idx],
+                        chan_per_deg=chan_per_degs[idx],
+                        center_chan=center_chans[idx],
+                        pixelsize=pixel_sizes[idx],
+                        detector_orient=det_orients[idx],
+                        angle=angles[idx])
+              for idx, scan in enumerate(entries)}
     return result
 
 
@@ -484,42 +503,44 @@ def _img_2_qspace(data_h5f,
 
     params = _get_all_params(data_h5f)
 
+    entries = sorted(params.keys())
+    n_entries = len(entries)
+
+    first_param = params[entries[0]]
+
     if beam_energy is None:
-        beam_energy = params['beam_energy'][0]
+        beam_energy = first_param['beam_energy']
     if beam_energy is None:
         raise ValueError('Invalid/missing beam energy : {0}.'
                          ''.format(beam_energy))
 
     if chan_per_deg is None:
-        chan_per_deg = params['chan_per_deg'][0]
+        chan_per_deg = first_param['chan_per_deg']
     if beam_energy is None or len(chan_per_deg) != 2:
         raise ValueError('Invalid/missing chan_per_deg value : {0}.'
                          ''.format(chan_per_deg))
 
     if center_chan is None:
-        center_chan = params['center_chan'][0]
+        center_chan = first_param['center_chan']
     if beam_energy is None or len(center_chan) != 2:
         raise ValueError('Invalid/missing center_chan value : {0}.'
                          ''.format(center_chan))
 
     if detector_orient is None:
-        detector_orient = params['detector_orient'][0]
+        detector_orient = first_param['detector_orient']
     if detector_orient is None:
         raise ValueError('Invalid/missing detector_orient value : {0}'
                          ''.format(detector_orient))
 
-    n_images = params['n_images'][0]
+    n_images = first_param['n_images']
     if n_images is None or n_images == 0:
         raise ValueError('Data does not contain any images (n_images={0}).'
                          ''.format(n_images))
 
-    img_size = params['img_size'][0]
+    img_size = first_param['img_size']
     if img_size is None or 0 in img_size:
         raise ValueError('Invalid image size (img_size={0}).'
                          ''.format(img_size))
-
-    entries = params['scans']
-    n_entries = len(entries)
 
     # TODO : implement ROI
     roi = [0, img_size[0], 0, img_size[1]]
@@ -543,9 +564,9 @@ def _img_2_qspace(data_h5f,
                                       [1, 0, 0])
 
     # convention for coordinate system:
-    # - x downstream
-    # - z upwards
-    # - y to the "outside"
+    # x downstream
+    # z upwards
+    # y to the "outside"
     # (righthanded)
     hxrd = xu.HXRD([1, 0, 0],
                    [0, 0, 1],
@@ -633,15 +654,22 @@ def _img_2_qspace(data_h5f,
     qy_idx = qy_min + step_y * np.arange(0, ny, dtype=np.float64)
     qz_idx = qz_min + step_z * np.arange(0, nz, dtype=np.float64)
 
+    # TODO : on windows we may be forced to use shared memory
+    # TODO : find why we use more memory when using shared arrays
+    #       this shouldnt be the case (use the same amount as non shared mem)
+    # on linux apparently we dont because when fork() is called data is
+    # only copied on write.
     # shared histo used by all processes
-    histo_shared = mp_sharedctypes.RawArray(ctypes.c_int32, nx * ny * nz)
-    histo = np.frombuffer(histo_shared, dtype='int32')
-    histo.shape = nx, ny, nz
-    histo[:] = 0
+    #histo_shared = mp_sharedctypes.RawArray(ctypes.c_int32, nx * ny * nz)
+    #histo = np.frombuffer(histo_shared, dtype='int32')
+    #histo.shape = nx, ny, nz
+    #histo[:] = 0
+    histo = np.zeros(qspace_size, dtype=np.int32)
 
     # shared LUT used by all processes
-    h_lut = None
-    h_lut_shared = None
+    #h_lut = None
+    #h_lut_shared = None
+    h_lut = []
 
     for h_idx in range(n_entries):
         lut = histogramnd_get_lut(q_ar[h_idx, ...],
@@ -649,26 +677,28 @@ def _img_2_qspace(data_h5f,
                                   [nx, ny, nz],
                                   last_bin_closed=True)
 
-        if h_lut_shared is None:
-            lut_dtype = lut[0].dtype
-            if lut_dtype == np.int16:
-                lut_ctype = ctypes.c_int16
-            elif lut_dtype == np.int32:
-                lut_ctype = ctypes.c_int32
-            elif lut_dtype == np.int64:
-                lut_ctype == ctypes.c_int64
-            else:
-                raise TypeError('Unknown type returned by '
-                                'histogramnd_get_lut : {0}.'
-                                ''.format(lut.dtype))
-            h_lut_shared = mp_sharedctypes.RawArray(lut_ctype,
-                                                    n_images * lut[0].size)
-            h_lut = np.frombuffer(h_lut_shared, dtype=lut_dtype)
-            h_lut.shape = (n_images, -1)
+        #if h_lut_shared is None:
+            #lut_dtype = lut[0].dtype
+            #if lut_dtype == np.int16:
+                #lut_ctype = ctypes.c_int16
+            #elif lut_dtype == np.int32:
+                #lut_ctype = ctypes.c_int32
+            #elif lut_dtype == np.int64:
+                #lut_ctype == ctypes.c_int64
+            #else:
+                #raise TypeError('Unknown type returned by '
+                                #'histogramnd_get_lut : {0}.'
+                                #''.format(lut.dtype))
+            #h_lut_shared = mp_sharedctypes.RawArray(lut_ctype,
+                                                    #n_images * lut[0].size)
+            #h_lut = np.frombuffer(h_lut_shared, dtype=lut_dtype)
+            #h_lut.shape = (n_images, -1)
 
-        h_lut[h_idx, ...] = lut[0]
+        #h_lut[h_idx, ...] = lut[0]
+        h_lut.append(lut[0])
         histo += lut[1]
 
+    del lut
     del q_ar
 
     # TODO : split the output file into several files? speedup?
@@ -701,10 +731,10 @@ def _img_2_qspace(data_h5f,
                              write_lock,
                              bins_rng,
                              qspace_size,
-                             h_lut_shared,
-                             lut_dtype,
+                             h_lut, #_shared,
+                             None, #lut_dtype,
                              n_xy,
-                             histo_shared,))
+                             histo,)) #_shared,))
 
     res_list = []
 
@@ -856,12 +886,14 @@ def _to_qspace(th_idx,
     t_write = 0.
     t_w_lock = 0.
 
-    histo = np.frombuffer(histo_shared, dtype='int32')
-    histo.shape = qspace_size
+    #histo = np.frombuffer(histo_shared, dtype='int32')
+    #histo.shape = qspace_size
+    histo = histo_shared
     mask = histo > 0
     
-    h_lut = np.frombuffer(h_lut_shared, dtype=h_lut_dtype)
-    h_lut.shape = (n_xy, -1)
+    #h_lut = np.frombuffer(h_lut_shared, dtype=h_lut_dtype)
+    #h_lut.shape = (n_xy, -1)
+    h_lut = h_lut_shared
 
     img = np.ascontiguousarray(np.zeros((516, 516)), dtype=np.float64)
 

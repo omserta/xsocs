@@ -41,7 +41,7 @@ from multiprocessing import Pool, cpu_count, Manager
 
 import h5py
 import numpy as np
-from PyMca5 import EdfFile
+from silx.third_party import EdfFile
 from silx.io import spectoh5
 
 

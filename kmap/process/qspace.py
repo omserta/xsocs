@@ -62,18 +62,22 @@ class RecipSpaceConverter(object):
                  output_f=None):
         super(RecipSpaceConverter, self).__init__()
 
+        self.__thread = None
+
         self.reset(data_h5f, output_f)
 
     def reset(self,
               data_h5f,
               output_f=None):
 
+        self.__running_exception()
+
         self.__data_h5f = data_h5f
         self.__output_f = output_f
         self.__thread = None
 
         self.__qspace_size = None
-        self.__img_binning = [1, 1]
+        self.__image_binning = [1, 1]
 
         self.__results = None
 
@@ -95,16 +99,21 @@ class RecipSpaceConverter(object):
         self.__output_f = output_f
 
     def is_running(self):
-        return self.__thread and self.__thread.is_alive()
+        return self.__thread is not None and self.__thread.is_alive()
+
+    def abort(self, wait=True):
+     if self.__thread is not None:
+        self.__thread.abort(wait=wait)
 
     def convert(self,
                 blocking=True,
                 overwrite=False,
                 callback=None,
-                pos_indices=None):
+                pos_indices=None,
+                **kwargs):
 
         thread = self.__thread
-        if thread is not None and thread.is_running():
+        if thread is not None and thread.is_alive():
             raise RuntimeError('A conversion is already in progress.')
 
         if not overwrite and os.path.exists(self.__output_f):
@@ -118,10 +127,11 @@ class RecipSpaceConverter(object):
         thread = _ConvertThread(self.__data_h5f,
                                 self.output_f,
                                 self.__qspace_size,
-                                self.__img_binning,
+                                self.__image_binning,
                                 callback=callback,
                                 overwrite=overwrite,
-                                pos_indices=pos_indices)
+                                pos_indices=pos_indices,
+                                **kwargs)
 
         self.__thread = thread
 
@@ -134,6 +144,11 @@ class RecipSpaceConverter(object):
         if self.__thread is not None:
             self.__thread.wait()
 
+    def progress(self):
+        if self.__thread is not None:
+            return self.__thread.progress()
+        return 0
+
     def __on_conversion_done(self, callback):
         self.__results = self.__thread.results()
         if callback:
@@ -143,7 +158,8 @@ class RecipSpaceConverter(object):
         """
         Checks if the output file(s) already exist(s).
         """
-        if os.path.exists(self.__output_f):
+        output_f = self.__output_f
+        if output_f is not None and os.path.exists(output_f):
             return [self.__output_f]
         return []
 
@@ -162,13 +178,13 @@ class RecipSpaceConverter(object):
         or an empty list.
         """
         errors = []
-        if self.__img_binning is None:
+        if self.__image_binning is None:
             errors.append('invalid "image binning"')
         if self.__qspace_size is None:
             errors.append('invalid "qspace size"')
         return errors
 
-    img_binning = property(lambda self: self.__img_binning)
+    image_binning = property(lambda self: self.__image_binning)
 
     def check_consistency(self):
         """
@@ -219,14 +235,24 @@ class RecipSpaceConverter(object):
         params = _get_all_params(self.__data_h5f)
         return sorted(params.keys())
 
-    @img_binning.setter
-    def img_binning(self, img_binning):
+    @image_binning.setter
+    def image_binning(self, image_binning):
         """
         Binning applied to the image before converting to qspace
         """
-        if len(img_binning) != 2:
-            raise ValueError('img_binning must be a two elements array.')
-        self.__img_binning = [int(img_binning[0]), int(img_binning[1])]
+        err = False
+        if len(image_binning) != 2:
+            raise ValueError('image_binning must be a two elements array.')
+        if None in image_binning:
+            err = True
+        else:
+            image_binning_int = [int(image_binning[0]), int(image_binning[1])]
+            if min(image_binning_int) <= 0:
+                err = True
+        if err:
+            raise ValueError('<image_binning> values must be strictly'
+                             ' positive integers.')
+        self.__image_binning = image_binning_int
 
     qspace_size = property(lambda self: self.__qspace_size)
 
@@ -235,11 +261,22 @@ class RecipSpaceConverter(object):
         """
         Size of the qspace volume.
         """
+        err = False
         if len(qspace_size) != 3:
             raise ValueError('qspace_size must be a three elements array.')
-        self.__qspace_size = [int(qspace_size[0]),
-                              int(qspace_size[1]),
-                              int(qspace_size[2])]
+        if None in qspace_size:
+            err = True
+        else:
+            qspace_size_int = [int(qspace_size[0]),
+                               int(qspace_size[1]),
+                               int(qspace_size[2])]
+            if min(qspace_size_int) <= 0:
+                err = True
+        
+        if err:
+            raise ValueError('<qspace_size> values must be strictly'
+                             ' positive integers.')
+        self.__qspace_size = qspace_size_int
 
     n_proc = property(lambda self: self.__n_proc)
 
@@ -263,32 +300,51 @@ class _ConvertThread(Thread):
                  data_h5f,
                  output_f,
                  qspace_size,
-                 img_binning,
+                 image_binning,
                  n_proc=None,
                  callback=None,
                  overwrite=False,
-                 pos_indices=None):
+                 pos_indices=None,
+                 **kwargs):
         super(_ConvertThread, self).__init__()
 
         self.__data_h5f = data_h5f
         self.__output_f = output_f
         self.__qspace_size = qspace_size
-        self.__img_binning = img_binning
+        self.__image_binning = image_binning
         self.__callback = callback
+
+        if n_proc is None or n_proc <= 0:
+            n_proc = mp.cpu_count()
+
         self.__n_proc = n_proc
         self.__overwrite = overwrite
         self.__pos_indices = pos_indices
+        self.__kwargs = kwargs
 
         self.__results = None
+        
+        self.__shared_progress = mp_sharedctypes.RawArray(ctypes.c_int32,
+                                                          n_proc)
+        manager = mp.Manager()
+        self.__term_evt = manager.Event()
+        self.__manager = manager
 
     def results(self):
         return self.__results
 
     def progress(self):
-        return None
+        progress = np.frombuffer(self.__shared_progress, dtype='int32')
+        return progress.max()
 
     def wait(self):
         self.join()
+
+    def abort(self, wait=True):
+        if self.is_alive():
+            self.__term_evt.set()
+            if wait:
+                self.wait()
 
     def run(self):
         _img_2_qspace(self.__data_h5f,
@@ -296,7 +352,12 @@ class _ConvertThread(Thread):
                       self.__qspace_size,
                       overwrite=self.__overwrite,
                       pos_indices=self.__pos_indices,
-                      img_binning=self.__img_binning)
+                      image_binning=self.__image_binning,
+                      n_proc=self.__n_proc,
+                      shared_progress=self.__shared_progress,
+                      manager=self.__manager,
+                      term_evt=self.__term_evt,
+                      **self.__kwargs)
 
         if self.__callback:
             self.__callback()
@@ -311,7 +372,6 @@ def _get_all_params(data_h5f):
     Each of those fields are N elements arrays, where N is the number of
     scans found in the file.
     """
-
     n_images = []
     n_positions = []
     img_sizes = []
@@ -469,12 +529,17 @@ def _img_2_qspace(data_h5f,
                   chan_per_deg=None,
                   center_chan=None,
                   detector_orient=None,
-                  img_binning=(1, 1),
+                  pixelsize=None,  # unused at the moment
+                  image_binning=(1, 1),
                   pos_indices=None,
                   n_proc=None,
-                  overwrite=False):
+                  overwrite=False,
+                  shared_progress=None,
+                  manager=None,
+                  term_evt=None):
 
     """
+    TODO : put this in _ConvertThread::run
     TODO : detector_orient is NOT supported YET.
     This function does NOT :
     - check input file consistency
@@ -495,11 +560,11 @@ def _img_2_qspace(data_h5f,
     if min(qspace_size) <= 0:
         raise ValueError('<qspace_size> values must be strictly positive.')
 
-    if len(img_binning) != 2:
-        raise ValueError('<img_binning> must be a 2-elements array.')
+    if len(image_binning) != 2:
+        raise ValueError('<image_binning> must be a 2-elements array.')
 
-    if min(img_binning) <= 0:
-        raise ValueError('<img_binning> values must be strictly positive.')
+    if min(image_binning) <= 0:
+        raise ValueError('<image_binning> values must be strictly positive.')
 
     params = _get_all_params(data_h5f)
 
@@ -581,12 +646,12 @@ def _img_2_qspace(data_h5f,
                          Nch2=img_size[1],
                          chpdeg1=chan_per_deg[0],
                          chpdeg2=chan_per_deg[1],
-                         Nav=img_binning)
+                         Nav=image_binning)
 
     # shape of the array that will store the qx/qy/qz for all
     # rocking angles
     q_shape = (n_entries,
-               (img_size[0] // img_binning[0]) * (img_size[1] // img_binning[1]),
+               (img_size[0] // image_binning[0]) * (img_size[1] // image_binning[1]),
                3)
 
     # then the array
@@ -704,7 +769,10 @@ def _img_2_qspace(data_h5f,
     # TODO : split the output file into several files? speedup?
     output_shape = (n_images,) + histo.shape
 
-    chunks = (1, output_shape[1]//4, output_shape[2]//4, output_shape[3]//4,)
+    chunks = (1,
+              max(output_shape[1]//4, 1),
+              max(output_shape[2]//4, 1),
+              max(output_shape[3]//4, 1),)
     _create_result_file(output_f,
                         output_shape,
                         np.float64,
@@ -718,7 +786,12 @@ def _img_2_qspace(data_h5f,
                         chunks=chunks,
                         overwrite=overwrite)
 
-    manager = mp.Manager()
+    if manager is None:
+        manager = mp.Manager()
+
+    if term_evt is None:
+        term_evt = manager.Event()
+
     write_lock = manager.Lock()
     idx_queue = manager.Queue()
 
@@ -734,7 +807,9 @@ def _img_2_qspace(data_h5f,
                              h_lut, #_shared,
                              None, #lut_dtype,
                              n_xy,
-                             histo,)) #_shared,))
+                             histo, #_shared,))
+                             shared_progress,
+                             term_evt,))
 
     res_list = []
 
@@ -752,7 +827,7 @@ def _img_2_qspace(data_h5f,
 
             def update(self, arg):
                 (t_read_, t_dnsamp_, t_medfilt_, t_histo_,
-                 t_mask_, t_fit_, t_write_, t_w_lock_) = arg
+                 t_mask_, t_fit_, t_write_, t_w_lock_) = arg[2]
                 self.t_histo += t_histo_
                 self.t_fit += t_fit_
                 self.t_mask += t_mask_
@@ -773,7 +848,7 @@ def _img_2_qspace(data_h5f,
                     entries,
                     img_size,
                     output_f,
-                    img_binning)
+                    image_binning)
         res = pool.apply_async(_to_qspace, args=arg_list, callback=callback)
         res_list.append(res)
 
@@ -813,7 +888,9 @@ def _init_thread(idx_queue_,
                  h_lut_shared_,
                  h_lut_dtype_,
                  n_xy_,
-                 histo_shared_):
+                 histo_shared_,
+                 shared_progress_,
+                 term_evt_):
 
         global idx_queue,\
             write_lock,\
@@ -822,7 +899,9 @@ def _init_thread(idx_queue_,
             h_lut_shared,\
             h_lut_dtype,\
             n_xy,\
-            histo_shared
+            histo_shared, \
+            shared_progress, \
+            term_evt
 
         idx_queue = idx_queue_
         write_lock = write_lock_
@@ -832,6 +911,8 @@ def _init_thread(idx_queue_,
         h_lut_dtype = h_lut_dtype_
         n_xy = n_xy_
         histo_shared = histo_shared_
+        shared_progress = shared_progress_
+        term_evt = term_evt_
 
 
 def _create_result_file(h5_fn,
@@ -873,7 +954,7 @@ def _to_qspace(th_idx,
                entries,
                img_size,
                output_fn,
-               img_binning):
+               image_binning):
 
     print('Thread {0} started.'.format(th_idx))
 
@@ -885,6 +966,12 @@ def _to_qspace(th_idx,
     t_medfilt = 0.
     t_write = 0.
     t_w_lock = 0.
+    
+    if shared_progress is not None:
+        progress_np = np.frombuffer(shared_progress, dtype='int32')
+        progress_np[th_idx] = 0
+    else:
+        progress_np = None
 
     #histo = np.frombuffer(histo_shared, dtype='int32')
     #histo.shape = qspace_size
@@ -899,100 +986,118 @@ def _to_qspace(th_idx,
 
     # TODO : handle case when nav is not a multiple of img_size!!
     # TODO : find why the first version is faster than the second one
-    img_shape_1 = img_size[0]//img_binning[0], img_binning[0], img_size[1]
-    img_shape_2 = img_shape_1[0], img_shape_1[2]//img_binning[1], img_binning[1]
+    img_shape_1 = img_size[0]//image_binning[0], image_binning[0], img_size[1]
+    img_shape_2 = (img_shape_1[0], img_shape_1[2]//image_binning[1],
+                   image_binning[1])
     sum_axis_1 = 1
     sum_axis_2 = 2
     # img_shape_1 = img_size[0], img_size[1]/nav[1], nav[1]
     # img_shape_2 = img_size[0]//nav[0], nav[0], img_shape_1[1]
     # sum_axis_1 = 2
     # sum_axis_2 = 1
-    avg_weight = 1./(img_binning[0]*img_binning[1])
+    avg_weight = 1./(image_binning[0]*image_binning[1])
 
-    while True:
-        image_idx = idx_queue.get()
-        if image_idx is None:
-            print('Thread {0} is done. Times={1}'
-                  ''.format(th_idx, (t_read, t_dnsamp,
-                                     t_medfilt, t_histo,
-                                     t_mask, t_fit, t_write, t_w_lock)))
-            if disp_times:
-                return (t_read, t_dnsamp,
-                        t_medfilt, t_histo,
-                        t_mask, t_fit, t_write, t_w_lock,)
-            else:
-                return None
+    is_done = False
 
-        if image_idx % 100 == 0:
-            print('#{0}/{1}'.format(image_idx, n_xy))
+    try:
+        while True:
+            if term_evt.is_set():  # noqa
+                raise Exception('Thread #{0} : conversion aborted.'
+                                ''.format(th_idx))
 
-        cumul = None
-        # histo = None
+            image_idx = idx_queue.get()
+            if image_idx is None:
+                is_done = True
+                break
 
-        for entry_idx, entry in enumerate(entries):
+            if image_idx % 100 == 0:
+                print('#{0}/{1}'.format(image_idx, n_xy))
+
+            cumul = None
+            # histo = None
+
+            for entry_idx, entry in enumerate(entries):
+
+                t0 = time.time()
+
+                try:
+                    with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
+                        img_data = entry_h5[img_data_tpl.format(entry)]
+                        img_data.read_direct(img,
+                                             source_sel=np.s_[image_idx],
+                                             dest_sel=None)
+                        #img = img_data[image_idx].astype(np.float64)
+                except Exception as ex:
+                    raise RuntimeError('Error in proc {0} while reading '
+                                       'img {1} from entry {2} ({3}) : {4}.'
+                                       ''.format(th_idx, image_idx, entry_idx,
+                                                 entry, ex))
+
+                t_read += time.time() - t0
+                t0 = time.time()
+
+                if image_binning[0] != 1 or image_binning[1] != 1:
+                    intensity = img.reshape(img_shape_1).\
+                        sum(axis=sum_axis_1).reshape(img_shape_2).\
+                        sum(axis=sum_axis_2) *\
+                        avg_weight
+                    # intensity = xu.blockAverage2D(img, nav[0], nav[1], roi=roi)
+                else:
+                    intensity = img
+
+                t_dnsamp += time.time() - t0
+                t0 = time.time()
+
+                # intensity = medfilt2d(intensity, 3)
+                intensity = medfilt2D(intensity, kernel=[3, 3], n_threads=None)
+
+                t_medfilt += time.time() - t0
+                t0 = time.time()
+
+                try:
+                    cumul = histogramnd_from_lut(intensity.reshape(-1),
+                                                 h_lut[entry_idx],
+                                                 shape=qspace_size,
+                                                 weighted_histo=cumul,
+                                                 dtype=np.float64)
+                except Exception as ex:
+                    print 'EX', ex
+                    raise ex
+
+                t_histo += time.time() - t0
 
             t0 = time.time()
 
+            cumul[mask] = cumul[mask]/histo[mask]
+
+            t_mask += time.time() - t0
+            
+            t0 = time.time()
+            write_lock.acquire()
+            t_w_lock += time.time() - t0
             try:
-                with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
-                    img_data = entry_h5[img_data_tpl.format(entry)]
-                    img_data.read_direct(img,
-                                         source_sel=np.s_[image_idx],
-                                         dest_sel=None)
-                    #img = img_data[image_idx].astype(np.float64)
+                with h5py.File(output_fn, 'r+') as output_h5:
+                    output_h5['qspace'][image_idx] = cumul
             except Exception as ex:
-                print('Error in proc {0} while reading img {1} from entry '
-                      '{2} ({3}) : {4}.'
-                      ''.format(th_idx, image_idx, entry_idx, entry, ex))
+                raise RuntimeError('Error in proc {0} while writing result '
+                                   'for img {1} : {2}.'
+                                   ''.format(th_idx, image_idx, ex))
+            write_lock.release()
 
-            t_read += time.time() - t0
-            t0 = time.time()
+            if progress_np is not None:
+                progress_np[th_idx] = round(100. * (image_idx + 1.) / n_xy)
 
-            if img_binning[0] != 1 or img_binning[1] != 1:
-                intensity = img.reshape(img_shape_1).\
-                    sum(axis=sum_axis_1).reshape(img_shape_2).\
-                    sum(axis=sum_axis_2) *\
-                    avg_weight
-                # intensity = xu.blockAverage2D(img, nav[0], nav[1], roi=roi)
-            else:
-                intensity = img
-
-            t_dnsamp += time.time() - t0
-            t0 = time.time()
-
-            # intensity = medfilt2d(intensity, 3)
-            intensity = medfilt2D(intensity, kernel=[3, 3], n_threads=None)
-
-            t_medfilt += time.time() - t0
-            t0 = time.time()
-
-            try:
-                cumul = histogramnd_from_lut(intensity.reshape(-1),
-                                             h_lut[entry_idx],
-                                             shape=qspace_size,
-                                             weighted_histo=cumul,
-                                             dtype=np.float64)
-            except Exception as ex:
-                print 'EX', ex
-                raise ex
-
-            t_histo += time.time() - t0
-
-        t0 = time.time()
-
-        cumul[mask] = cumul[mask]/histo[mask]
-
-        t_mask += time.time() - t0
+            t_write += time.time() - t0
+    except Exception as ex:
+        print str(ex)
+        term_evt.set()
+        is_done = False
         
-        t0 = time.time()
-        write_lock.acquire()
-        t_w_lock += time.time() - t0
-        try:
-            with h5py.File(output_fn, 'r+') as output_h5:
-                output_h5['qspace'][image_idx] = cumul
-        except Exception as ex:
-            print('Error in proc {0} while writing result for img {1} : {2}.'
-                  ''.format(th_idx, image_idx, ex))
-        write_lock.release()
-
-        t_write += time.time() - t0
+    if disp_times:
+        print('Thread {0} is done. Times={1}'
+              ''.format(th_idx, (t_read, t_dnsamp,
+                                 t_medfilt, t_histo,
+                                 t_mask, t_fit, t_write, t_w_lock)))
+    return [is_done, '', (t_read, t_dnsamp,
+                       t_medfilt, t_histo,
+                       t_mask, t_fit, t_write, t_w_lock,)]

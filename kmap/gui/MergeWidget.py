@@ -1,6 +1,7 @@
 import os
 import time
 import shutil
+from types import MethodType
 from collections import namedtuple
 
 from ..util.id01_spec import Id01DataMerger
@@ -48,17 +49,43 @@ def _create_tmp_dir():
 
 
 class _ScansSelectDialog(Qt.QDialog):
+    
+    (SEL_COL, ID_COL,
+     M0_COL, M0_START_COL, M0_END_COL, M0_STEP_COL,
+     M1_COL, M1_START_COL, M1_END_COL, M1_STEP_COL,
+     IMG_FILE_COL, COL_COUNT) = range(12)
 
     def __init__(self, merger, **kwargs):
         super(_ScansSelectDialog, self).__init__(**kwargs)
-        layout = Qt.QVBoxLayout(self)
+        layout = Qt.QGridLayout(self)
 
         matched = merger.matched_ids
         selected = merger.selected_ids
 
-        table_widget = Qt.QTableWidget(len(matched), 3)
+        table_widget = Qt.QTableWidget(len(matched), self.COL_COUNT)
+        table_widget.setHorizontalHeaderLabels(['', 'ID',
+                                                'M0', 'start', 'end', 'step',
+                                                'M1', 'start', 'end', 'step',
+                                                'Image File'])
+
+        def _sizeHint(self):
+            width = (sum([self.columnWidth(i)
+                     for i in range(self.columnCount())]) +
+                     self.verticalHeader().width() +
+                     20)
+            return Qt.QSize(width, self.height())
+        table_widget.sizeHint = MethodType(_sizeHint, table_widget)
+        table_widget.minimumSize = MethodType(_sizeHint, table_widget)
+        table_widget.maximumSize = MethodType(_sizeHint, table_widget)
+        #layout.setSizeConstraint(Qt.QLayout.SetMinimumSize)
+        #table_widget.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.Fixed,
+                                   #Qt.QSizePolicy.Minimum))
+        self.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.Fixed,
+                                          Qt.QSizePolicy.Minimum))
 
         for num, scan_id in enumerate(matched):
+            command = merger.get_scan_command(scan_id)
+
             item = Qt.QTableWidgetItem()
             item.setFlags(Qt.Qt.ItemIsUserCheckable |
                           Qt.Qt.ItemIsEditable |
@@ -66,31 +93,78 @@ class _ScansSelectDialog(Qt.QDialog):
                           Qt.Qt.ItemIsEnabled)
             state = Qt.Qt.Checked if scan_id in selected else Qt.Qt.Unchecked
             item.setCheckState(state)
-            table_widget.setItem(num, 0, item)
+            table_widget.setItem(num, self.SEL_COL, item)
 
-            item = Qt.QTableWidgetItem(str(scan_id))
-            table_widget.setItem(num, 1, item)
+            def _add_col(value, col_idx):
+                item = Qt.QTableWidgetItem(value)
+                item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
+                item.setTextAlignment(Qt.Qt.AlignRight)
+                table_widget.setItem(num, col_idx, item)
+
+            _add_col(str(scan_id), self.ID_COL)
+            _add_col(command['motor_0'], self.M0_COL)
+            _add_col(command['motor_0_start'], self.M0_START_COL)
+            _add_col(command['motor_0_end'], self.M0_END_COL)
+            _add_col(command['motor_0_step'], self.M0_STEP_COL)
+            _add_col(command['motor_1'], self.M1_COL)
+            _add_col(command['motor_1_start'], self.M1_START_COL)
+            _add_col(command['motor_1_end'], self.M1_END_COL)
+            _add_col(command['motor_1_step'], self.M1_STEP_COL)
 
             img_file = merger.get_scan_image(scan_id)
-            item = Qt.QTableWidgetItem(img_file)
+            item = Qt.QTableWidgetItem(os.path.basename(img_file))
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             item.setToolTip(img_file)
-            table_widget.setItem(num, 2, item)
+            table_widget.setItem(num, self.IMG_FILE_COL, item)
 
         table_widget.resizeColumnsToContents()
         table_widget.resizeRowsToContents()
+        layout.addWidget(table_widget, 0, 0, Qt.Qt.AlignLeft)
 
-        layout.addWidget(table_widget)
+        table_widget.setColumnHidden(self.M0_COL, True)
+        table_widget.setColumnHidden(self.M0_START_COL, True)
+        table_widget.setColumnHidden(self.M0_END_COL, True)
+        table_widget.setColumnHidden(self.M0_STEP_COL, True)
+        table_widget.setColumnHidden(self.M1_COL, True)
+        table_widget.setColumnHidden(self.M1_START_COL, True)
+        table_widget.setColumnHidden(self.M1_END_COL, True)
+        table_widget.setColumnHidden(self.M1_STEP_COL, True)
+
+        more_bn = _AdjustedPushButton('More')
+        layout.addWidget(more_bn, 1, 0, Qt.Qt.AlignRight)
 
         bn_box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Ok |
                                      Qt.QDialogButtonBox.Cancel)
         bn_box.button(Qt.QDialogButtonBox.Ok).setText('Apply')
 
-        layout.addWidget(bn_box)
+        layout.addWidget(bn_box, 2, 0)
         bn_box.accepted.connect(self.__onAccept)
         bn_box.rejected.connect(self.reject)
+        more_bn.clicked.connect(self.__showMore)
 
         self.__table_widget = table_widget
+        self.__more_bn = more_bn
         self.__merger = merger
+
+    def __showMore(self, *args, **kwargs):
+        if self.__more_bn.text() == 'More':
+            self.__more_bn.setText('Less')
+            hide = False
+        else:
+            self.__more_bn.setText('More')
+            hide = True
+        table_widget = self.__table_widget
+        table_widget.setColumnHidden(self.M0_COL, hide)
+        table_widget.setColumnHidden(self.M0_START_COL, hide)
+        table_widget.setColumnHidden(self.M0_END_COL, hide)
+        table_widget.setColumnHidden(self.M0_STEP_COL, hide)
+        table_widget.setColumnHidden(self.M1_COL, hide)
+        table_widget.setColumnHidden(self.M1_START_COL, hide)
+        table_widget.setColumnHidden(self.M1_END_COL, hide)
+        table_widget.setColumnHidden(self.M1_STEP_COL, hide)
+        table_widget.resizeColumnsToContents()
+        table_widget.updateGeometry()
+        self.adjustSize()
 
     def __onAccept(self, *args, **kwags):
         table_widget = self.__table_widget
@@ -121,15 +195,18 @@ class _ScansInfoDialog(Qt.QDialog):
             table_widget.setItem(num, 0, item)
 
             item = Qt.QTableWidgetItem('Image file not found.')
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             table_widget.setItem(num, 1, item)
 
         offset = len(no_match)
 
         for num, scan_id in enumerate(no_img):
             item = Qt.QTableWidgetItem(scan_id)
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             table_widget.setItem(num + offset, 0, item)
 
             item = Qt.QTableWidgetItem('No image info in header.')
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             table_widget.setItem(num + offset, 1, item)
 
         table_widget.resizeColumnsToContents()

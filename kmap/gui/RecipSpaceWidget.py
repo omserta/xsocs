@@ -486,7 +486,7 @@ class RecipSpaceWidget(Qt.QWidget):
         try:
             converter = RecipSpaceConverter(input_f)
         except Exception as ex:
-            print 'EX', ex
+            print('EX : {0}.'.format(ex))
             raise ex
 
         self.__converter = converter
@@ -636,16 +636,6 @@ class _ConversionProcessDialog(Qt.QDialog):
         self.__bn_box.button(Qt.QDialogButtonBox.Ok).setText('Done')
         self.__bn_box.button(Qt.QDialogButtonBox.Ok).setEnabled(True)
         self.__bn_box.button(Qt.QDialogButtonBox.Abort).setEnabled(False)
-
-
-def before_after(f):
-    def decorator(*args, **kwargs):
-        print('before', f.func_name)
-        f(*args, **kwargs)
-        print('after', f.func_name)
-    return decorator
-
-
 
 
 if __name__ == '__main__':

@@ -1061,7 +1061,7 @@ def _to_qspace(th_idx,
                                                  weighted_histo=cumul,
                                                  dtype=np.float64)
                 except Exception as ex:
-                    print 'EX', ex
+                    print('EX {0}'.format(str(ex)))
                     raise ex
 
                 t_histo += time.time() - t0
@@ -1089,7 +1089,7 @@ def _to_qspace(th_idx,
 
             t_write += time.time() - t0
     except Exception as ex:
-        print str(ex)
+        print(str(ex))
         term_evt.set()
         is_done = False
         

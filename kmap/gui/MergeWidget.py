@@ -30,83 +30,21 @@ def _create_tmp_dir():
     qt_tmp_tpl = os.path.join(Qt.QDir.tempPath(),
                               'tmpXsocsXXXXXX')
     try:
-        tmp_dir = Qt.QTemporaryDir(qt_tmp_tpl)
-        isValid = tmp_dir.isValid()
+        q_tmp_dir = Qt.QTemporaryDir(qt_tmp_tpl)
+        isValid = q_tmp_dir.isValid()
         delete_tmp = False
+        tmp_dir = q_tmp_dir.path()
+        q_tmp_dir.setAutoRemove(False)
     except AttributeError:
         isValid = False
 
     if not isValid:
+        q_tmp_dir = None
         import tempfile
         tmp_dir = tempfile.mkdtemp()
         delete_tmp = True
 
-    return tmp_dir, delete_tmp
-
-
-#class _AdjustedPushButton(Qt.QPushButton):
-    #"""
-    #It seems that by default QPushButtons minimum width is 75.
-    #This is a workaround.
-    #For _AdjustedPushButton to work text has to be set at creation time.
-    #"""
-    #def __init__(self, text, padding=None, **kwargs):
-        #super(_AdjustedPushButton, self).__init__(text, **kwargs)
-
-        #fm = self.fontMetrics()
-
-        #if padding is None:
-            #padding = 2 * fm.width('0')
-
-        #width = fm.width(self.text()) + padding
-        #self.setMaximumWidth(width)
-
-
-#class _AdjustedLineEdit(Qt.QLineEdit):
-    #"""
-    #"""
-    #def __init__(self, width, padding=None, **kwargs):
-        #super(_AdjustedLineEdit, self).__init__(**kwargs)
-
-        #fm = self.fontMetrics()
-
-        #if padding is None:
-            #padding = 2 * fm.width('0')
-
-        #text = '0' * width
-        #width = fm.width(text) + padding
-        #self.setMaximumWidth(width)
-
-
-#class _SpinBoxLayout(Qt.QHBoxLayout):
-    #def __init__(self,
-                 #klass=Qt.QDoubleSpinBox,
-                 #unit=None,
-                 #min_value=None,
-                 #max_value=None,
-                 #special_val_txt=None,
-                 #**kwargs):
-        #super(_SpinBoxLayout, self).__init__(**kwargs)
-        #spinbox = self.__spinbox = klass()
-        #self.__label = Qt.QLabel(unit)
-
-        #if min_value is not None:
-            #spinbox.setMinimum(min_value)
-        #if max_value is not None:
-            #spinbox.setMaximum(max_value)
-        #if special_val_txt is not None:
-            #spinbox.setSpecialValueText(special_val_txt)
-
-        #self.addWidget(self.__spinbox)
-        #self.addWidget(self.__label)
-
-    #@property
-    #def spinbox(self):
-        #return self.__spinbox
-
-    #@property
-    #def label(self):
-        #return self.__label
+    return tmp_dir, delete_tmp, q_tmp_dir
 
 
 class _ScansSelectDialog(Qt.QDialog):
@@ -314,7 +252,7 @@ class _MergeProcessDialog(Qt.QDialog):
         self.__merger.abort_merge(wait=False)
 
     def __mergeDone(self):
-        print 'TOTAL', time.time() - self.__time
+        print('TOTAL : {0}.'.format(time.time() - self.__time))
         self.__qtimer.stop()
         self.__qtimer = None
         self.__onProgress()
@@ -694,12 +632,14 @@ class MergeWidget(Qt.QWidget):
         self.__resetState()
 
         if tmp_dir is None:
-            tmp_dir, delete_tmp = _create_tmp_dir()
+            tmp_dir, delete_tmp, q_tmp_dir = _create_tmp_dir()
         else:
             delete_tmp = False
+            q_tmp_dir = None
 
         self.__tmp_root = tmp_dir
         self.__delete_tmp_root = delete_tmp
+        self.__q_tmp_dir = q_tmp_dir
 
         tmp_dir = os.path.join(self.__tmp_root, 'xsocs_merge')
         if not os.path.exists(tmp_dir):
@@ -721,7 +661,6 @@ class MergeWidget(Qt.QWidget):
         outdir_edit.textChanged.connect(self.__updateOutputGroupBox)
         outdir_bn.clicked.connect(self.__pickOutputDir)
         master_edit.textChanged.connect(self.__updateOutputGroupBox)
-        #master_edit.editingFinished.connect(self.__masterEditingFinished)
         merge_bn.clicked.connect(self.__mergeButtonClicked)
         cancel_bn.clicked.connect(self.close)
 
@@ -751,6 +690,13 @@ class MergeWidget(Qt.QWidget):
             shutil.rmtree(self.__tmp_root, ignore_errors=True)
         elif os.path.exists(self.__tmp_dir_merge):
             shutil.rmtree(self.__tmp_dir_merge, ignore_errors=True)
+        if self.__q_tmp_dir is not None:
+            # for some reason the QTemporaryDir gets deleted even thos
+            # this instance is still in scope. This is a workaround until
+            # we figure out what's going on.
+            # (deletion seems to occur when creating the Pool in the
+            # _MergeThread::run method)
+            self.__q_tmp_dir.setAutoRemove(True)
         super(MergeWidget, self).closeEvent(event)
 
     def __resetMaster(self, *args, **kwargs):
@@ -845,6 +791,7 @@ class MergeWidget(Qt.QWidget):
         process_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
         process_diag.accepted.connect(self.__mergeDone)
         process_diag.rejected.connect(self.__mergeDone)
+        process_diag.setModal(True)
         self.__process_diag = process_diag
         process_diag.show()
 
@@ -942,16 +889,6 @@ class MergeWidget(Qt.QWidget):
         if merger is None:
             return
         _ScansInfoDialog(merger, parent=self).exec_()
-
-    #def __masterEditingFinished(self, *args, **kwargs):
-        #merger = self.__merger
-        #line_edit = self.sender()
-
-        #if merger is None:
-            #return
-        #merger.master_file = str(line_edit.text())
-        #master = merger.master_file
-        #line_edit.setText(master)
 
     def __updateOutputGroupBox(self, first=False, **kwargs):
         widgets = self.__widgets
@@ -1076,18 +1013,5 @@ class MergeWidget(Qt.QWidget):
         widgets.no_img_info_edit.setText(str(n_no_img))
 
 
-def before_after(f):
-    def decorator(*args, **kwargs):
-        print('before', f.func_name)
-        f(*args, **kwargs)
-        print('after', f.func_name)
-    return decorator
-
-
 if __name__ == '__main__':
     pass
-
-# label.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Raised)
-# sp = total_line_edit.sizePolicy()
-# sp.setHorizontalPolicy(Qt.QSizePolicy.Minimum)
-# total_line_edit.setSizePolicy(sp)

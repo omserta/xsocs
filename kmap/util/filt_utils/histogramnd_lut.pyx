@@ -219,7 +219,7 @@ def histogramnd_from_lut(weights,
     # + some checks
     if shape is not None:
         if weighted_histo is not None:
-            if shape != weighted_histo.shape:
+            if list(shape) != list(weighted_histo.shape):
                 raise ValueError('<shape> and weighted_histo\'s shape don\'t'
                                  ' match.')
         else:

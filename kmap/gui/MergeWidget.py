@@ -1,9 +1,14 @@
 import os
 import time
 import shutil
+from types import MethodType
 from collections import namedtuple
 
-from kmap.util.id01_spec import Id01DataMerger
+from ..util.id01_spec import Id01DataMerger
+from .Widgets import (AcqParamsWidget,
+                      _AdjustedLabel,
+                      _AdjustedLineEdit,
+                      _AdjustedPushButton)
 
 from silx.gui import qt as Qt
 
@@ -26,97 +31,61 @@ def _create_tmp_dir():
     qt_tmp_tpl = os.path.join(Qt.QDir.tempPath(),
                               'tmpXsocsXXXXXX')
     try:
-        tmp_dir = Qt.QTemporaryDir(qt_tmp_tpl)
-        isValid = tmp_dir.isValid()
+        q_tmp_dir = Qt.QTemporaryDir(qt_tmp_tpl)
+        isValid = q_tmp_dir.isValid()
         delete_tmp = False
+        tmp_dir = q_tmp_dir.path()
+        q_tmp_dir.setAutoRemove(False)
     except AttributeError:
         isValid = False
 
     if not isValid:
+        q_tmp_dir = None
         import tempfile
         tmp_dir = tempfile.mkdtemp()
         delete_tmp = True
 
-    return tmp_dir, delete_tmp
-
-
-class _AdjustedPushButton(Qt.QPushButton):
-    """
-    It seems that by default QPushButtons minimum width is 75.
-    This is a workaround.
-    For _AdjustedPushButton to work text has to be set at creation time.
-    """
-    def __init__(self, text, padding=None, **kwargs):
-        super(_AdjustedPushButton, self).__init__(text, **kwargs)
-
-        fm = self.fontMetrics()
-
-        if padding is None:
-            padding = 2 * fm.width('0')
-
-        width = fm.width(self.text()) + padding
-        self.setMaximumWidth(width)
-
-
-class _AdjustedLineEdit(Qt.QLineEdit):
-    """
-    """
-    def __init__(self, width, padding=None, **kwargs):
-        super(_AdjustedLineEdit, self).__init__(**kwargs)
-
-        fm = self.fontMetrics()
-
-        if padding is None:
-            padding = 2 * fm.width('0')
-
-        text = '0' * width
-        width = fm.width(text) + padding
-        self.setMaximumWidth(width)
-
-
-class _SpinBoxLayout(Qt.QHBoxLayout):
-    def __init__(self,
-                 klass=Qt.QDoubleSpinBox,
-                 unit=None,
-                 min_value=None,
-                 max_value=None,
-                 special_val_txt=None,
-                 **kwargs):
-        super(_SpinBoxLayout, self).__init__(**kwargs)
-        spinbox = self.__spinbox = klass()
-        self.__label = Qt.QLabel(unit)
-
-        if min_value is not None:
-            spinbox.setMinimum(min_value)
-        if max_value is not None:
-            spinbox.setMaximum(max_value)
-        if special_val_txt is not None:
-            spinbox.setSpecialValueText(special_val_txt)
-
-        self.addWidget(self.__spinbox)
-        self.addWidget(self.__label)
-
-    @property
-    def spinbox(self):
-        return self.__spinbox
-
-    @property
-    def label(self):
-        return self.__label
+    return tmp_dir, delete_tmp, q_tmp_dir
 
 
 class _ScansSelectDialog(Qt.QDialog):
+    
+    (SEL_COL, ID_COL,
+     M0_COL, M0_START_COL, M0_END_COL, M0_STEP_COL,
+     M1_COL, M1_START_COL, M1_END_COL, M1_STEP_COL,
+     IMG_FILE_COL, COL_COUNT) = range(12)
 
     def __init__(self, merger, **kwargs):
         super(_ScansSelectDialog, self).__init__(**kwargs)
-        layout = Qt.QVBoxLayout(self)
+        layout = Qt.QGridLayout(self)
 
         matched = merger.matched_ids
         selected = merger.selected_ids
 
-        table_widget = Qt.QTableWidget(len(matched), 3)
+        table_widget = Qt.QTableWidget(len(matched), self.COL_COUNT)
+        table_widget.setHorizontalHeaderLabels(['', 'ID',
+                                                'M0', 'start', 'end', 'step',
+                                                'M1', 'start', 'end', 'step',
+                                                'Image File'])
+
+        def _sizeHint(self):
+            width = (sum([self.columnWidth(i)
+                     for i in range(self.columnCount())]) +
+                     self.verticalHeader().width() +
+                     20)
+            return Qt.QSize(width, self.height())
+        table_widget.sizeHint = MethodType(_sizeHint, table_widget)
+        table_widget.minimumSize = MethodType(_sizeHint, table_widget)
+        table_widget.maximumSize = MethodType(_sizeHint, table_widget)
+        #layout.setSizeConstraint(Qt.QLayout.SetMinimumSize)
+        #table_widget.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.Fixed,
+                                   #Qt.QSizePolicy.Minimum))
+        self.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.Fixed,
+                                          Qt.QSizePolicy.Minimum))
 
         for num, scan_id in enumerate(matched):
+            command = merger.get_scan_command(scan_id)
+
             item = Qt.QTableWidgetItem()
             item.setFlags(Qt.Qt.ItemIsUserCheckable |
                           Qt.Qt.ItemIsEditable |
@@ -124,31 +93,78 @@ class _ScansSelectDialog(Qt.QDialog):
                           Qt.Qt.ItemIsEnabled)
             state = Qt.Qt.Checked if scan_id in selected else Qt.Qt.Unchecked
             item.setCheckState(state)
-            table_widget.setItem(num, 0, item)
+            table_widget.setItem(num, self.SEL_COL, item)
 
-            item = Qt.QTableWidgetItem(str(scan_id))
-            table_widget.setItem(num, 1, item)
+            def _add_col(value, col_idx):
+                item = Qt.QTableWidgetItem(value)
+                item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
+                item.setTextAlignment(Qt.Qt.AlignRight)
+                table_widget.setItem(num, col_idx, item)
+
+            _add_col(str(scan_id), self.ID_COL)
+            _add_col(command['motor_0'], self.M0_COL)
+            _add_col(command['motor_0_start'], self.M0_START_COL)
+            _add_col(command['motor_0_end'], self.M0_END_COL)
+            _add_col(command['motor_0_step'], self.M0_STEP_COL)
+            _add_col(command['motor_1'], self.M1_COL)
+            _add_col(command['motor_1_start'], self.M1_START_COL)
+            _add_col(command['motor_1_end'], self.M1_END_COL)
+            _add_col(command['motor_1_step'], self.M1_STEP_COL)
 
             img_file = merger.get_scan_image(scan_id)
-            item = Qt.QTableWidgetItem(img_file)
+            item = Qt.QTableWidgetItem(os.path.basename(img_file))
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             item.setToolTip(img_file)
-            table_widget.setItem(num, 2, item)
+            table_widget.setItem(num, self.IMG_FILE_COL, item)
 
         table_widget.resizeColumnsToContents()
         table_widget.resizeRowsToContents()
+        layout.addWidget(table_widget, 0, 0, Qt.Qt.AlignLeft)
 
-        layout.addWidget(table_widget)
+        table_widget.setColumnHidden(self.M0_COL, True)
+        table_widget.setColumnHidden(self.M0_START_COL, True)
+        table_widget.setColumnHidden(self.M0_END_COL, True)
+        table_widget.setColumnHidden(self.M0_STEP_COL, True)
+        table_widget.setColumnHidden(self.M1_COL, True)
+        table_widget.setColumnHidden(self.M1_START_COL, True)
+        table_widget.setColumnHidden(self.M1_END_COL, True)
+        table_widget.setColumnHidden(self.M1_STEP_COL, True)
+
+        more_bn = _AdjustedPushButton('More')
+        layout.addWidget(more_bn, 1, 0, Qt.Qt.AlignRight)
 
         bn_box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Ok |
                                      Qt.QDialogButtonBox.Cancel)
         bn_box.button(Qt.QDialogButtonBox.Ok).setText('Apply')
 
-        layout.addWidget(bn_box)
+        layout.addWidget(bn_box, 2, 0)
         bn_box.accepted.connect(self.__onAccept)
         bn_box.rejected.connect(self.reject)
+        more_bn.clicked.connect(self.__showMore)
 
         self.__table_widget = table_widget
+        self.__more_bn = more_bn
         self.__merger = merger
+
+    def __showMore(self, *args, **kwargs):
+        if self.__more_bn.text() == 'More':
+            self.__more_bn.setText('Less')
+            hide = False
+        else:
+            self.__more_bn.setText('More')
+            hide = True
+        table_widget = self.__table_widget
+        table_widget.setColumnHidden(self.M0_COL, hide)
+        table_widget.setColumnHidden(self.M0_START_COL, hide)
+        table_widget.setColumnHidden(self.M0_END_COL, hide)
+        table_widget.setColumnHidden(self.M0_STEP_COL, hide)
+        table_widget.setColumnHidden(self.M1_COL, hide)
+        table_widget.setColumnHidden(self.M1_START_COL, hide)
+        table_widget.setColumnHidden(self.M1_END_COL, hide)
+        table_widget.setColumnHidden(self.M1_STEP_COL, hide)
+        table_widget.resizeColumnsToContents()
+        table_widget.updateGeometry()
+        self.adjustSize()
 
     def __onAccept(self, *args, **kwags):
         table_widget = self.__table_widget
@@ -179,15 +195,18 @@ class _ScansInfoDialog(Qt.QDialog):
             table_widget.setItem(num, 0, item)
 
             item = Qt.QTableWidgetItem('Image file not found.')
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             table_widget.setItem(num, 1, item)
 
         offset = len(no_match)
 
         for num, scan_id in enumerate(no_img):
             item = Qt.QTableWidgetItem(scan_id)
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             table_widget.setItem(num + offset, 0, item)
 
             item = Qt.QTableWidgetItem('No image info in header.')
+            item.setFlags(item.flags() ^ Qt.Qt.ItemIsEditable)
             table_widget.setItem(num + offset, 1, item)
 
         table_widget.resizeColumnsToContents()
@@ -310,7 +329,7 @@ class _MergeProcessDialog(Qt.QDialog):
         self.__merger.abort_merge(wait=False)
 
     def __mergeDone(self):
-        print 'TOTAL', time.time() - self.__time
+        print('TOTAL : {0}.'.format(time.time() - self.__time))
         self.__qtimer.stop()
         self.__qtimer = None
         self.__onProgress()
@@ -556,130 +575,12 @@ class MergeWidget(Qt.QWidget):
         # ################
         params_gbx = Qt.QGroupBox("Acq. Parameters")
         grp_layout = Qt.QVBoxLayout(params_gbx)
+
+        acq_params_wid = AcqParamsWidget(highlight_change=False)
         self.layout().addWidget(params_gbx,
                                 2, 0,
                                 Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-
-        layout = Qt.QGridLayout()
-        grp_layout.addLayout(layout)
-
-        # ===========
-        # beam energy
-        # ===========
-
-        row = 0
-        beam_nrg_edit = _AdjustedLineEdit(8)
-        beam_nrg_edit.setValidator(Qt.QDoubleValidator(beam_nrg_edit))
-        beam_nrg_edit.setAlignment(Qt.Qt.AlignRight)
-        layout.addWidget(Qt.QLabel('Beam energy :'), row, 0)
-        layout.addWidget(beam_nrg_edit, row, 1, Qt.Qt.AlignRight)
-        layout.addWidget(Qt.QLabel('eV'), row, 2)
-
-        # ===
-
-        row += 1
-        h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine)
-        h_line.setFrameShadow(Qt.QFrame.Sunken)
-        layout.addWidget(h_line, row, 0, 1, 3)
-
-        # ===========
-        # pristine beam
-        # ===========
-        row += 1
-        h_layout = Qt.QHBoxLayout()
-        v_layout = Qt.QFormLayout()
-        dir_beam_h_edit = _AdjustedLineEdit(8)
-        dir_beam_h_edit.setValidator(Qt.QDoubleValidator(dir_beam_h_edit))
-        dir_beam_h_edit.setAlignment(Qt.Qt.AlignRight)
-        v_layout.addRow('h=', dir_beam_h_edit)
-        dir_beam_v_edit = _AdjustedLineEdit(8)
-        dir_beam_v_edit.setValidator(Qt.QDoubleValidator(dir_beam_v_edit))
-        dir_beam_v_edit.setAlignment(Qt.Qt.AlignRight)
-        v_layout.addRow('v=', dir_beam_v_edit)
-        h_layout.addLayout(v_layout)
-        layout.addWidget(Qt.QLabel('Direct beam :'), row, 0)
-        layout.addLayout(h_layout, row, 1)
-        layout.addWidget(Qt.QLabel('px'), row, 2)
-
-        # ===
-
-        row += 1
-        h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine)
-        h_line.setFrameShadow(Qt.QFrame.Sunken)
-        layout.addWidget(h_line, row, 0, 1, 3)
-
-        # ===========
-        # chan per degree
-        # ===========
-
-        row += 1
-        h_layout = Qt.QHBoxLayout()
-        v_layout = Qt.QFormLayout()
-        chpdeg_h_edit = _AdjustedLineEdit(8)
-        chpdeg_h_edit.setValidator(Qt.QDoubleValidator(chpdeg_h_edit))
-        chpdeg_h_edit.setAlignment(Qt.Qt.AlignRight)
-        v_layout.addRow('h=', chpdeg_h_edit)
-        chpdeg_v_edit = _AdjustedLineEdit(8)
-        chpdeg_v_edit.setValidator(Qt.QDoubleValidator(chpdeg_v_edit))
-        chpdeg_v_edit.setAlignment(Qt.Qt.AlignRight)
-        v_layout.addRow('v=', chpdeg_v_edit)
-        h_layout.addLayout(v_layout)
-        layout.addWidget(Qt.QLabel('Chan. per deg. :'), row, 0)
-        layout.addLayout(h_layout, row, 1)
-        layout.addWidget(Qt.QLabel('px'), row, 2)
-
-        # ===
-
-        row += 1
-        h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine)
-        h_line.setFrameShadow(Qt.QFrame.Sunken)
-        layout.addWidget(h_line, row, 0, 1, 3)
-
-        # ===========
-        # pixelsize
-        # ===========
-
-        row += 1
-        h_layout = Qt.QHBoxLayout()
-        v_layout = Qt.QFormLayout()
-        pixelsize_h_edit = _AdjustedLineEdit(8)
-        pixelsize_h_edit.setValidator(Qt.QDoubleValidator(pixelsize_h_edit))
-        pixelsize_h_edit.setAlignment(Qt.Qt.AlignRight)
-        v_layout.addRow('h=', pixelsize_h_edit)
-        pixelsize_v_edit = _AdjustedLineEdit(8)
-        pixelsize_v_edit.setValidator(Qt.QDoubleValidator(pixelsize_v_edit))
-        pixelsize_v_edit.setAlignment(Qt.Qt.AlignRight)
-        v_layout.addRow('v=', pixelsize_v_edit)
-        h_layout.addLayout(v_layout)
-        layout.addWidget(Qt.QLabel('Pixel size :'), row, 0)
-        layout.addLayout(h_layout, row, 1)
-        layout.addWidget(Qt.QLabel('um'), row, 2)
-
-        # ===
-
-        row += 1
-        h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine)
-        h_line.setFrameShadow(Qt.QFrame.Sunken)
-        layout.addWidget(h_line, row, 0, 1, 3)
-
-        # ===========
-        # detector orientation
-        # ===========
-
-        row += 1
-        layout.addWidget(Qt.QLabel('Det. orientation :'), row, 0)
-        h_layout = Qt.QHBoxLayout()
-        v_layout = Qt.QFormLayout()
-        h_layout.addLayout(v_layout)
-        det_phi_rb = Qt.QRadioButton(u'Width is {0}.'.format(_PHI_LOWER))
-        v_layout.addRow(det_phi_rb)
-        det_mu_rb = Qt.QRadioButton(u'Width is {0}.'.format(_MU_LOWER))
-        v_layout.addRow(det_mu_rb)
-        layout.addLayout(h_layout, row, 1)
+        grp_layout.addWidget(acq_params_wid)
 
         # ################
         # output options
@@ -771,15 +672,7 @@ class MergeWidget(Qt.QWidget):
                                   'other_scans_bn',
                                   'no_match_scans_edit',
                                   'no_img_info_edit',
-                                  'beam_nrg_edit',
-                                  'dir_beam_h_edit',
-                                  'dir_beam_v_edit',
-                                  'chpdeg_h_edit',
-                                  'chpdeg_v_edit',
-                                  'pixelsize_h_edit',
-                                  'pixelsize_v_edit',
-                                  'det_phi_rb',
-                                  'det_mu_rb',
+                                  'acq_params_wid',
                                   'master_edit',
                                   'outdir_edit',
                                   'outdir_bn',
@@ -802,15 +695,7 @@ class MergeWidget(Qt.QWidget):
                                      other_scans_bn=other_scans_bn,
                                      no_match_scans_edit=no_match_scans_edit,
                                      no_img_info_edit=no_img_info_edit,
-                                     beam_nrg_edit=beam_nrg_edit,
-                                     dir_beam_h_edit=dir_beam_h_edit,
-                                     dir_beam_v_edit=dir_beam_v_edit,
-                                     chpdeg_h_edit=chpdeg_h_edit,
-                                     chpdeg_v_edit=chpdeg_v_edit,
-                                     pixelsize_h_edit=pixelsize_h_edit,
-                                     pixelsize_v_edit=pixelsize_v_edit,
-                                     det_phi_rb=det_phi_rb,
-                                     det_mu_rb=det_mu_rb,
+                                     acq_params_wid=acq_params_wid,
                                      master_edit=master_edit,
                                      outdir_edit=outdir_edit,
                                      outdir_bn=outdir_bn,
@@ -824,12 +709,14 @@ class MergeWidget(Qt.QWidget):
         self.__resetState()
 
         if tmp_dir is None:
-            tmp_dir, delete_tmp = _create_tmp_dir()
+            tmp_dir, delete_tmp, q_tmp_dir = _create_tmp_dir()
         else:
             delete_tmp = False
+            q_tmp_dir = None
 
         self.__tmp_root = tmp_dir
         self.__delete_tmp_root = delete_tmp
+        self.__q_tmp_dir = q_tmp_dir
 
         tmp_dir = os.path.join(self.__tmp_root, 'xsocs_merge')
         if not os.path.exists(tmp_dir):
@@ -851,7 +738,6 @@ class MergeWidget(Qt.QWidget):
         outdir_edit.textChanged.connect(self.__updateOutputGroupBox)
         outdir_bn.clicked.connect(self.__pickOutputDir)
         master_edit.textChanged.connect(self.__updateOutputGroupBox)
-        master_edit.editingFinished.connect(self.__masterEditingFinished)
         merge_bn.clicked.connect(self.__mergeButtonClicked)
         cancel_bn.clicked.connect(self.close)
 
@@ -881,6 +767,13 @@ class MergeWidget(Qt.QWidget):
             shutil.rmtree(self.__tmp_root, ignore_errors=True)
         elif os.path.exists(self.__tmp_dir_merge):
             shutil.rmtree(self.__tmp_dir_merge, ignore_errors=True)
+        if self.__q_tmp_dir is not None:
+            # for some reason the QTemporaryDir gets deleted even thos
+            # this instance is still in scope. This is a workaround until
+            # we figure out what's going on.
+            # (deletion seems to occur when creating the Pool in the
+            # _MergeThread::run method)
+            self.__q_tmp_dir.setAutoRemove(True)
         super(MergeWidget, self).closeEvent(event)
 
     def __resetMaster(self, *args, **kwargs):
@@ -911,43 +804,48 @@ class MergeWidget(Qt.QWidget):
                                    'At least one scan has to be selected.')
             return
 
-        def assert_non_empty(txt):
-            if len(txt) == 0:
+        def assert_non_none(val):
+            if val is None:
                 raise ValueError('parameter is mandatory.')
-            return txt
+            return val
 
+        acq_params_wid = widgets.acq_params_wid
         try:
             name = 'Beam Energy'
-            merger.beam_energy = assert_non_empty(widgets.beam_nrg_edit.text())
+            merger.beam_energy = \
+                assert_non_none(acq_params_wid.beam_energy)
 
             name = 'Direct beam'
-            dir_beam_h = assert_non_empty(widgets.dir_beam_h_edit.text())
-            dir_beam_v = assert_non_empty(widgets.dir_beam_v_edit.text())
+            dir_beam_h = assert_non_none(acq_params_wid.direct_beam_h)
+            dir_beam_v = assert_non_none(acq_params_wid.direct_beam_v)
             merger.center_chan = [dir_beam_h, dir_beam_v]
 
             name = 'Channel per degree'
-            chpdeg_h = assert_non_empty(widgets.chpdeg_h_edit.text())
-            chpdeg_v = assert_non_empty(widgets.chpdeg_v_edit.text())
+            chpdeg_h = assert_non_none(acq_params_wid.chperdeg_h)
+            chpdeg_v = assert_non_none(acq_params_wid.chperdeg_v)
             merger.chan_per_deg = [chpdeg_h, chpdeg_v]
 
             name = 'Pixel size'
-            pixelsize_h = assert_non_empty(widgets.pixelsize_h_edit.text())
-            pixelsize_v = assert_non_empty(widgets.pixelsize_v_edit.text())
+            pixelsize_h = assert_non_none(acq_params_wid.pixelsize_h)
+            pixelsize_v = assert_non_none(acq_params_wid.pixelsize_v)
             merger.pixelsize = [pixelsize_h, pixelsize_v]
 
             name = 'Detector orientation'
-            if widgets.det_mu_rb.isChecked():
-                merger.detector_orient = 'mu'
-            elif widgets.det_phi_rb.isChecked():
-                merger.detector_orient = 'phi'
-            else:
-                raise ValueError('parameter is mandatory.')
+            detector_orient = assert_non_none(acq_params_wid.detector_orient)
+            merger.detector_orient = detector_orient
 
             name = 'master'
-            master = assert_non_empty(str(widgets.master_edit.text()))
+            master = str(widgets.master_edit.text())
+            if len(master) == 0:
+                raise ValueError('parameter is mandatory.')
             merger.master_file = master
 
-            merger.output_dir = assert_non_empty(str(widgets.outdir_edit.text()))  # noqa
+            name = 'output_dir'
+            output_dir = str(widgets.outdir_edit.text())
+            if len(output_dir) == 0:
+                raise ValueError('parameter is mandatory.')
+            merger.output_dir = output_dir
+
         except Exception as ex:
             Qt.QMessageBox.critical(self, 'Error',
                                     '{0} : {1}.'.format(name, str(ex)))
@@ -970,6 +868,7 @@ class MergeWidget(Qt.QWidget):
         process_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
         process_diag.accepted.connect(self.__mergeDone)
         process_diag.rejected.connect(self.__mergeDone)
+        process_diag.setModal(True)
         self.__process_diag = process_diag
         process_diag.show()
 
@@ -1068,17 +967,7 @@ class MergeWidget(Qt.QWidget):
             return
         _ScansInfoDialog(merger, parent=self).exec_()
 
-    def __masterEditingFinished(self, *args, **kwargs):
-        merger = self.__merger
-        line_edit = self.sender()
-
-        if merger is None:
-            return
-        merger.master_file = str(line_edit.text())
-        master = merger.master_file
-        line_edit.setText(master)
-
-    def __updateOutputGroupBox(self, *args, **kwargs):
+    def __updateOutputGroupBox(self, first=False, **kwargs):
         widgets = self.__widgets
         merger = self.__merger
 
@@ -1090,11 +979,12 @@ class MergeWidget(Qt.QWidget):
         widgets.output_gbx.setEnabled(enable)
 
         if enable:
-            master = merger.master_file
             # improve on this
-            master = widgets.master_edit.text()
-            if len(master) == 0:
-                widgets.master_edit.setText(merger.master_file)
+            if first:
+                master = merger.master_file
+                master = widgets.master_edit.text()
+                if len(master) == 0:
+                    widgets.master_edit.setText(merger.master_file)
 
             has_output_dir = len(widgets.outdir_edit.text()) > 0
             has_master = len(widgets.master_edit.text()) > 0
@@ -1163,7 +1053,7 @@ class MergeWidget(Qt.QWidget):
         widgets.parse_bn.setText('Parse file.')
 
         self.__updateScansInfos()
-        self.__updateOutputGroupBox()
+        self.__updateOutputGroupBox(first=True)
 
     def __updateScansInfos(self):
         """
@@ -1200,18 +1090,5 @@ class MergeWidget(Qt.QWidget):
         widgets.no_img_info_edit.setText(str(n_no_img))
 
 
-def before_after(f):
-    def decorator(*args, **kwargs):
-        print('before', f.func_name)
-        f(*args, **kwargs)
-        print('after', f.func_name)
-    return decorator
-
-
 if __name__ == '__main__':
     pass
-
-# label.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Raised)
-# sp = total_line_edit.sizePolicy()
-# sp.setHorizontalPolicy(Qt.QSizePolicy.Minimum)
-# total_line_edit.setSizePolicy(sp)

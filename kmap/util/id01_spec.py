@@ -41,7 +41,7 @@ from multiprocessing import Pool, cpu_count, Manager
 
 import h5py
 import numpy as np
-from PyMca5 import EdfFile
+from silx.third_party import EdfFile
 from silx.io import spectoh5
 
 
@@ -76,8 +76,6 @@ class Id01DataMerger(object):
 
         spec_h5 = os.path.join(work_dir, 'temp_spec.h5')
         self.__spec_h5 = spec_h5
-
-        self.__tmp_dir = work_dir
 
         self.__merge_thread = None
         self.__parse_thread = None
@@ -327,13 +325,13 @@ class Id01DataMerger(object):
         self.__selected_ids -= set(scan_ids)
 
     def get_scan_command(self, scan_id):
-        with h5py.File(self.__spec_h5) as spec_h5:
+        with h5py.File(self.__spec_h5, 'r') as spec_h5:
             try:
                 scan = spec_h5[scan_id]
             except KeyError:
                 raise ValueError('Scan ID {0} not found.')
 
-            command = scan['title'][()]
+            command = scan['title'][()].decode()
 
         _COMMAND_LINE_PATTERN = ('^(?P<id>[0-9]*) '
                                  '(?P<command>[^ ]*) '
@@ -564,10 +562,12 @@ class Id01DataMerger(object):
         if n_proc is None:
             self.__n_proc = None
             return
+
         n_proc = int(n_proc)
         if n_proc <= 0:
-            raise ValueError('n_proc must be a non nul positive integer.')
-        self.__n_proc = n_proc
+            self.__n_proc = None
+        else:
+            self.__n_proc = n_proc
 
     matched_ids = property(lambda self: self.__matched_ids)
     selected_ids = property(lambda self: sorted(self.__selected_ids))
@@ -738,7 +738,8 @@ def _spec_get_img_filenames(spec_h5_filename):
         regx = re.compile(_IMAGEFILE_LINE_PATTERN)
 
         for k_scan, v_scan in h5_f.items():
-            header = v_scan['instrument/specfile/scan_header']
+            header = [s.decode()
+                      for s in v_scan['instrument/specfile/scan_header']]
             imgfile_match = [m for line in header
                              if line.startswith('#C imageFile')
                              for m in [regx.match(line.strip())] if m]
@@ -1094,7 +1095,7 @@ def _add_edf_data(scan_id,
         with h5py.File(entry_fn, 'w') as entry_h5f:
             progress[proc_idx] = 1
             entry_grp = entry_h5f.create_group(entry)
-            with h5py.File(spec_h5_fn) as s_h5f:
+            with h5py.File(spec_h5_fn, 'r') as s_h5f:
                 scan_grp = s_h5f[scan_id]
 
                 for grp_name in scan_grp:
@@ -1154,7 +1155,7 @@ def _add_edf_data(scan_id,
 
             # attributes
             grp = entry_grp.require_group('measurement/image')
-            grp.attrs['interpretation'] = 'image'
+            grp.attrs['interpretation'] = np.string_('image')
 
             # setting the nexus classes
             grp = entry_grp.require_group('instrument')

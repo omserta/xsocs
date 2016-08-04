@@ -110,7 +110,7 @@ def peak_fit(qspace_f,
         q_x = qspace_h5['bins_edges/x'][:]
         q_y = qspace_h5['bins_edges/y'][:]
         q_z = qspace_h5['bins_edges/z'][:]
-        qdata = qspace_h5['qspace']
+        qdata = qspace_h5['data/qspace']
 
         n_points = qdata.shape[0]
 
@@ -157,14 +157,16 @@ def peak_fit(qspace_f,
     if disp_times:
         class myTimes(object):
             def __init__(self):
-                self.t_fit = 0.
                 self.t_read = 0.
+                self.t_mask = 0.
+                self.t_fit = 0.
                 self.t_write = 0.
 
             def update(self, arg):
-                (t_read_, t_fit_, t_write_) = arg
-                self.t_fit += t_fit_
+                (t_read_, t_mask_, t_fit_, t_write_) = arg
                 self.t_read += t_read_
+                self.t_mask += t_mask_
+                self.t_fit += t_fit_
                 self.t_write += t_write_
         res_times = myTimes()
         callback = res_times.update
@@ -203,6 +205,7 @@ def peak_fit(qspace_f,
     if disp_times:
         print('Total : {0}.'.format(t_total))
         print('Read {0}'.format(res_times.t_read))
+        print('Mask {0}'.format(res_times.t_mask))
         print('Fit {0}'.format(res_times.t_fit))
         print('Write {0}'.format(res_times.t_write))
     return results, success
@@ -248,6 +251,7 @@ def _fit_process(th_idx):
     try:
         t_read = 0.
         t_fit = 0.
+        t_mask = 0.
         
         results = np.frombuffer(shared_res)
         results.shape = result_shape
@@ -259,10 +263,12 @@ def _fit_process(th_idx):
             q_x = qspace_h5['bins_edges/x'][:]
             q_y = qspace_h5['bins_edges/y'][:]
             q_z = qspace_h5['bins_edges/z'][:]
-            q_shape = qspace_h5['qspace'].shape
-            q_dtype = qspace_h5['qspace'].dtype
+            q_shape = qspace_h5['data/qspace'].shape
+            q_dtype = qspace_h5['data/qspace'].dtype
+            mask = np.where(qspace_h5['histo'][:] > 0)
+            weights = qspace_h5['histo'][:][mask]
         #read_lock.release()
-
+        #print weights.max(), min(weights)
         cube = np.ascontiguousarray(np.zeros(q_shape[1:]),
                                     dtype=q_dtype)
 
@@ -282,10 +288,14 @@ def _fit_process(th_idx):
 
             t0 = time.time()
             with h5py.File(qspace_f, 'r') as qspace_h5:
-                qspace_h5['qspace'].read_direct(cube,
+                qspace_h5['data/qspace'].read_direct(cube,
                                                 source_sel=np.s_[i_cube],
                                                 dest_sel=None)
             t_read += time.time() - t0
+
+            t0 = time.time()
+            cube[mask] = cube[mask]/weights
+            t_mask = time.time() - t0
 
             t0 = time.time()
 
@@ -372,6 +382,6 @@ def _fit_process(th_idx):
     except Exception as ex:
         print 'EX', ex
 
-    times = (t_read, t_fit, t_write)
+    times = (t_read, t_mask, t_fit, t_write)
     print('Thread {0} done ({1}).'.format(th_idx, times))
     return times

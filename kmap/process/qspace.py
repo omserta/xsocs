@@ -619,8 +619,10 @@ def _img_2_qspace(data_h5f,
 
     print('Parameters :')
     print('\t- beam energy  : {0}'.format(beam_energy))
-    print('\t- center chan  : [{0}, {1}]'.format(*center_chan))
-    print('\t- chan per deg : [{0}, {1}]'.format(*chan_per_deg))
+    print('\t- center chan  : {0}'.format(center_chan))
+    print('\t- chan per deg : {0}'.format(chan_per_deg))
+    print('\t- img binning : {0}'.format(image_binning))
+    print('\t- qspace size : {0}'.format(qspace_size))
 
     # TODO : make this editable?
     nx, ny, nz = qspace_size
@@ -817,7 +819,7 @@ def _img_2_qspace(data_h5f,
         class myTimes(object):
             def __init__(self):
                 self.t_histo = 0.
-                self.t_fit = 0.
+                self.t_sum = 0.
                 self.t_mask = 0.
                 self.t_read = 0.
                 self.t_dnsamp = 0.
@@ -827,9 +829,9 @@ def _img_2_qspace(data_h5f,
 
             def update(self, arg):
                 (t_read_, t_dnsamp_, t_medfilt_, t_histo_,
-                 t_mask_, t_fit_, t_write_, t_w_lock_) = arg[2]
+                 t_mask_, t_sum_, t_write_, t_w_lock_) = arg[2]
                 self.t_histo += t_histo_
-                self.t_fit += t_fit_
+                self.t_sum += t_sum_
                 self.t_mask += t_mask_
                 self.t_read += t_read_
                 self.t_dnsamp += t_dnsamp_
@@ -877,7 +879,7 @@ def _img_2_qspace(data_h5f,
         print('Medfilt {0}'.format(res_times.t_medfilt))
         print('Histo {0}'.format(res_times.t_histo))
         print('Mask {0}'.format(res_times.t_mask))
-        print('Fit {0}'.format(res_times.t_fit))
+        print('Sum {0}'.format(res_times.t_sum))
         print('Write {0}'.format(res_times.t_write))
         print('(lock : {0})'.format(res_times.t_w_lock))
 
@@ -938,9 +940,11 @@ def _create_result_file(h5_fn,
         os.makedirs(dir_name)
 
     with h5py.File(h5_fn, mode) as h5f:
-        h5f.create_dataset('qspace', shape, dtype=dtype,
+        h5f.create_dataset('data/qspace', shape, dtype=dtype,
                            shuffle=True, compression=compression,
                            chunks=chunks)
+        h5f.create_dataset('data/sum', (len(pos_x),), dtype=np.float64,
+                           shuffle=True, compression=compression)
         h5f.create_dataset('bins_edges/x', data=bins_x)
         h5f.create_dataset('bins_edges/y', data=bins_y)
         h5f.create_dataset('bins_edges/z', data=bins_z)
@@ -961,6 +965,7 @@ def _to_qspace(th_idx,
     t_histo = 0.
     t_fit = 0.
     t_mask = 0.
+    t_sum = 0.
     t_read = 0.
     t_dnsamp = 0.
     t_medfilt = 0.
@@ -982,7 +987,7 @@ def _to_qspace(th_idx,
     #h_lut.shape = (n_xy, -1)
     h_lut = h_lut_shared
 
-    img = np.ascontiguousarray(np.zeros((516, 516)), dtype=np.float64)
+    img = np.ascontiguousarray(np.zeros(img_size), dtype=np.float64)
 
     # TODO : handle case when nav is not a multiple of img_size!!
     # TODO : find why the first version is faster than the second one
@@ -1067,17 +1072,21 @@ def _to_qspace(th_idx,
                 t_histo += time.time() - t0
 
             t0 = time.time()
+            cumul_sum = cumul.sum(dtype=np.float64)
+            t_sum += time.time() - t0
 
-            cumul[mask] = cumul[mask]/histo[mask]
-
+            t0 = time.time()
+            #cumul[mask] = cumul[mask]/histo[mask]
             t_mask += time.time() - t0
-            
+
             t0 = time.time()
             write_lock.acquire()
             t_w_lock += time.time() - t0
+            t0 = time.time()
             try:
                 with h5py.File(output_fn, 'r+') as output_h5:
-                    output_h5['qspace'][image_idx] = cumul
+                    output_h5['data/qspace'][image_idx] = cumul
+                    output_h5['data/sum'][image_idx] = cumul_sum
             except Exception as ex:
                 raise RuntimeError('Error in proc {0} while writing result '
                                    'for img {1} : {2}.'
@@ -1097,7 +1106,7 @@ def _to_qspace(th_idx,
         print('Thread {0} is done. Times={1}'
               ''.format(th_idx, (t_read, t_dnsamp,
                                  t_medfilt, t_histo,
-                                 t_mask, t_fit, t_write, t_w_lock)))
+                                 t_mask, t_sum, t_write, t_w_lock)))
     return [is_done, '', (t_read, t_dnsamp,
                        t_medfilt, t_histo,
-                       t_mask, t_fit, t_write, t_w_lock,)]
+                       t_mask, t_sum, t_write, t_w_lock,)]

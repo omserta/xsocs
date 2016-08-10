@@ -364,7 +364,7 @@ class _MergeProcessDialog(Qt.QDialog):
             wid.setValue(total / len(progress))
 
 
-class MergeWidget(Qt.QWidget):
+class MergeWidget(Qt.QDialog):
 
     __sigParseDone = Qt.Signal()
 

@@ -659,6 +659,8 @@ def _img_2_qspace(data_h5f,
     # then the array
     q_ar = np.zeros(q_shape, dtype=np.float64)
 
+    img_dtype = None
+
     with h5py.File(data_h5f, 'r') as master_h5:
 
         entry_files = []
@@ -688,6 +690,15 @@ def _img_2_qspace(data_h5f,
             q_ar[entry_idx, :, 0] = qx.reshape(-1)
             q_ar[entry_idx, :, 1] = qy.reshape(-1)
             q_ar[entry_idx, :, 2] = qz.reshape(-1)
+
+            entry_dtype = master_h5[img_data_tpl.format(entry)].dtype
+
+            if img_dtype is None:
+                img_dtype = entry_dtype
+            elif img_dtype != entry_dtype:
+                raise TypeError('All images in the input HDF5 files should '
+                                'be of the same type. Found {0} and {1}.'
+                                ''.format(img_dtype, entry_dtype))
 
             del positioners
 
@@ -850,7 +861,8 @@ def _img_2_qspace(data_h5f,
                     entries,
                     img_size,
                     output_f,
-                    image_binning)
+                    image_binning,
+                    img_dtype)
         res = pool.apply_async(_to_qspace, args=arg_list, callback=callback)
         res_list.append(res)
 
@@ -958,7 +970,8 @@ def _to_qspace(th_idx,
                entries,
                img_size,
                output_fn,
-               image_binning):
+               image_binning,
+               img_dtype):
 
     print('Thread {0} started.'.format(th_idx))
 
@@ -987,7 +1000,7 @@ def _to_qspace(th_idx,
     #h_lut.shape = (n_xy, -1)
     h_lut = h_lut_shared
 
-    img = np.ascontiguousarray(np.zeros(img_size), dtype=np.float64)
+    img = np.ascontiguousarray(np.zeros(img_size), dtype=img_dtype)
 
     # TODO : handle case when nav is not a multiple of img_size!!
     # TODO : find why the first version is faster than the second one
@@ -1043,8 +1056,8 @@ def _to_qspace(th_idx,
 
                 if image_binning[0] != 1 or image_binning[1] != 1:
                     intensity = img.reshape(img_shape_1).\
-                        sum(axis=sum_axis_1).reshape(img_shape_2).\
-                        sum(axis=sum_axis_2) *\
+                        sum(axis=sum_axis_1, dtype=np.uint32).reshape(img_shape_2).\
+                        sum(axis=sum_axis_2, dtype=np.uint32) *\
                         avg_weight
                     # intensity = xu.blockAverage2D(img, nav[0], nav[1], roi=roi)
                 else:

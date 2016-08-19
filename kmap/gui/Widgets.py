@@ -15,6 +15,8 @@ class AcqParamsWidget(Qt.QWidget):
         layout = Qt.QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        self.__read_only = read_only
+
         self.__beam_energy = None
         self.__dir_beam_h = None
         self.__dir_beam_v = None
@@ -142,13 +144,19 @@ class AcqParamsWidget(Qt.QWidget):
         row += 1
         layout.addWidget(Qt.QLabel('Det. orientation :'), row, 0)
         h_layout = Qt.QHBoxLayout()
-        det_phi_rb = Qt.QRadioButton(u'Width is {0}.'.format(_PHI_LOWER))
-        h_layout.addWidget(det_phi_rb)
-        det_mu_rb = Qt.QRadioButton(u'Width is {0}.'.format(_MU_LOWER))
-        h_layout.addWidget(det_mu_rb)
+        det_phi_rb = None
+        det_mu_rb = None
+        det_orient_edit = None
+        if not read_only:
+            det_phi_rb = Qt.QRadioButton(u'Width is {0}.'.format(_PHI_LOWER))
+            h_layout.addWidget(det_phi_rb)
+            det_mu_rb = Qt.QRadioButton(u'Width is {0}.'.format(_MU_LOWER))
+            h_layout.addWidget(det_mu_rb)
+        else:
+            det_orient_edit = _AdjustedLineEdit(5, read_only=True)
+            det_orient_edit.setAlignment(Qt.Qt.AlignCenter)
+            h_layout.addWidget(det_orient_edit, alignment=Qt.Qt.AlignLeft)
         layout.addLayout(h_layout, row, 1)
-        det_phi_rb.setEnabled(not read_only)
-        det_mu_rb.setEnabled(not read_only)
 
         # ===========
         # size constraints
@@ -166,6 +174,21 @@ class AcqParamsWidget(Qt.QWidget):
         self.__pixelsize_v_edit = pixelsize_v_edit
         self.__det_phi_rb = det_phi_rb
         self.__det_mu_rb = det_mu_rb
+        self.__det_orient_edit = det_orient_edit
+
+    def clear(self):
+        self.__beam_nrg_edit.clear()
+        self.__dir_beam_h_edit.clear()
+        self.__dir_beam_v_edit.clear()
+        self.__chpdeg_h_edit.clear()
+        self.__chpdeg_v_edit.clear()
+        self.__pixelsize_h_edit.clear()
+        self.__pixelsize_v_edit.clear()
+        if self.__read_only:
+            self.__det_orient_edit.clear()
+        else:
+            self.__det_phi_rb.setChecked(False)
+            self.__det_mu_rb.setChecked(False)
 
     @property
     def beam_energy(self):
@@ -253,7 +276,9 @@ class AcqParamsWidget(Qt.QWidget):
 
     @property
     def detector_orient(self):
-        if self.__det_phi_rb.isChecked():
+        if self.__read_only:
+            return self.__det_orient_edit.text()
+        elif self.__det_phi_rb.isChecked():
             return 'phi'
         elif self.__det_mu_rb.isChecked():
             return 'mu'
@@ -261,7 +286,12 @@ class AcqParamsWidget(Qt.QWidget):
 
     @detector_orient.setter
     def detector_orient(self, detector_orient):
-        if detector_orient == 'phi':
+        if detector_orient not in ('phi', 'mu', None):
+            raise ValueError('Unknown detector orientation : {0}.'
+                             ''.format(detector_orient))
+        if self.__read_only:
+            self.__det_orient_edit.setText(detector_orient or '')
+        elif detector_orient == 'phi':
             self.__det_phi_rb.setChecked(True)
         elif detector_orient == 'mu':
             self.__det_mu_rb.setChecked(True)
@@ -320,6 +350,7 @@ class _AdjustedLineEdit(Qt.QLineEdit):
         text = '0' * width
         width = fm.width(text) + padding
         self.setMaximumWidth(width)
+        self.setMinimumWidth(width)
 
         self.setAlignment(alignment)
         self.setReadOnly(read_only)

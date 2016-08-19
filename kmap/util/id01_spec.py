@@ -62,6 +62,7 @@ _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
 class Id01DataMerger(object):
     """
     NOT thread safe
+    TODO : status : parsed, merged, error, cancelled, ...
     """
 
     def __init__(self,
@@ -79,6 +80,7 @@ class Id01DataMerger(object):
 
         self.__merge_thread = None
         self.__parse_thread = None
+        self.__status = None
 
         self.reset(spec_fname,
                    img_dir=img_dir,
@@ -95,7 +97,7 @@ class Id01DataMerger(object):
         self.__spec_fname = spec_fname
         self.__img_dir = img_dir
         self.__version = version
-        self.__master_file = 'master.h5'
+        self.prefix = 'prefix'
 
         self.__parsed = False
         self.__merged = False
@@ -118,10 +120,11 @@ class Id01DataMerger(object):
 
         self.__set_parse_results(reset=True)
 
-    def __on_merge_done(self, callback=None):
-        self.__merged = True
+    def __on_merge_done(self, result, callback=None):
+        self.__merged = result[0]
+        self.__master = result[1]
         if callback:
-            callback()
+            callback(result)
 
     def __on_parse_done(self, callback=None):
         self.__set_parse_results()
@@ -161,7 +164,8 @@ class Id01DataMerger(object):
             self.__parsed = True
 
         self.__merged = False
-        self.master_file = None
+        self.__master = None
+        self.prefix = None
 
     def __running_exception(self):
         if self.is_running():
@@ -300,14 +304,17 @@ class Id01DataMerger(object):
 
         self.__check_parsed()
 
+        if scan_ids is None:
+            scan_ids = self.__matched_scans.keys()
+
         if not isinstance(scan_ids, (list, tuple)):
             scan_ids = [scan_ids]
 
         scan_ids = set(scan_ids)
-        unknown_scans = scan_ids - set(self.__matched_scans)
+        unknown_scans = scan_ids - set(self.__matched_scans.keys())
 
         if len(unknown_scans) != 0:
-            err_ids = '; '.join('{0}'.format(scan for scan in unknown_scans))
+            err_ids = '; '.join(scan for scan in unknown_scans)
             raise ValueError('Unknown scan IDs : {0}.'.format(err_ids))
 
         if clear:
@@ -316,6 +323,9 @@ class Id01DataMerger(object):
             self.__selected_ids |= scan_ids
 
     def unselect(self, scan_ids):
+
+        if scan_ids is None:
+            return
 
         self.__check_parsed()
 
@@ -458,21 +468,23 @@ class Id01DataMerger(object):
 
     master_file = property(lambda self: self.__master)
 
-    @master_file.setter
-    def master_file(self, master):
+    prefix = property(lambda self: self.__prefix)
+
+    @prefix.setter
+    def prefix(self, prefix):
         # self.__check_parsed()
 
-        if master is None or len(master) == 0:
-            master = self.common_prefix()
-            if len(master) == 0:
-                self.__master = 'master'
+        if prefix is None or len(prefix) == 0:
+            prefix = self.common_prefix()
+            if not prefix:
+                self.__prefix = 'prefix'
             else:
-                self.__master = master + '_master'
+                self.__prefix = prefix
 
-        elif isinstance(master, str):
-            self.__master = master
+        elif isinstance(prefix, str):
+            self.__prefix = prefix
         else:
-            raise TypeError('master must be a string, or None.')
+            raise TypeError('prefix must be a string, or None.')
 
     def __gen_scan_filename(self, scan_id, fullpath=False):
         pattern = '{img_file}_{scan_id}.h5'
@@ -485,9 +497,9 @@ class Id01DataMerger(object):
         return merged_file
 
     def __gen_master_filename(self, fullpath=False):
-        master = self.__master
-        if not master.endswith('.h5'):
-            master += '.h5'
+        prefix = self.prefix
+        #if not master.endswith('.h5'):
+        master = prefix + '.h5'
         if fullpath:
             master = os.path.join(self.output_dir, master)
         return master
@@ -663,6 +675,8 @@ def merge_scan_data(output_dir,
                                  version=version)
 
     id01_merger.parse()
+
+    id01_merger.select(scan_ids, clear=True)
 
     id01_merger.output_dir = output_dir
 
@@ -991,7 +1005,7 @@ class _MergeThread(Thread):
         self.__proc_indices = proc_indices
         pool.join()
 
-        valid = all(result[1] for result in results)
+        valid = all(result.get()[1] for result in results.values())
         if valid:
             with h5py.File(master_f, 'a') as m_h5f:
                 items = self.__scans.items()
@@ -1001,7 +1015,7 @@ class _MergeThread(Thread):
                     m_h5f[entry] = h5py.ExternalLink(entry_fn, entry)
 
         if self.__callback:
-            self.__callback()
+            self.__callback((True, master_f) if valid else (False, None))
 
     def wait(self):
         self.join()
@@ -1050,7 +1064,6 @@ class _MergeThread(Thread):
 # #######################################################################
 # #######################################################################
 # #######################################################################
-
 
 def _add_edf_data(scan_id,
                   proc_idx,
@@ -1149,6 +1162,15 @@ def _add_edf_data(scan_id,
                                                      compression=compression,
                                                      shuffle=True)
 
+            if dtype.kind == 'i':
+                cumul_dtype = np.int64
+            elif dtype.kind == 'u':
+                cumul_dtype = np.uint64
+            else:
+                cumul_dtype = np.float64
+
+            cumul_array = np.zeros((n_images,), dtype=cumul_dtype)
+
             # creating some links
             img_data_grp['info'] = img_det_grp
             img_det_grp['data'] = image_dset
@@ -1182,6 +1204,13 @@ def _add_edf_data(scan_id,
 
                 data = edf_file.GetData(i)
                 image_dset[i, :, :] = data
+                cumul_array[i] = data.sum()
+
+            img_data_grp.create_dataset('cumul',
+                                        data=cumul_array,
+                                        compression=compression,
+                                        shuffle=True)
+
 
     except Exception as ex:
         print(ex)

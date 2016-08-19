@@ -2,6 +2,7 @@ import os
 import time
 import shutil
 from types import MethodType
+from functools import partial
 from collections import namedtuple
 
 from ..util.id01_spec import Id01DataMerger
@@ -222,7 +223,7 @@ class _ScansInfoDialog(Qt.QDialog):
 
 
 class _MergeProcessDialog(Qt.QDialog):
-    __sigMergeDone = Qt.Signal()
+    __sigMergeDone = Qt.Signal(object)
 
     def __init__(self, merger, **kwargs):
         super(_MergeProcessDialog, self).__init__(**kwargs)
@@ -282,6 +283,7 @@ class _MergeProcessDialog(Qt.QDialog):
         self.__bn_box = bn_box
         self.__abort_diag = None
         self.__merger = merger
+        self.__status = False
 
     def __onAccept(self, *args, **kwargs):
         merger = self.__merger
@@ -328,8 +330,9 @@ class _MergeProcessDialog(Qt.QDialog):
         abort_diag.show()
         self.__merger.abort_merge(wait=False)
 
-    def __mergeDone(self):
+    def __mergeDone(self, result):
         print('TOTAL : {0}.'.format(time.time() - self.__time))
+        self.__status = result[0]
         self.__qtimer.stop()
         self.__qtimer = None
         self.__onProgress()
@@ -337,7 +340,11 @@ class _MergeProcessDialog(Qt.QDialog):
             self.__abort_diag.done(0)
             self.__abort_diag = None
         self.__bn_box.button(Qt.QDialogButtonBox.Cancel).setText('Close')
-        self.__bn_box.rejected.connect(self.accept)
+
+        if self.__status:
+            self.__bn_box.rejected.connect(self.accept)
+        else:
+            self.__bn_box.rejected.connect(self.reject)
 
     def __onProgress(self, *args, **kwargs):
         progress = self.__merger.merge_progress()
@@ -596,7 +603,7 @@ class MergeWidget(Qt.QDialog):
         # master
         # ===========
 
-        lab = Qt.QLabel('Master file :')
+        lab = Qt.QLabel('Prefix :')
         master_edit = Qt.QLineEdit()
         fm = master_edit.fontMetrics()
         master_edit.setMinimumWidth(fm.width(' ' * 50))
@@ -739,7 +746,7 @@ class MergeWidget(Qt.QDialog):
         outdir_bn.clicked.connect(self.__pickOutputDir)
         master_edit.textChanged.connect(self.__updateOutputGroupBox)
         merge_bn.clicked.connect(self.__mergeButtonClicked)
-        cancel_bn.clicked.connect(self.close)
+        cancel_bn.clicked.connect(self.reject)
 
         edit_scans_bn.clicked.connect(self.__editScans)
         other_scans_bn.clicked.connect(self.__viewOtherScans)
@@ -753,6 +760,8 @@ class MergeWidget(Qt.QDialog):
         if spec_file is not None:
             spec_file_edit.setText(spec_file)
         self.__widget_setup = False
+
+        self.__xsocs_h5 = None
 
     def showEvent(self, *args, **kwargs):
         if not self.__widget_setup:
@@ -781,8 +790,8 @@ class MergeWidget(Qt.QDialog):
         merger = self.__merger
         if merger is None:
             return
-        merger.master_file = None
-        master = merger.master_file
+        merger.prefix = None
+        master = merger.prefix
         widgets.master_edit.setText(master)
 
     def __mergeButtonClicked(self, *args, **kwargs):
@@ -834,11 +843,11 @@ class MergeWidget(Qt.QDialog):
             detector_orient = assert_non_none(acq_params_wid.detector_orient)
             merger.detector_orient = detector_orient
 
-            name = 'master'
+            name = 'Prefix'
             master = str(widgets.master_edit.text())
             if len(master) == 0:
                 raise ValueError('parameter is mandatory.')
-            merger.master_file = master
+            merger.prefix = master
 
             name = 'output_dir'
             output_dir = str(widgets.outdir_edit.text())
@@ -866,14 +875,21 @@ class MergeWidget(Qt.QDialog):
 
         process_diag = _MergeProcessDialog(merger, parent=self)
         process_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        process_diag.accepted.connect(self.__mergeDone)
-        process_diag.rejected.connect(self.__mergeDone)
+        process_diag.accepted.connect(partial(self.__mergeDone, status=True))
+        process_diag.rejected.connect(partial(self.__mergeDone, status=False))
         process_diag.setModal(True)
         self.__process_diag = process_diag
         process_diag.show()
 
-    def __mergeDone(self, *args, **kwargs):
+    def __mergeDone(self, status):
         self.__process_diag = None
+        if status:
+            self.__xsocs_h5 = self.__merger.master_file
+            self.accept()
+
+    @property
+    def xsocsH5(self):
+        return self.__xsocs_h5
 
     def __inputEditTextChanged(self, text):
         """
@@ -981,14 +997,14 @@ class MergeWidget(Qt.QDialog):
         if enable:
             # improve on this
             if first:
-                master = merger.master_file
-                master = widgets.master_edit.text()
-                if len(master) == 0:
-                    widgets.master_edit.setText(merger.master_file)
+                #master = merger.master_file
+                prefix = widgets.master_edit.text()
+                if len(prefix) == 0:
+                    widgets.master_edit.setText(merger.prefix)
 
             has_output_dir = len(widgets.outdir_edit.text()) > 0
-            has_master = len(widgets.master_edit.text()) > 0
-            enable = has_output_dir and has_master
+            has_prefix = len(widgets.master_edit.text()) > 0
+            enable = has_output_dir and has_prefix
             widgets.merge_bn.setEnabled(enable)
         else:
             widgets.master_edit.clear()

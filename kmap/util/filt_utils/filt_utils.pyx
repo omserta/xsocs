@@ -34,6 +34,8 @@ from libc.stdio cimport printf
 from cython.parallel import prange, threadid
 
 ctypedef fused image_t:
+    _np.uint16_t
+    _np.uint32_t
     _np.int64_t
     _np.float64_t
     _np.float32_t

@@ -41,8 +41,10 @@ ctypedef fused cumul_t:
     numpy.float32_t
     numpy.int32_t
     numpy.int64_t
+    numpy.uint16_t
 
 ctypedef fused weights_t:
+    numpy.uint16_t
     numpy.float64_t
     numpy.float32_t
     numpy.int32_t
@@ -180,6 +182,7 @@ def histogramnd_get_lut(sample,
                                         histo_c,
                                         last_bin_closed)
     except TypeError as ex:
+        print('EXXX', ex)
         raise TypeError('Type not supported - sample : {0}'
                         ''.format(sample_type))
 
@@ -237,8 +240,13 @@ def histogramnd_from_lut(weights,
 
     rc = 0
 
-    filt_min_weights = weight_min is not None
-    filt_max_weights = weight_max is not None
+    if weight_min is None:
+        weight_min = 0
+        filt_min_weights = False
+
+    if weight_max is None:
+        weight_max = 0
+        filt_max_weights = False
 
     try:
         _histogramnd_from_lut_fused(w_c,

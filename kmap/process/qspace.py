@@ -955,7 +955,7 @@ def _create_result_file(h5_fn,
         h5f.create_dataset('data/qspace', shape, dtype=dtype,
                            shuffle=True, compression=compression,
                            chunks=chunks)
-        h5f.create_dataset('data/sum', (len(pos_x),), dtype=np.float64,
+        h5f.create_dataset('data/qspace_sum', (len(pos_x),), dtype=np.float64,
                            shuffle=True, compression=compression)
         h5f.create_dataset('bins_edges/x', data=bins_x)
         h5f.create_dataset('bins_edges/y', data=bins_y)
@@ -1079,7 +1079,7 @@ def _to_qspace(th_idx,
                                                  weighted_histo=cumul,
                                                  dtype=np.float64)
                 except Exception as ex:
-                    print('EX {0}'.format(str(ex)))
+                    print('EX2 {0}'.format(str(ex)))
                     raise ex
 
                 t_histo += time.time() - t0
@@ -1099,7 +1099,7 @@ def _to_qspace(th_idx,
             try:
                 with h5py.File(output_fn, 'r+') as output_h5:
                     output_h5['data/qspace'][image_idx] = cumul
-                    output_h5['data/sum'][image_idx] = cumul_sum
+                    output_h5['data/qspace_sum'][image_idx] = cumul_sum
             except Exception as ex:
                 raise RuntimeError('Error in proc {0} while writing result '
                                    'for img {1} : {2}.'
@@ -1111,7 +1111,7 @@ def _to_qspace(th_idx,
 
             t_write += time.time() - t0
     except Exception as ex:
-        print(str(ex))
+        print('EX', str(ex))
         term_evt.set()
         is_done = False
         

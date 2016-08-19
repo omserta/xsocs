@@ -326,7 +326,7 @@ class _AdjustedLineEdit(Qt.QLineEdit):
     """
     """
     def __init__(self,
-                 width,
+                 width=None,
                  padding=None,
                  alignment=Qt.Qt.AlignRight,
                  validator_cls=None,
@@ -342,15 +342,17 @@ class _AdjustedLineEdit(Qt.QLineEdit):
         self.__resetOnEmpty = reset_on_empty
         self.__fieldType = field_type
 
-        fm = self.fontMetrics()
 
-        if padding is None:
-            padding = 2 * fm.width('0')
+        if width is not None:
+            fm = self.fontMetrics()
 
-        text = '0' * width
-        width = fm.width(text) + padding
-        self.setMaximumWidth(width)
-        self.setMinimumWidth(width)
+            if padding is None:
+                padding = 2 * fm.width('0')
+
+            text = '0' * width
+            width = fm.width(text) + padding
+            self.setMaximumWidth(width)
+            self.setMinimumWidth(width)
 
         self.setAlignment(alignment)
         self.setReadOnly(read_only)

@@ -4,7 +4,7 @@ import time
 from kmap.util.id01_spec import merge_scan_data
 
 # output directory (some temporary files will also be written there)
-workdir = '/path/to/output/'
+output_dir = '/path/to/output/'
 
 # path to the spec file
 spec_f ='/path/to/spec/scan.spec'
@@ -37,30 +37,41 @@ version = 1
 # qspace coordinates)
 # (not that this value can also be changed later when calling the
 # img_2_qpeak function)
-ch_per_deg = [318., 318.]
+chan_per_deg = [318., 318.]
 
 # direct beam position in the detector coordinates
 center_chan = [140, 322]
 
+# the pixel size of the detector
+pixelsize = [-1, -1]
+
+# detector orientation
+# (not used at the moment though, still a work in progres)
+detector_orient = 'phi'
+
 # the merge will actually create one file per scan, then a "master" file
 # (in the output directory) that will contain links to those files. You can
-# give the master file the name you want (if None, the file will be
-# named ... "master.h5")
+# give the master file the name you want (if None, a name will be generated
+# with the prefix found in the spec file)
 master_f = None
+
+# checks if some of the output files already exist
+# set it to True if you dont care about overwriting files
+overwrite = False
 
 t_merge = time.time()
 
-merge_scan_data(workdir,
+merge_scan_data(output_dir,
                     spec_f,
-                    beam_energy,
-                    ch_per_deg,
-                    # pixelsize=[-1., -1],
+                    beam_energy=beam_energy,
+                    chan_per_deg=chan_per_deg,
+                    pixelsize=pixelsize,
                     center_chan=center_chan,
                     scan_ids=scan_ids,
                     master_f=master_f,
                     img_dir=img_base,
-                    n_proc=None,
-                    version=version)
+                    version=version,
+                    overwrite=overwrite)
 
 t_merge = time.time() - t_merge
 print('Total time spent : {0}'.format(t_merge))

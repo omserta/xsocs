@@ -44,6 +44,8 @@ import numpy as np
 from silx.third_party import EdfFile
 from silx.io import spectoh5
 
+from ..io import XsocsH5
+
 
 # regular expression matching the imageFile comment line
 _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
@@ -52,6 +54,34 @@ _IMAGEFILE_LINE_PATTERN = ('^#C imageFile '
                            '(idxFmt\[(?P<idxFmt>[^\]]*)\] ){0,1}'
                            'nextNr\[(?P<nextNr>[^\]]*)\] '
                            'suffix\[(?P<suffix>[^\]]*)\]$')
+
+
+# #######################################################################
+# #######################################################################
+# #######################################################################
+
+
+def parse_scan_command(command):
+    _COMMAND_LINE_PATTERN = ('^(?P<id>[0-9]*) '
+                             '(?P<command>[^ ]*) '
+                             '(?P<motor_0>[^ ]*) '
+                             '(?P<motor_0_start>[^ ]*) '
+                             '(?P<motor_0_end>[^ ]*) '
+                             '(?P<motor_0_steps>[^ ]*) '
+                             '(?P<motor_1>[^ ]*) '
+                             '(?P<motor_1_start>[^ ]*) '
+                             '(?P<motor_1_end>[^ ]*) '
+                             '(?P<motor_1_steps>[^ ]*) '
+                             '(?P<delay>[^ ]*)\s*'
+                             '$')
+    cmd_rgx = re.compile(_COMMAND_LINE_PATTERN)
+    cmd_match = cmd_rgx.match(command)
+    if cmd_match is None:
+        raise ValueError('Failed to parse command line : "{0}".'
+                         ''.format(command))
+    cmd_dict = cmd_match.groupdict()
+    cmd_dict.update(full=command)
+    return cmd_dict
 
 
 # #######################################################################
@@ -307,14 +337,14 @@ class Id01DataMerger(object):
         if scan_ids is None:
             scan_ids = self.__matched_scans.keys()
 
-        if not isinstance(scan_ids, (list, tuple)):
+        if not isinstance(scan_ids, (list, tuple, xrange)):
             scan_ids = [scan_ids]
 
         scan_ids = set(scan_ids)
         unknown_scans = scan_ids - set(self.__matched_scans.keys())
 
         if len(unknown_scans) != 0:
-            err_ids = '; '.join(scan for scan in unknown_scans)
+            err_ids = '; '.join(str(scan) for scan in unknown_scans)
             raise ValueError('Unknown scan IDs : {0}.'.format(err_ids))
 
         if clear:
@@ -343,26 +373,12 @@ class Id01DataMerger(object):
 
             command = scan['title'][()].decode()
 
-        _COMMAND_LINE_PATTERN = ('^(?P<id>[0-9]*) '
-                                 '(?P<command>[^ ]*) '
-                                 '(?P<motor_0>[^ ]*) '
-                                 '(?P<motor_0_start>[^ ]*) '
-                                 '(?P<motor_0_end>[^ ]*) '
-                                 '(?P<motor_0_step>[^ ]*) '
-                                 '(?P<motor_1>[^ ]*) '
-                                 '(?P<motor_1_start>[^ ]*) '
-                                 '(?P<motor_1_end>[^ ]*) '
-                                 '(?P<motor_1_step>[^ ]*) '
-                                 '(?P<delay>[^ ]*)\s*'
-                                 '$')
-        cmd_rgx = re.compile(_COMMAND_LINE_PATTERN)
-        cmd_match = cmd_rgx.match(command)
-        if cmd_match is None:
+        try:
+            return parse_scan_command(command)
+        except:
             raise ValueError('Failed to parse command line for scan ID {0} : '
                              '{1}.'.format(scan_id, command))
-        cmd_dict = cmd_match.groupdict()
-        cmd_dict.update(full=command)
-        return cmd_dict
+        return None
 
     def check_overwrite(self):
         """
@@ -400,8 +416,8 @@ class Id01DataMerger(object):
         check_key(commands, 'motor_1_start', errors)
         check_key(commands, 'motor_0_end', errors)
         check_key(commands, 'motor_1_end', errors)
-        check_key(commands, 'motor_0_step', errors)
-        check_key(commands, 'motor_1_step', errors)
+        check_key(commands, 'motor_0_steps', errors)
+        check_key(commands, 'motor_1_steps', errors)
         check_key(commands, 'delay', errors)
 
         return errors
@@ -953,7 +969,7 @@ class _MergeThread(Thread):
             mode = 'w'
 
         # trying to access the file (erasing it if necessary)
-        with h5py.File(master_f, mode) as m_h5f:
+        with XsocsH5.XsocsH5_Master_Writer(master_f, mode=mode) as m_h5f:
             pass
 
         if self.__n_proc is None:
@@ -1006,13 +1022,40 @@ class _MergeThread(Thread):
         pool.join()
 
         valid = all(result.get()[1] for result in results.values())
+        cumul = None
+
         if valid:
-            with h5py.File(master_f, 'a') as m_h5f:
+            with XsocsH5.XsocsH5_Master_Writer(master_f, mode='a') as m_h5f:
                 items = self.__scans.items()
                 for proc_idx, (scan_id, infos) in enumerate(items):
                     entry_fn = infos['output']
                     entry = entry_fn.rpartition('.')[0]
-                    m_h5f[entry] = h5py.ExternalLink(entry_fn, entry)
+                    m_h5f.add_entry_file(entry, entry_fn)
+
+                    #entry = entry_fn.rpartition('.')[0]
+                    #m_h5f.add_file_link(entry, entry_fn, entry)
+                    entry_fn = os.path.join(self.__output_dir, entry_fn)
+
+                    # computing the cumulated sum only if all individual
+                    # datasets have the same size. This should always be the
+                    # case... but who knows, if someone one day modify the code
+                    # to allow data from two different scans to be merged...
+                    with XsocsH5.XsocsH5(entry_fn) as entry_h5:
+                        if proc_idx == 0:
+                            cumul = entry_h5.image_cumul(entry)
+                        elif cumul is None:
+                            pass
+                        else:
+                            cumul_data = entry_h5.image_cumul(entry)
+                            if cumul_data.shape == cumul.shape:
+                                cumul += cumul_data
+                            else:
+                                cumul = None
+
+                if cumul is not None:
+                    m_h5f.set_image_cumul(m_h5f.TOP_ENTRY,
+                                          cumul,
+                                          compression=self.__compression)
 
         if self.__callback:
             self.__callback((True, master_f) if valid else (False, None))
@@ -1105,43 +1148,38 @@ def _add_edf_data(scan_id,
         if g_term_evt.is_set():  # noqa
             raise Exception('Merge of scan {0} aborted.'.format(scan_id))
 
-        with h5py.File(entry_fn, 'w') as entry_h5f:
+        with XsocsH5.XsocsH5_Writer(entry_fn, mode='w') as entry_h5f:
+            entry_h5f.create_entry(entry)
             progress[proc_idx] = 1
-            entry_grp = entry_h5f.create_group(entry)
-            with h5py.File(spec_h5_fn, 'r') as s_h5f:
-                scan_grp = s_h5f[scan_id]
 
-                for grp_name in scan_grp:
-                    scan_grp.copy(grp_name,
-                                  entry_grp,
-                                  shallow=False,
-                                  expand_soft=True,
-                                  expand_external=True,
-                                  expand_refs=True,
-                                  without_attrs=False)
-            img_det_grp = entry_grp.require_group('instrument/image_detector')
-            img_data_grp = entry_grp.require_group('measurement/image')
+            entry_h5f.copy_group(spec_h5_fn, scan_id, entry)
+            with h5py.File(spec_h5_fn) as spec_h5:
+                command = spec_h5[scan_id]['title'][()].decode()
+                command_params = parse_scan_command(command)
 
-            img_det_grp.create_dataset('pixelsize_dim0',
-                                       data=float(pixelsize[0]))
-            img_det_grp.create_dataset('pixelsize_dim1',
-                                       data=float(pixelsize[1]))
+            entry_h5f.set_scan_params(entry, **command_params)
+
+            if pixelsize is not None:
+                entry_h5f.set_pixel_size([float(pixelsize[0]),
+                                            float(pixelsize[1])],
+                                         entry=entry)
+
             if beam_energy is not None:
-                img_det_grp.create_dataset('beam_energy',
-                                           data=float(beam_energy))
+                entry_h5f.set_beam_energy(float(beam_energy), entry)
+
             if chan_per_deg is not None:
-                img_det_grp.create_dataset('chan_per_deg_dim0',
-                                           data=float(chan_per_deg[0]))
-                img_det_grp.create_dataset('chan_per_deg_dim1',
-                                           data=float(chan_per_deg[1]))
+                entry_h5f.set_chan_per_deg([float(chan_per_deg[0]),
+                                            float(chan_per_deg[1])],
+                                           entry=entry)
+
             if center_chan is not None:
-                img_det_grp.create_dataset('center_chan_dim0',
-                                           data=float(center_chan[0]))
-                img_det_grp.create_dataset('center_chan_dim1',
-                                           data=float(center_chan[1]))
+                entry_h5f.set_direct_beam([float(center_chan[0]),
+                                           float(center_chan[1])],
+                                          entry=entry)
+
             if detector_orient is not None:
-                img_det_grp.create_dataset('detector_orient',
-                                           data=np.string_(detector_orient))
+                entry_h5f.set_detector_orient(detector_orient,
+                                              entry=entry)
 
             progress[proc_idx] = 2
             edf_file = EdfFile.EdfFile(img_f, access='r', fastedf=True)
@@ -1155,13 +1193,6 @@ def _add_edf_data(scan_id,
             dset_shape = (n_images, img_shape[0], img_shape[1])
             chunks = (1, dset_shape[1]//4, dset_shape[2]//4)
 
-            image_dset = img_data_grp.create_dataset('data',
-                                                     shape=dset_shape,
-                                                     dtype=dtype,
-                                                     chunks=chunks,
-                                                     compression=compression,
-                                                     shuffle=True)
-
             if dtype.kind == 'i':
                 cumul_dtype = np.int64
             elif dtype.kind == 'u':
@@ -1171,46 +1202,24 @@ def _add_edf_data(scan_id,
 
             cumul_array = np.zeros((n_images,), dtype=cumul_dtype)
 
-            # creating some links
-            img_data_grp['info'] = img_det_grp
-            img_det_grp['data'] = image_dset
+            with entry_h5f.image_dset_ctx(entry=entry,
+                                          create=True,
+                                          shape=dset_shape,
+                                          dtype=dtype,
+                                          chunks=chunks,
+                                          compression=compression,
+                                          shuffle=True) as image_dset:
+                for i in range(n_images):
+                    if i % 500 == 0:
+                        progress[proc_idx] = round(5. + (95.0 * i) / n_images)
+                        if g_term_evt.is_set():  # noqa
+                            raise Exception('Merge of scan {0} aborted.'
+                                            ''.format(scan_id))
 
-            # attributes
-            grp = entry_grp.require_group('measurement/image')
-            grp.attrs['interpretation'] = np.string_('image')
-
-            # setting the nexus classes
-            grp = entry_grp.require_group('instrument')
-            grp.attrs['NX_class'] = np.string_('NXinstrument')
-
-            grp = entry_grp.require_group('instrument/image_detector')
-            grp.attrs['NX_class'] = np.string_('NXdetector')
-
-            grp = entry_grp.require_group('instrument/positioners')
-            grp.attrs['NX_class'] = np.string_('NXcollection')
-
-            grp = entry_grp.require_group('measurement')
-            grp.attrs['NX_class'] = np.string_('NXcollection')
-
-            grp = entry_grp.require_group('measurement/image')
-            grp.attrs['NX_class'] = np.string_('NXcollection')
-
-            for i in range(n_images):
-                if i % 500 == 0:
-                    progress[proc_idx] = round(5. + (95.0 * i) / n_images)
-                    if g_term_evt.is_set():  # noqa
-                        raise Exception('Merge of scan {0} aborted.'
-                                        ''.format(scan_id))
-
-                data = edf_file.GetData(i)
-                image_dset[i, :, :] = data
-                cumul_array[i] = data.sum()
-
-            img_data_grp.create_dataset('cumul',
-                                        data=cumul_array,
-                                        compression=compression,
-                                        shuffle=True)
-
+                    data = edf_file.GetData(i)
+                    image_dset[i, :, :] = data
+                    cumul_array[i] = data.sum()
+            entry_h5f.set_image_cumul(entry, cumul_array)
 
     except Exception as ex:
         print(ex)

@@ -47,13 +47,9 @@ from scipy.optimize import leastsq
 from ..util.filt_utils import medfilt2D
 from ..util.histogramnd_lut import histogramnd_get_lut, histogramnd_from_lut
 # from silx.math import histogramnd
+from ..io import XsocsH5
 
 disp_times = False
-
-positioners_tpl = '/{0}/instrument/positioners'
-img_data_tpl = '/{0}/measurement/image/data'
-measurement_tpl = '/{0}/measurement'
-detector_tpl = '/{0}/instrument/image_detector'
 
 
 class RecipSpaceConverter(object):
@@ -382,64 +378,24 @@ def _get_all_params(data_h5f):
     det_orients = []
     angles = []
 
-    with h5py.File(data_h5f, 'r') as master_h5:
-        entries = sorted(master_h5.keys())
-        entry_files = []
-
-        n_entries = len(entries)
+    with XsocsH5.XsocsH5(data_h5f, mode='r') as master_h5:
+        entries = master_h5.entries()
 
         for entry_idx, entry in enumerate(entries):
-            imgnr_tpl = measurement_tpl.format(entry) + '/imgnr'
-            param_tpl = detector_tpl.format(entry) + '/{0}'
-            angle_path = positioners_tpl.format(entry) + '/eta'
 
-            img_data = master_h5.get(img_data_tpl.format(entry), None)
+            n_image = master_h5.n_images(entry=entry)
+            img_size = master_h5.image_size(entry=entry)
 
-            if img_data is not None:
-                if len(img_data.shape) == 2:
-                    n_image = 1
-                    img_x, img_y = img_data.shape
-                else:
-                    n_image = img_data.shape[0]
-                    img_x, img_y = img_data.shape[1:3]
-            else:
-                n_image = None
-                img_x = img_y = None
-
-            img_size = [img_x, img_y]
-
-            del img_data
-
-            imgnr = master_h5.get(imgnr_tpl.format(entry), None)
+            imgnr = master_h5.measurement(entry, 'imgnr')
             n_position = len(imgnr) if imgnr is not None else None
 
-            del imgnr
+            beam_energy = master_h5.beam_energy(entry=entry)
+            chan_per_deg = master_h5.chan_per_deg(entry=entry)
+            center_chan = master_h5.direct_beam(entry=entry)
+            pixel_size = master_h5.pixel_size(entry=entry)
+            det_orient = master_h5.detector_orient(entry=entry)
 
-            path = param_tpl.format('beam_energy')
-            beam_energy = master_h5.get(path, np.array(None))[()]
-
-            path = param_tpl.format('chan_per_deg_dim0')
-            chan_per_deg_dim0 = master_h5.get(path, np.array(None))[()]
-            path = param_tpl.format('chan_per_deg_dim1')
-            chan_per_deg_dim1 = master_h5.get(path, np.array(None))[()]
-            chan_per_deg = [chan_per_deg_dim0, chan_per_deg_dim1]
-
-            path = param_tpl.format('center_chan_dim0')
-            center_chan_dim0 = master_h5.get(path, np.array(None))[()]
-            path = param_tpl.format('center_chan_dim1')
-            center_chan_dim1 = master_h5.get(path, np.array(None))[()]
-            center_chan = [center_chan_dim0, center_chan_dim1]
-
-            path = param_tpl.format('pixelsize_dim0')
-            pixel_size_dim0 = master_h5.get(path, np.array(None))[()]
-            path = param_tpl.format('pixelsize_dim1')
-            pixel_size_dim1 = master_h5.get(path, np.array(None))[()]
-            pixel_size = [pixel_size_dim0, pixel_size_dim1]
-
-            path = param_tpl.format('detector_orient')
-            det_orient = master_h5.get(path, np.array(None))[()]
-
-            angle = master_h5.get(angle_path, np.array(None))[()]##angle_path = np.float64(positioners['eta'][()])
+            angle = master_h5.positioner(entry, 'eta')
 
             n_images.append(n_image)
             n_positions.append(n_position)
@@ -450,6 +406,7 @@ def _get_all_params(data_h5f):
             pixel_sizes.append(pixel_size)
             det_orients.append(det_orient)
             angles.append(angle)
+
     result = {scan:dict(scans=entries[idx],
                         n_images=n_images[idx],
                         n_positions=n_positions[idx],
@@ -661,37 +618,30 @@ def _img_2_qspace(data_h5f,
 
     img_dtype = None
 
-    with h5py.File(data_h5f, 'r') as master_h5:
+    with XsocsH5.XsocsH5(data_h5f, mode='r') as master_h5:
 
         entry_files = []
 
-        measurement = master_h5[measurement_tpl.format(entries[0])]
-        sample_x = measurement['adcX'][:]
-        sample_y = measurement['adcY'][:]
-
-        # this has to be done otherwise h5py complains about not being
-        # able to open compressed datasets from other processes
-        del measurement
+        sample_x = master_h5.measurement(entries[0], 'adcX')
+        sample_y = master_h5.measurement(entries[0], 'adcY')
 
         for entry_idx, entry in enumerate(entries):
-            entry_file = master_h5[entry].file.filename
+            entry_file = master_h5.entry_filename(entry)
             if not os.path.isabs(entry_file):
                 entry_file = os.path.abspath(os.path.join(base_dir,
                                                           entry_file))
             entry_files.append(entry_file)
 
-            positioners = master_h5[positioners_tpl.format(entry)]
-
-            eta = np.float64(positioners['eta'][()])
-            nu = np.float64(positioners['nu'][()])
-            delta = np.float64(positioners['del'][()])
+            eta = np.float64(master_h5.positioner(entry, 'eta'))
+            nu = np.float64(master_h5.positioner(entry, 'nu'))
+            delta = np.float64(master_h5.positioner(entry, 'del'))
 
             qx, qy, qz = hxrd.Ang2Q.area(eta, nu, delta)
             q_ar[entry_idx, :, 0] = qx.reshape(-1)
             q_ar[entry_idx, :, 1] = qy.reshape(-1)
             q_ar[entry_idx, :, 2] = qz.reshape(-1)
 
-            entry_dtype = master_h5[img_data_tpl.format(entry)].dtype
+            entry_dtype = master_h5.image_dtype(entry=entry)
 
             if img_dtype is None:
                 img_dtype = entry_dtype
@@ -699,8 +649,6 @@ def _img_2_qspace(data_h5f,
                 raise TypeError('All images in the input HDF5 files should '
                                 'be of the same type. Found {0} and {1}.'
                                 ''.format(img_dtype, entry_dtype))
-
-            del positioners
 
     # custom bins range to have the same histo as xrayutilities.gridder3d
     # bins centered around the qx, qy, qz
@@ -1016,7 +964,6 @@ def _to_qspace(th_idx,
     avg_weight = 1./(image_binning[0]*image_binning[1])
 
     is_done = False
-
     try:
         while True:
             if term_evt.is_set():  # noqa
@@ -1039,8 +986,11 @@ def _to_qspace(th_idx,
                 t0 = time.time()
 
                 try:
-                    with h5py.File(entry_files[entry_idx], 'r') as entry_h5:
-                        img_data = entry_h5[img_data_tpl.format(entry)]
+                    # TODO : there s room for improvement here maybe
+                    # (recreating a XsocsH5 instance each time slows down
+                    # slows down things a big, not much tho)
+                    with XsocsH5.XsocsH5(entry_files[entry_idx],
+                                         mode='r').image_dset_ctx(entry) as img_data:  # noqa
                         img_data.read_direct(img,
                                              source_sel=np.s_[image_idx],
                                              dest_sel=None)

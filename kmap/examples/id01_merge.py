@@ -20,8 +20,9 @@ beam_energy = 8000.
 # merge_scan_data will take all scans from the spec file that have a matching
 # image file. If you only want a subset of those scans you can provide a list
 # of scan numbers (i.e : the #S xxx lines in the scan headers)
-# for example, if we only want scans 48, 50, 52 :
-scan_ids = xrange(48, 53, 2)
+# for example, if we only want scans 48.1, 54.1 and 68.1 we would write :
+# scan_ids = ['48.1', '54.1', '68.1']
+scan_id = None
 
 # this (temporary?) keyword is used to tell the function about the format
 # of the spec file. So far there is only two supported values :

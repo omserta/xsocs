@@ -292,7 +292,7 @@ class _DataSetDelegate(Qt.QStyledItemDelegate):
             if isScatter:
                 scatterBn = self.__getButton(hover,
                                              isScatter,
-                                             '1d',
+                                             u'\u25A9',
                                              rect,
                                              index,
                                              self.oneDSignal)
@@ -301,7 +301,7 @@ class _DataSetDelegate(Qt.QStyledItemDelegate):
             if isImage:
                 imageBn = self.__getButton(hover,
                                            isImage,
-                                           '2d',
+                                           u'\u25A3',
                                            rect,
                                            index,
                                            self.twoDSignal)
@@ -401,9 +401,9 @@ class XsocsQModel(Qt.QStandardItemModel):
         if plotType == 'scatter':
             data = index.data(role=_XsocsRoles.ONE_D_DATA_ROLE)
         if plotType == 'image':
-            return index.data(role=_XsocsRoles.TWO_D_DATA_ROLE)
+            data = index.data(role=_XsocsRoles.TWO_D_DATA_ROLE)
         if plotType == 'cube':
-            return index.data(role=_XsocsRoles.TWO_D_DATA_ROLE)
+            data = index.data(role=_XsocsRoles.TWO_D_DATA_ROLE)
         return {'type':plotType, 'data':data, 'id':internalId, 'title':''}
 
 

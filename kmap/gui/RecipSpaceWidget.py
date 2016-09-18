@@ -129,7 +129,7 @@ class ConversionParamsWidget(Qt.QWidget):
         self.__qsize_z_edit.setText(str(int(qspace_size[2])))
 
 
-class RecipSpaceWidget(Qt.QWidget):
+class RecipSpaceWidget(Qt.QDialog):
 
     __sigConvertDone = Qt.Signal()
 

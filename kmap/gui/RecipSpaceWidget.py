@@ -435,7 +435,20 @@ class RecipSpaceWidget(Qt.QDialog):
                 return
 
         self.__converter = converter
-        _ConversionProcessDialog(converter, parent=self, **kwargs).exec_()
+        procDialog = _ConversionProcessDialog(converter, parent=self, **kwargs)
+        procDialog.accepted.connect(partial(self.__convertDone, status=True))
+        procDialog.rejected.connect(partial(self.__convertDone, status=False))
+        procDialog.exec_()
+
+    def __convertDone(self, status=None):
+        if status:
+            self.__qspaceH5 = self.__widgets.output_file_edit.text()
+            self.accept()
+        else:
+            self.__qspaceH5 = None
+            self.reject()
+
+    qspaceH5 = property(lambda self: self.__qspaceH5)
 
     def __acqParamChkBnStateChanged(self, state):
         """
@@ -636,10 +649,9 @@ class _ConversionProcessDialog(Qt.QDialog):
         status_lab.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Sunken)
         layout.addWidget(status_lab)
 
-        bn_box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Ok |
-                                     Qt.QDialogButtonBox.Abort)
-        bn_box.button(Qt.QDialogButtonBox.Ok).setText('Done')
-        bn_box.button(Qt.QDialogButtonBox.Ok).setEnabled(False)
+        bn_box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Abort)
+        #bn_box.button(Qt.QDialogButtonBox.Ok).setText('Done')
+        #bn_box.button(Qt.QDialogButtonBox.Ok).setEnabled(False)
         layout.addWidget(bn_box)
         bn_box.accepted.connect(self.accept)
         bn_box.rejected.connect(self.__onAbort)
@@ -664,6 +676,7 @@ class _ConversionProcessDialog(Qt.QDialog):
 
     def __onAbort(self):
         self.__status_lab.setText('<font color="orange">Cancelling...</font>')
+        self.__bn_box.button(Qt.QDialogButtonBox.Abort).setEnabled(False)
         self.__converter.abort(wait=False)
         self.__aborted = True
 
@@ -675,16 +688,22 @@ class _ConversionProcessDialog(Qt.QDialog):
         self.__qtimer.stop()
         self.__qtimer = None
         self.__onProgress()
+        abortBn = self.__bn_box.button(Qt.QDialogButtonBox.Abort)
         if self.__aborted:
+            self.__bn_box.rejected.disconnect(self.__onAbort)
             self.__status_lab.setText('<font color="red">Conversion '
                                       'cancelled.</font>')
+            abortBn.setText('Close')
+            self.__bn_box.rejected.connect(self.reject)
+            abortBn.setEnabled(True)
         else:
+            self.__bn_box.removeButton(abortBn)
+            okBn = self.__bn_box.addButton(Qt.QDialogButtonBox.Ok)
             self.__status_lab.setText('<font color="green">Conversion '
                                       'done.</font>')
-        self.__bn_box.button(Qt.QDialogButtonBox.Ok).setText('Done')
-        self.__bn_box.button(Qt.QDialogButtonBox.Ok).setEnabled(True)
-        self.__bn_box.button(Qt.QDialogButtonBox.Abort).setEnabled(False)
+            okBn.setText('Close')
 
+    status = property(lambda self: 0 if self.__aborted else 1)
 
 if __name__ == '__main__':
     pass

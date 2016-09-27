@@ -643,6 +643,17 @@ class ImageRoiManager(qt.QObject):
         else:
             rois = roiActions.keys()
 
+        try:
+            rois.pop('zoom')
+        except:
+            pass
+        try:
+            rois.pop('edit')
+        except:
+            pass
+
+        rois = ['zoom', 'edit'] + rois
+
         optionActions = self._createOptionActions()
         # TODO : find a better way to ensure that the order of
         # actions returned is always the same

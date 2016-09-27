@@ -159,9 +159,12 @@ class XsocsH5(XsocsH5Base):
 
     def _update_entries(self):
         with self._get_file() as h5_file:
-            self.__entries = sorted([key for key in h5_file.keys()
-                                     if (h5_file[key].attrs.get('NX_class')
-                                         =='NXentry')])
+            # TODO : this isnt pretty but for some reason the attrs.get() fails
+            # when there is no attribute NX_class (should return the default
+            # None)
+            self.__entries = sorted([key for key in h5_file
+                                     if ('NX_class' in h5_file[key].attrs and
+                                         h5_file[key].attrs['NX_class'] == 'NXentry')])  # noqa
 
     def entries(self):
         if self.__entries is None:

@@ -138,9 +138,12 @@ class RecipSpaceWidget(Qt.QDialog):
                  output_f=None,
                  qspace_size=None,
                  image_binning=None,
+                 rect_roi=None,
                  **kwargs):
         super(Qt.QWidget, self).__init__(**kwargs)
         Qt.QGridLayout(self)
+
+        self.__rectRoi = rect_roi
 
         # ATTENTION : this is done to allow the stretch
         # of the QTableWidget containing the scans info
@@ -186,20 +189,39 @@ class RecipSpaceWidget(Qt.QDialog):
 
         fm = self.fontMetrics()
 
-        label = Qt.QLabel(u'# points :')
-        n_img_label = _AdjustedLabel(5)
-        info_layout.addWidget(label, 0, 0)
-        info_layout.addWidget(n_img_label, 0, 1)
+        line = 0
+        label = Qt.QLabel('# Roi :')
+        xMinText = _AdjustedLineEdit(width=5, read_only=True)
+        xMaxText = _AdjustedLineEdit(width=5, read_only=True)
+        yMinText = _AdjustedLineEdit(width=5, read_only=True)
+        yMaxText = _AdjustedLineEdit(width=5, read_only=True)
+        roi_layout = Qt.QHBoxLayout()
+        roi_layout.addWidget(xMinText)
+        roi_layout.addWidget(xMaxText)
+        roi_layout.addWidget(yMinText)
+        roi_layout.addWidget(yMaxText)
+        info_layout.addWidget(label, line, 0)
+        info_layout.addLayout(roi_layout, line, 1, alignment=Qt.Qt.AlignLeft)
 
+        line += 1
+        label = Qt.QLabel('# points :')
+        n_img_label = _AdjustedLineEdit(width=16, read_only=True)
+        nImgLayout = Qt.QHBoxLayout()
+        info_layout.addWidget(label, line, 0)
+        info_layout.addLayout(nImgLayout, line, 1, alignment=Qt.Qt.AlignLeft)
+        nImgLayout.addWidget(n_img_label)
+        nImgLayout.addWidget(Qt.QLabel(' (roi / total)'))
+
+        line += 1
         label = Qt.QLabel(u'# {0} :'.format(_ETA_LOWER))
-        n_angles_label = _AdjustedLabel(5)
-        info_layout.addWidget(label, 1, 0)
-        info_layout.addWidget(n_angles_label, 1, 1)
+        n_angles_label = _AdjustedLineEdit(5, read_only=True)
+        info_layout.addWidget(label, line, 0)
+        info_layout.addWidget(n_angles_label, line, 1, alignment=Qt.Qt.AlignLeft)
         info_layout.setColumnStretch(2, 1)
 
         scans_table = Qt.QTableWidget(0, 2)
         scans_table.verticalHeader().hide()
-        grp_layout.addWidget(scans_table)
+        grp_layout.addWidget(scans_table, alignment=Qt.Qt.AlignLeft)
 
         # ################
         # Acq. parameters
@@ -294,6 +316,10 @@ class RecipSpaceWidget(Qt.QDialog):
                                   'params_gbx',
                                   'conv_gbx',
                                   'output_gbx',
+                                  'xMinText',
+                                  'xMaxText',
+                                  'yMinText',
+                                  'yMaxText',
                                   'n_img_label',
                                   'n_angles_label',
                                   'scans_table',
@@ -311,6 +337,10 @@ class RecipSpaceWidget(Qt.QDialog):
                                      params_gbx=params_gbx,
                                      conv_gbx=conv_gbx,
                                      output_gbx=output_gbx,
+                                     xMinText=xMinText,
+                                     xMaxText=xMaxText,
+                                     yMinText=yMinText,
+                                     yMaxText=yMaxText,
                                      n_img_label=n_img_label,
                                      n_angles_label=n_angles_label,
                                      scans_table=scans_table,
@@ -491,6 +521,9 @@ class RecipSpaceWidget(Qt.QDialog):
 
         self.__converter = converter
 
+        if self.__rectRoi is not None:
+            converter.rect_roi = self.__rectRoi
+
         self.__fillScansInfos()
         self.__fillAcqParamWidgets()
         self.__groupsSetEnabled(True)
@@ -559,8 +592,23 @@ class RecipSpaceWidget(Qt.QDialog):
         size.setWidth(width)
         scans_table.setMinimumSize(size)
 
+        # TODO : warning if the ROI is empty (too small to contain images)
         params = converter.scan_params(scans[0])
-        widgets.n_img_label.setText(str(params['n_images']))
+        rect_roi = converter.rect_roi
+        if rect_roi is None:
+            xMin = xMax = yMin = yMax = 'ns'
+        else:
+            xMin, xMax, yMin, yMax = rect_roi
+
+        widgets.xMinText.setText(str(xMin))
+        widgets.xMaxText.setText(str(xMax))
+        widgets.yMinText.setText(str(yMin))
+        widgets.yMaxText.setText(str(yMax))
+        
+        indices = converter.pos_indices
+        nImgTxt = '{0} / {1}'.format(len(indices),
+                                     params['n_images'])
+        widgets.n_img_label.setText(nImgTxt)
         widgets.n_angles_label.setText(str(len(scans)))
 
     def __groupsSetEnabled(self, enable=True):

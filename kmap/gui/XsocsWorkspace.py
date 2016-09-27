@@ -110,6 +110,16 @@ class XsocsWorkspace(_XsocsH5.XsocsH5Base):
             return self.xsocsH5.entries()
         return []
 
+    def addQSpaceH5(self, qspaceH5):
+        #with self._get_file() as inner_file:
+            #self.add_file_link('/qspace/test', qspaceH5, '/qspace/data')
+        titleItem = Qt.QStandardItem('Qspace')
+        titleItem.setEditable(False)
+        titleItem.setSelectable(False)
+        actionItem = Qt.QStandardItem('fubar')
+        actionItem.setEditable(False)
+        actionItem.setSelectable(False)
+        self.__model.appendRow([titleItem, actionItem])
 
 class _DataSetDelegate(Qt.QStyledItemDelegate):
 
@@ -289,6 +299,7 @@ class _DataSetDelegate(Qt.QStyledItemDelegate):
             x = r.left() + self.H_MARGIN
             y = r.top() + self.V_MARGIN
             rect = Qt.QRect(x, y, self.BN_W, self.BN_H)
+
             if isScatter:
                 scatterBn = self.__getButton(hover,
                                              isScatter,
@@ -298,6 +309,7 @@ class _DataSetDelegate(Qt.QStyledItemDelegate):
                                              self.oneDSignal)
                 Qt.QApplication.style().drawControl(Qt.QStyle.CE_PushButton, scatterBn, painter)
             rect.translate(self.BN_W + self.BN_SPACING, 0)
+
             if isImage:
                 imageBn = self.__getButton(hover,
                                            isImage,
@@ -307,6 +319,7 @@ class _DataSetDelegate(Qt.QStyledItemDelegate):
                                            self.twoDSignal)
                 Qt.QApplication.style().drawControl(Qt.QStyle.CE_PushButton, imageBn, painter)
             rect.translate(self.BN_W + self.BN_SPACING, 0)
+
             if isCube:
                 cubeBn = self.__getButton(hover,
                                           isCube,

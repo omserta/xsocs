@@ -42,7 +42,6 @@ import numpy as np
 import xrayutilities as xu
 
 # from scipy.signal import medfilt2d
-from scipy.optimize import leastsq
 
 from ..util.filt_utils import medfilt2D
 from ..util.histogramnd_lut import histogramnd_get_lut, histogramnd_from_lut
@@ -60,6 +59,9 @@ class RecipSpaceConverter(object):
 
         self.__thread = None
 
+        self.__pos_indices = None
+        self.__rect_roi = None
+
         self.reset(data_h5f, output_f)
 
     def reset(self,
@@ -71,11 +73,14 @@ class RecipSpaceConverter(object):
         self.__data_h5f = data_h5f
         self.__output_f = output_f
         self.__thread = None
+        self.__n_proc = None
 
         self.__qspace_size = None
         self.__image_binning = [1, 1]
 
         self.__results = None
+
+        self.__pos_indices = self.__indices_from_roi()
 
     def __running_exception(self):
         if self.is_running():
@@ -89,7 +94,56 @@ class RecipSpaceConverter(object):
         prefix = os.path.basename(self.__data_h5f).rsplit('.')[0]
         return os.path.join(self.__output_f, '{0}_qspace.h5'.format(prefix))
 
+    pos_indices = property(lambda self: self.__pos_indices)
+
+    @pos_indices.setter
+    def pos_indices(self, pos_indices):
+        # TODO : consistency check
+        if self.__rect_roi:
+            # rect_roi is False if pos_indices have been set before.
+            # rect_roi is None if no roi has been set.
+            # rect_roi is not None nor False if it has been set
+            # (see rect_roi property)
+            raise ValueError('A ROI is already set for this '
+                             'RecipSpaceConverter, remove it first.')
+        if pos_indices is None:
+            self.__rect_roi = None
+            self.__pos_indices = self.__indices_from_roi()
+        else:
+            self.__rect_roi = False
+            self.__pos_indices = pos_indices
+
+    rect_roi = property(lambda self: self.__rect_roi)
+
+    @rect_roi.setter
+    def rect_roi(self, rect_roi):
+        if self.__rect_roi is False:
+            raise ValueError('Cannot set a rectangular ROI, pos_indices are '
+                             'already set, remove them first.')
+        self.__rect_roi = rect_roi
+        self.__pos_indices = self.__indices_from_roi()
+
+    def __indices_from_roi(self):
+        # TODO : check all positions
+        # at the moment using only the first scan's positions
+        with XsocsH5.XsocsH5(self.__data_h5f) as xsocsH5:
+            entries = xsocsH5.entries()
+            x_pos, y_pos = xsocsH5.scan_positions(entries[0])
+
+        if self.__rect_roi is None:
+            return np.arange(len(x_pos))
+
+        x_min = self.__rect_roi[0]
+        x_max = self.__rect_roi[1]
+        y_min = self.__rect_roi[2]
+        y_max = self.__rect_roi[3]
+
+        pos_indices = np.where((x_pos >= x_min) & (x_pos <= x_max) &
+                               (y_pos >= y_min) & (y_pos <= y_max))[0]
+        return pos_indices
+
     output_f = property(__get_output_f)
+
     @output_f.setter
     def output_f(self, output_f):
         self.__output_f = output_f
@@ -105,7 +159,6 @@ class RecipSpaceConverter(object):
                 blocking=True,
                 overwrite=False,
                 callback=None,
-                pos_indices=None,
                 **kwargs):
 
         thread = self.__thread
@@ -126,7 +179,8 @@ class RecipSpaceConverter(object):
                                 self.__image_binning,
                                 callback=callback,
                                 overwrite=overwrite,
-                                pos_indices=pos_indices,
+                                pos_indices=self.pos_indices,
+                                n_proc=self.__n_proc,
                                 **kwargs)
 
         self.__thread = thread
@@ -217,8 +271,8 @@ class RecipSpaceConverter(object):
         n_images = params[params.keys()[0]]['n_images']
         n_positions = params[params.keys()[0]]['n_positions']
         if n_images != n_positions:
-            errors.append('number of images != number of X/Y coordinates'
-                          'on sample :'
+            errors.append('number of images != number of X/Y coordinates '
+                          'on sample : '
                           '{0} != {1}'.format(n_images, n_positions))
 
         return errors
@@ -382,7 +436,6 @@ def _get_all_params(data_h5f):
         entries = master_h5.entries()
 
         for entry_idx, entry in enumerate(entries):
-
             n_image = master_h5.n_images(entry=entry)
             img_size = master_h5.image_size(entry=entry)
 
@@ -428,6 +481,7 @@ def img_2_qspace(data_h5f,
                  center_chan=None,
                  chan_per_deg=None,
                  nav=(4, 4),
+                 rect_roi=None,
                  pos_indices=None,
                  n_proc=None,
                  overwrite=False):
@@ -465,9 +519,15 @@ def img_2_qspace(data_h5f,
         the images (TODO : rephrase)
     :type nav: *optional* `array_like`
 
+    :param rect_roi: rectangular region which will be converted to qspace.
+        This must be a four elements array containing x_min, x_max, y_min,
+        y_max.
+    :type roi: *optional* `array_like` (x_min, x_max, y_min, y_max)
+
     :param pos_indices: indices of the positions (on the sample) that have
-        to be converted to qspace. E.g : if the array [1, 2, 3] is provided,
-        only the first 3 sample scans positions will be converted to qspace.
+        to be converted to qspace. **Ignored** if *roi* is provided.
+        E.g : if the array [1, 2, 3] is provided, only the first 3 sample
+        scans positions will be converted to qspace.
     :type pos_indices: *optional* `array_like`
 
     :param n_proc: number of process to use. If None, the number of process
@@ -477,7 +537,12 @@ def img_2_qspace(data_h5f,
     converter = RecipSpaceConverter(data_h5f,
                                     output_f)
     converter.qspace_size = qspace_size
-    converter.merge(overwrite=overwrite, pos_indices=pos_indices)
+    if rect_roi is not None:
+        converter.rect_roi = rect_roi
+    elif pos_indices is not None:
+        converter.pos_indices = pos_indices
+
+    converter.convert(overwrite=overwrite)
 
 def _img_2_qspace(data_h5f,
                   output_f,
@@ -815,8 +880,8 @@ def _img_2_qspace(data_h5f,
         res_list.append(res)
 
     # sending the image indices
-    for pos_idx in pos_indices:
-        idx_queue.put(pos_idx)
+    for result_idx, pos_idx in enumerate(pos_indices):
+        idx_queue.put((result_idx, pos_idx))
 
     # sending the None value to let the threads know that they should return
     for th_idx in range(n_proc):
@@ -939,13 +1004,13 @@ def _to_qspace(th_idx,
     else:
         progress_np = None
 
-    #histo = np.frombuffer(histo_shared, dtype='int32')
-    #histo.shape = qspace_size
+    # histo = np.frombuffer(histo_shared, dtype='int32')
+    # histo.shape = qspace_size
     histo = histo_shared
     mask = histo > 0
     
-    #h_lut = np.frombuffer(h_lut_shared, dtype=h_lut_dtype)
-    #h_lut.shape = (n_xy, -1)
+    # h_lut = np.frombuffer(h_lut_shared, dtype=h_lut_dtype)
+    # h_lut.shape = (n_xy, -1)
     h_lut = h_lut_shared
 
     img = np.ascontiguousarray(np.zeros(img_size), dtype=img_dtype)
@@ -970,13 +1035,14 @@ def _to_qspace(th_idx,
                 raise Exception('Thread #{0} : conversion aborted.'
                                 ''.format(th_idx))
 
-            image_idx = idx_queue.get()
-            if image_idx is None:
+            next_data = idx_queue.get()
+            if next_data is None:
                 is_done = True
                 break
 
-            if image_idx % 100 == 0:
-                print('#{0}/{1}'.format(image_idx, n_xy))
+            result_idx, image_idx = next_data
+            if result_idx % 100 == 0:
+                print('#{0}/{1}'.format(result_idx, n_xy))
 
             cumul = None
             # histo = None
@@ -1048,16 +1114,16 @@ def _to_qspace(th_idx,
             t0 = time.time()
             try:
                 with h5py.File(output_fn, 'r+') as output_h5:
-                    output_h5['data/qspace'][image_idx] = cumul
-                    output_h5['data/qspace_sum'][image_idx] = cumul_sum
+                    output_h5['data/qspace'][result_idx] = cumul
+                    output_h5['data/qspace_sum'][result_idx] = cumul_sum
             except Exception as ex:
                 raise RuntimeError('Error in proc {0} while writing result '
-                                   'for img {1} : {2}.'
-                                   ''.format(th_idx, image_idx, ex))
+                                   'for img {1} (idx = {3}) : {2}.)'
+                                   ''.format(th_idx, image_idx, ex, result_idx))
             write_lock.release()
 
             if progress_np is not None:
-                progress_np[th_idx] = round(100. * (image_idx + 1.) / n_xy)
+                progress_np[th_idx] = round(100. * (result_idx + 1.) / n_xy)
 
             t_write += time.time() - t0
     except Exception as ex:

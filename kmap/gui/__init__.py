@@ -1,1 +1,3 @@
-from .gui import merge_window, conversion_window  # noqa
+from .gui import (xsocs_main,
+                  merge_window,
+                  conversion_window)  # noqa

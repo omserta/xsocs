@@ -3,7 +3,7 @@ import sys
 from silx.gui import qt as Qt
 print('Using Qt {0}'.format(Qt.qVersion()))
 
-from XsocsMainWindow import XsocsMainWindow
+from XsocsGui import XsocsGui
 from .MergeWidget import MergeWidget
 from .RecipSpaceWidget import RecipSpaceWidget
 
@@ -21,6 +21,6 @@ def conversion_window(*args, **kwargs):
 
 def xsocs_main(*args, **kwargs):
     app = Qt.QApplication(sys.argv)
-    mw = XsocsMainWindow(*args, **kwargs)
+    mw = XsocsGui(*args, **kwargs)
     mw.show()
     app.exec_()

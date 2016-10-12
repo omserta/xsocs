@@ -1,4 +1,5 @@
 import weakref
+from collections import OrderedDict
 from functools import partial
 from contextlib import contextmanager
 
@@ -32,8 +33,8 @@ class XsocsH5Base(object):
     @contextmanager
     def _get_file(self):
         """
-        This private context manager opens the hdf5 file if it isn't already
-        opened (i.e : if the XsocsH5 isn't already used as a context
+        This protected context manager opens the hdf5 file if it isn't already
+        opened (i.e : if the XsocsH5Base isn't already used as a context
         manager).
         """
         with self:
@@ -195,9 +196,11 @@ class XsocsH5(XsocsH5Base):
         with self._get_file() as h5_file:
             path = self.measurement_command_tpl.format(entry) + '/{0}'
             if isinstance(param_names, (list, set, tuple)):
-                return {param:h5_file.get(path.format(param), _np.array(None))[()]
-                        for param in param_names}
-            return h5_file.get(path.format(param_names), _np.array(None))[()]
+                return OrderedDict([(param, h5_file.get(path.format(param),
+                                                      _np.array(None))[()])
+                                    for param in param_names])
+            return {param_names: h5_file.get(path.format(param_names),
+                                             _np.array(None))[()]}
 
     def beam_energy(self, entry):
         return self.__detector_params(entry, 'beam_energy')

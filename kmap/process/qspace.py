@@ -24,6 +24,8 @@
 #
 # ###########################################################################*/
 
+from __future__ import absolute_import
+
 __authors__ = ["D. Naudet"]
 __date__ = "20/04/2016"
 __license__ = "MIT"
@@ -1055,6 +1057,8 @@ def _to_qspace(th_idx,
                     # TODO : there s room for improvement here maybe
                     # (recreating a XsocsH5 instance each time slows down
                     # slows down things a big, not much tho)
+                    # TODO : add a lock on the files if there is no SWMR
+                    # test if it slows down things much
                     with XsocsH5.XsocsH5(entry_files[entry_idx],
                                          mode='r').image_dset_ctx(entry) as img_data:  # noqa
                         img_data.read_direct(img,

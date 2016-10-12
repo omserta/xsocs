@@ -1,39 +1,60 @@
-#!/users/naudet/bin/python_id01
+# coding: utf-8
+# /*##########################################################################
+#
+# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# ###########################################################################*/
+
+from __future__ import absolute_import
+
 import os
-import time
 
-import h5py
 import numpy as np
-
-from silx.gui import qt as Qt
-from silx.gui import plot
-
 from matplotlib import cm
+from silx.gui import qt as Qt
+from plot3d.IsosurfaceView import IsosurfaceView
 
-from kmap.io import XsocsH5
-from kmap.gui.MergeWidget import MergeWidget
-from kmap.gui.RecipSpaceWidget import RecipSpaceWidget
-from kmap.gui.Widgets import (AcqParamsWidget,
-                              _AdjustedLabel,
-                              _AdjustedLineEdit,
-                              _AdjustedPushButton)
-from kmap.gui.XsocsWorkspace import XsocsWorkspace, XsocsWorkspaceView
+from ..io import XsocsH5
+from .MergeWidget import MergeWidget
+from .RecipSpaceWidget import RecipSpaceWidget
+from .Widgets import (AcqParamsWidget,
+                      _AdjustedLineEdit,
+                      _AdjustedPushButton)
+from .project.XsocsProject import XsocsProject
 
-from kmap.gui.PlotWidgets import IntensityWindow
+from .PlotWidgets import IntensityWindow
 
 
 _COMPANY_NAME = 'ESRF'
 _APP_NAME = 'XSOCS'
 
 
-class XsocsMainWindow(Qt.QMainWindow):
+class XsocsGui(Qt.QMainWindow):
     
     __firstInitSig = Qt.Signal()
 
     def __init__(self,
                  parent=None,
                  workspaceH5File=None):
-        super(XsocsMainWindow, self).__init__(parent)
+        super(XsocsGui, self).__init__(parent)
         self.__pw = None
 
         mdiArea = Qt.QMdiArea()
@@ -50,18 +71,18 @@ class XsocsMainWindow(Qt.QMainWindow):
         self.__greeterDiag = None
         self.__readSettings()
 
-    def __plotSlot(self, plotType, index):
+    def __dataDockSlot(self, event):
         # TODO : store the plot window in a dictionary + weakref w delete
-        # callback when object is destroyed
-        plotData = self.__workspace.model().plotData(plotType, index)
-        if plotData['type'] == 'scatter':
-            plotWin = self.showScatterPlot(*plotData['data'])
-        elif plotData['type'] == 'image':
-            plotWin = self.showImage(*plotData['data'])
-        else:
-            print 'Unknown plotType : {0}'.format(plotType)
+        #   callback when object is destroyed
+        type = event.type
+        plotData = event.plotData()
+        x, y, data = plotData
+        if type == 'scatter':
+            self.showScatterPlot(x, y, data)
+        elif type == 'image':
+            self.showImage(x, y, data)
 
-    def showScatterPlot(self, x, y, data, title=''):
+    def showScatterPlot(self, x, y, data):
         mdi = self.centralWidget()
         min_, max_ = data.min(), data.max()
         colormap = cm.jet
@@ -74,7 +95,7 @@ class XsocsMainWindow(Qt.QMainWindow):
         plotWin.show()
         return plotWin
 
-    def showImage(self, x, y, data, title=''):
+    def showImage(self, x, y, data):
         mdi = self.centralWidget()
         plotWin = IntensityWindow(aspectRatio=True)
         plotWin.setAttribute(Qt.Qt.WA_DeleteOnClose)
@@ -104,14 +125,14 @@ class XsocsMainWindow(Qt.QMainWindow):
             self.__workspace.addQSpaceH5(widget.qspaceH5)
 
     def showEvent(self, event):
-        super(XsocsMainWindow, self).showEvent(event)
+        super(XsocsGui, self).showEvent(event)
         if not self.__widget_setup:
             self.__firstInitSig.emit()
             self.__widget_setup = True
 
     def closeEvent(self, event):
         self.__writeSettings()
-        super(XsocsMainWindow, self).closeEvent(event)
+        super(XsocsGui, self).closeEvent(event)
 
     def __showGreeter(self):
         if self.__startupWorkspaceH5File is None:
@@ -120,8 +141,8 @@ class XsocsMainWindow(Qt.QMainWindow):
                                          self.__actions['new'],
                                          self.__actions['import'])
             greeterDiag.setAttribute(Qt.Qt.WA_DeleteOnClose)
-            #greeterDiag.setWindowFlags(Qt.Qt.WindowStaysOnTopHint |
-                                       #greeterDiag.windowFlags())
+            # greeterDiag.setWindowFlags(Qt.Qt.WindowStaysOnTopHint |
+            #                            greeterDiag.windowFlags())
             greeterDiag.rejected.connect(self.close)
             greeterDiag.show()
             self.__greeterDiag = greeterDiag
@@ -161,7 +182,7 @@ class XsocsMainWindow(Qt.QMainWindow):
             if ans == Qt.QMessageBox.No:
                 return False
 
-        wkSpace = XsocsWorkspace(ws_file, mode=mode)
+        wkSpace = XsocsProject(ws_file, mode=mode)
         if xsocsH5 is not None:
             wkSpace.xsocsFile = xsocsH5
         self.__sessionDock.widget().setXsocsWorkspace(wkSpace)
@@ -204,7 +225,6 @@ class XsocsMainWindow(Qt.QMainWindow):
         quitAct.setShortcuts(Qt.QKeySequence.Quit)
         quitAct.setStatusTip('Exit the application')
         quitAct.triggered.connect(Qt.qApp.closeAllWindows)
-        #connect(exitAct, SIGNAL(triggered()), qApp, SLOT(closeAllWindows()))
         actions['quit'] = quitAct
 
         # "about" action
@@ -254,11 +274,13 @@ class XsocsMainWindow(Qt.QMainWindow):
         fileToolBar.addAction(actions['open'])
         fileToolBar.addAction(actions['new'])
         fileToolBar.addAction(actions['import'])
+        toolBars[fileToolBar.windowTitle()] = fileToolBar
 
         viewToolBar = self.addToolBar('View')
         viewToolBar.setObjectName('viewToolBar')
         viewToolBar.addAction(actions['sessionDock'])
         viewToolBar.addAction(actions['dataDock'])
+        toolBars[viewToolBar.windowTitle()] = viewToolBar
 
     def __createDocks(self):
         self.__sessionDock = sessionDock = Qt.QDockWidget('Infos')
@@ -270,8 +292,8 @@ class XsocsMainWindow(Qt.QMainWindow):
         plotDataDock.setWidget(PlotDataWidget())
         plotDataDock.setObjectName('DataDock')
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, plotDataDock)
-        plotDataDock.widget().plotSig.connect(self.__plotSlot,
-                                              Qt.Qt.QueuedConnection)
+        plotDataDock.widget().sigItemEvent.connect(self.__dataDockSlot,
+                                                   Qt.Qt.QueuedConnection)
 
     def __writeSettings(self):
         settings = Qt.QSettings(_COMPANY_NAME, _APP_NAME)
@@ -325,25 +347,31 @@ class XsocsMainWindow(Qt.QMainWindow):
 
 
 class PlotDataWidget(Qt.QWidget):
-    plotSig = Qt.Signal(str, object)
+    sigItemEvent = Qt.Signal(object)
 
     def __init__(self, parent=None):
-        super(PlotDataWidget, self).__init__(parent=parent)
+        super(PlotDataWidget, self).__init__(parent)
         layout = Qt.QGridLayout(self)
+        self.__xsocsProject = None
 
-        self.__treeView = treeView = XsocsWorkspaceView()
+        self.__treeView = treeView = Qt.QTreeView()
         layout.addWidget(treeView, 0, 0)
-        treeView.plotSig.connect(self.plotSig)
 
     def setXsocsWorkspace(self, xsocsWorkspace):
-        self.__xsocsWorkspace = xsocsWorkspace
+        self.__xsocsProject = xsocsWorkspace
         self.__setupWidget()
 
     def __setupWidget(self):
-        if self.__xsocsWorkspace is not None:
-            treeView = self.__treeView
-            treeView.setModel(self.__xsocsWorkspace.model())
-            treeView.expand(treeView.model().index(0, 0))
+        # TODO : better
+        if self.__xsocsProject is not None:
+            if self.__treeView:
+                self.layout().takeAt(0)
+                self.__treeView.deleteLater()
+                self.__treeView = None
+            view = self.__xsocsProject.view(parent=self)
+            view.sigItemEvent.connect(self.sigItemEvent)
+            self.layout().addWidget(view)
+            self.__treeView = view
 
 
 # ####################################################################
@@ -353,10 +381,11 @@ class PlotDataWidget(Qt.QWidget):
 
 class SessionWidget(Qt.QWidget):
     def __init__(self, parent=None, h5_f=None):
-        super(SessionWidget, self).__init__(parent=parent)
+        super(SessionWidget, self).__init__(parent)
 
         layout = Qt.QGridLayout(self)
         self.__xsocsH5 = None
+        self.__xsocsProject = None
 
         # #########
         # file name
@@ -378,15 +407,19 @@ class SessionWidget(Qt.QWidget):
         # number of angles
         rowIdx = 0
         self.__anglesText = anglesText = _AdjustedLineEdit(3, read_only=True)
-        gridLayout.addWidget(Qt.QLabel('# angles :'), rowIdx, 0, alignment=Qt.Qt.AlignLeft)
-        gridLayout.addWidget(anglesText, rowIdx, 1, alignment=Qt.Qt.AlignLeft)
+        gridLayout.addWidget(Qt.QLabel('# angles :'),
+                             rowIdx, 0, alignment=Qt.Qt.AlignLeft)
+        gridLayout.addWidget(anglesText,
+                             rowIdx, 1, alignment=Qt.Qt.AlignLeft)
 
-        rowIdx +=  1
+        rowIdx += 1
         self.__nImgText = nImgText = _AdjustedLineEdit(5, read_only=True)
-        gridLayout.addWidget(Qt.QLabel('Images :'), rowIdx, 0, alignment=Qt.Qt.AlignLeft)
+        gridLayout.addWidget(Qt.QLabel('Images :'),
+                             rowIdx, 0, alignment=Qt.Qt.AlignLeft)
         gridLayout.addWidget(nImgText, rowIdx, 1, alignment=Qt.Qt.AlignLeft)
         self.__imgSizeText = imgSizeText = _AdjustedLineEdit(10, read_only=True)
-        gridLayout.addWidget(Qt.QLabel('Size :'), rowIdx, 2, alignment=Qt.Qt.AlignLeft)
+        gridLayout.addWidget(Qt.QLabel('Size :'),
+                             rowIdx, 2, alignment=Qt.Qt.AlignLeft)
         gridLayout.addWidget(imgSizeText, rowIdx, 3, alignment=Qt.Qt.AlignLeft)
 
         gridLayout.setColumnStretch(gridLayout.columnCount(), 1)
@@ -408,13 +441,13 @@ class SessionWidget(Qt.QWidget):
         layout.setRowStretch(layout.rowCount(), 1)
 
     def setXsocsWorkspace(self, xsocsWorkspace):
-        self.__xsocsWorkspace = xsocsWorkspace
+        self.__xsocsProject = xsocsWorkspace
         self.__setupWidget()
 
     def __setupWidget(self):
         acqParamsWid = self.__acqParamsWid
 
-        xsocsH5 = self.__xsocsWorkspace.xsocsH5
+        xsocsH5 = self.__xsocsProject.xsocsH5
 
         acqParamsWid.clear()
         filename = ''
@@ -461,7 +494,7 @@ class _GreeterDialog(Qt.QDialog):
                  openAction,
                  loadAction,
                  importAction):
-        super(_GreeterDialog, self).__init__(parent=parent)
+        super(_GreeterDialog, self).__init__(parent)
         self.setModal(True)
         layout = Qt.QGridLayout(self)
 
@@ -490,7 +523,7 @@ class _WorkspaceDirDialog(Qt.QDialog):
                  parent=None,
                  nameHint=None,
                  **kwargs):
-        super(_WorkspaceDirDialog, self).__init__(parent=parent, **kwargs)
+        super(_WorkspaceDirDialog, self).__init__(parent, **kwargs)
         self.setModal(True)
         layout = Qt.QGridLayout(self)
 
@@ -545,3 +578,20 @@ class _WorkspaceDirDialog(Qt.QDialog):
 
 if __name__ == '__main__':
     pass
+
+# f = os.path.expanduser(
+#     '~/data/xsocs/results/kmap/psic_nano_20150314_fast_00007/qspace/gepoly200_004_qspace.h5')
+# with h5py.File(f) as h5f:
+#     data = h5f['/data/qspace'][0]
+#     x = h5f['/bins_edges/x'][:]
+#     y = h5f['/bins_edges/y'][:]
+#     z = h5f['/bins_edges/z'][:]
+# wid = Qt.QWidget(self)
+# layout = Qt.QHBoxLayout(wid)
+# threedwin = IsosurfaceView()
+# layout.addWidget(threedwin)
+# threedwin.setIsoLevel(80.)
+# threedwin.setData(data, copy=True)
+# self.centralWidget().addSubWindow(wid)
+# wid.show()
+# print 'shown', wid.isVisible()

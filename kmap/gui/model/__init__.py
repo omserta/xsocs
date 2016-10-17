@@ -1,6 +1,7 @@
-# /*##########################################################################
 # coding: utf-8
-# Copyright (C) 2016 European Synchrotron Radiation Facility
+# /*##########################################################################
+#
+# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,27 +21,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 #
-# ############################################################################*/
+# ###########################################################################*/
+
+from __future__ import absolute_import
 
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
-__date__ = "01/03/2016"
+__date__ = "15/09/2016"
 
-from numpy.distutils.misc_util import Configuration
-
-
-def configuration(parent_package='', top_path=None):
-    config = Configuration('gui', parent_package, top_path)
-    config.add_subpackage('model')
-    config.add_subpackage('process')
-    config.add_subpackage('project')
-    config.add_subpackage('silx_imports')
-    config.add_subpackage('view')
-
-    return config
-
-
-if __name__ == "__main__":
-    from numpy.distutils.core import setup
-
-    setup(configuration=configuration)
+from . import Nodes  # noqa

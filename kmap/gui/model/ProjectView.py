@@ -31,7 +31,8 @@ __date__ = "15/09/2016"
 
 
 from silx.gui import qt as Qt
-from .ProjectModel import itemEditorFromIndex
+from .ProjectModel import nodeEditorFromIndex
+from .ModelDef import ModelRoles
 
 
 class ProjectView(Qt.QTreeView):
@@ -42,6 +43,35 @@ class ProjectView(Qt.QTreeView):
         delegate = ItemDelegate(self)
         self.setItemDelegateForColumn(1, delegate)
         delegate.sigDelegateEvent.connect(self.sigItemEvent)
+        self.expanded.connect(self.__expanded)
+        # self.collapsed.connect(self.__collapsed)
+
+    def __expanded(self, index):
+        # TODO : closePersistentEditor when node is hidden
+        start = self.model().index(0, 0, parent=index)
+        indices = self.model().match(start,
+                                     ModelRoles.IsXsocsNodeRole,
+                                     True,
+                                     hits=-1,
+                                     flags=(Qt.Qt.MatchExactly |
+                                            Qt.Qt.MatchRecursive))
+        for index in indices:
+            # had to do this otherwise the openPersistentEditor wouldnt work
+            idx = self.model().index(index.row(), 1, start.parent())
+            self.openPersistentEditor(idx)
+
+    # def __collapsed(self, index):
+    #     start = self.model().index(0, 0, parent=index)
+    #     indices = self.model().match(start,
+    #                                  33,
+    #                                  True,
+    #                                  hits=-1,
+    #                                  flags=(Qt.Qt.MatchExactly |
+    #                                     Qt.Qt.MatchRecursive))
+    #     for index in indices:
+    #         # had to do this otherwise the openPersistentEditor wouldnt work
+    #         idx = self.model().index(index.row(), 1, start.parent())
+    #         self.closePersistentEditor(idx)
 
 
 class ItemDelegate(Qt.QStyledItemDelegate):
@@ -51,7 +81,7 @@ class ItemDelegate(Qt.QStyledItemDelegate):
         super(ItemDelegate, self).__init__(parent)
 
     def createEditor(self, parent, option, index):
-        editorClass = itemEditorFromIndex(index)
+        editorClass = nodeEditorFromIndex(index)
         if editorClass is not None:
             editor = editorClass(parent, option, index)
             editor.sigEditorEvent.connect(self.sigDelegateEvent)

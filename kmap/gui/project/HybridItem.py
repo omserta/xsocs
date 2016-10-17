@@ -29,62 +29,11 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-
-from functools import partial
-from silx.gui import qt as Qt
 import h5py
-from silx.gui.hdf5 import Hdf5TreeModel
-from silx.gui import icons
 
-from . import ItemClassDef
-from .ProjectItem import ProjectItem, ItemEvent
+from .ProjectItem import ProjectItem
 
 
-class HybridItemEvent(ItemEvent):
-    def plotData(self):
-        eventType = self.type
-        if eventType == 'scatter':
-            return self.item.getScatter()
-        if eventType == 'image':
-            return self.item.getImage()
-        return None
-
-
-class HybridItemDelegate(Qt.QWidget):
-    sigEditorEvent = Qt.Signal(object)
-
-    def __init__(self, parent, option, index):
-        super(HybridItemDelegate, self).__init__(parent)
-        self.__index = Qt.QPersistentModelIndex(index)
-        layout = Qt.QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        icon = icons.getQIcon('item-1dim')
-        bn = Qt.QToolButton()
-        bn.setIcon(icon)
-        bn.clicked.connect(partial(self.__onClicked, type='scatter'))
-        layout.addWidget(bn, Qt.Qt.AlignLeft)
-        icon = icons.getQIcon('item-2dim')
-        bn = Qt.QToolButton()
-        bn.setIcon(icon)
-        bn.clicked.connect(partial(self.__onClicked, type='image'))
-        layout.addWidget(bn, Qt.Qt.AlignLeft)
-        layout.addStretch(1)
-        # self.setAutoFillBackground(True)
-        # layout.setSizeConstraint(Qt.QLayout.SetMinimumSize)
-
-    def __onClicked(self, checked, type=None):
-        obj = self.__index.data(Hdf5TreeModel.H5PY_OBJECT_ROLE)
-        instance = ProjectItem.load(obj.file.filename, obj.name)
-        # TODO : weakref, or make sure persistent.isValid returns False if
-        # model item is destroyed.
-        event = HybridItemEvent(instance, type, self.__index)
-        self.sigEditorEvent.emit(event)
-
-    def sizeHint(self):
-        return Qt.QSize(0, 0)
-
-
-@ItemClassDef('HybridItem', editor=HybridItemDelegate)
 class HybridItem(ProjectItem):
     viewShowChildren = False
     icon = 'item-2dim'

@@ -33,7 +33,7 @@ import os
 
 from .view.RealSpaceWidget import RealSpaceWidget, RealSpaceWidgetEvent
 from .process.RecipSpaceWidget import RecipSpaceWidget
-from .project.XsocsProject import XsocsProject
+from .project import XsocsProject
 
 
 def viewWidgetFromProjectEvent(project, event):

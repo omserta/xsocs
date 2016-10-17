@@ -28,14 +28,13 @@ from __future__ import absolute_import
 import os
 
 from silx.gui import qt as Qt
-
+from .project.XsocsProject import XsocsProject
+from .MergeWidget import MergeWidget
 from .Utils import (viewWidgetFromProjectEvent,
                     processWidgetFromViewEvent)
-from .MergeWidget import MergeWidget
 from .Widgets import (AcqParamsWidget,
                       AdjustedLineEdit,
                       AdjustedPushButton)
-from .project.XsocsProject import XsocsProject
 from ..io import XsocsH5
 
 
@@ -88,7 +87,6 @@ class XsocsGui(Qt.QMainWindow):
 
     def __processDone(self, event):
         print 'event', event
-
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)

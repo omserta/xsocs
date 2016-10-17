@@ -29,6 +29,3 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-from .ProjectItem import (ItemClassDef,
-                          getItemClass,
-                          registerItemClass)  # noqa

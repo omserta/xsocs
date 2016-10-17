@@ -31,11 +31,9 @@ __date__ = "15/09/2016"
 
 import os
 import numpy as np
-from silx.gui import qt as Qt
-from silx.gui.hdf5 import Hdf5TreeModel
 from ...io import XsocsH5 as _XsocsH5
-from .ProjectModel import ProjectModel
-from .ProjectView import ProjectView
+from ..model.ProjectModel import ProjectModel
+from ..model.ProjectView import ProjectView
 from .HybridItem import HybridItem
 
 
@@ -51,7 +49,7 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
         super(XsocsProject, self).__init__(*args, **kwargs)
         self.__xsocsFile = None
         self.__xsocsH5 = None
-        self.__proxyModel = None
+        self.__projectModel = None
 
     xsocsH5 = property(lambda self: _XsocsH5.XsocsH5(self.xsocsFile)
                        if self.xsocsFile else None)
@@ -61,34 +59,14 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
         """
 
         """
-        if self.__proxyModel:
-            return self.__proxyModel
-        self.__sourceModel = Hdf5TreeModel()
-        self.__sourceModel.appendFile(self.filename)
-        self.__proxyModel = ProjectModel()
-        self.__proxyModel.setSourceModel(self.__sourceModel)
+        if self.__projectModel is None:
+            self.__projectModel = ProjectModel(self.filename)
 
-        return self.__proxyModel
+        return self.__projectModel
 
     def view(self, parent=None):
         view = ProjectView(parent)
         view.setModel(self.__model())
-        root = view.model().index(0, 0, Qt.QModelIndex())
-        view.setRootIndex(root)
-        inputNode = view.model().index(0, 0, root)
-        view.expand(inputNode)
-        # view.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
-
-        indices = view.model().match(view.model().index(0, 0, inputNode),
-                                     ProjectModel.IsXsocsNode,
-                                     1,
-                                     hits=-1,
-                                     flags=(Qt.Qt.MatchExactly |
-                                            Qt.Qt.MatchRecursive))
-        for index in indices:
-            # had to do this otherwise the openPersistentEditor wouldnt work
-            idx = view.model().index(index.row(), 1, index.parent())
-            view.openPersistentEditor(idx)
         return view
 
     workdir = property(lambda self: os.path.dirname(self.filename))

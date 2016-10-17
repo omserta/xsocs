@@ -29,6 +29,7 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
+import os
 import numpy as np
 from silx.gui import qt as Qt
 from silx.gui.hdf5 import Hdf5TreeModel
@@ -36,7 +37,6 @@ from ...io import XsocsH5 as _XsocsH5
 from .ProjectModel import ProjectModel
 from .ProjectView import ProjectView
 from .HybridItem import HybridItem
-from .ProjectItem import ProjectItem
 
 
 class XsocsProject(_XsocsH5.XsocsH5Base):
@@ -44,6 +44,8 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
     H5_SCAN_PARAMS = '/source/params'
     H5_INPUT_DATA = '/input/'
     GLOBAL_ENTRY = '_global'
+
+    XsocsNone, XsocsInput, XsocsQSpace, XsocsFit = range(4)
 
     def __init__(self, *args, **kwargs):
         super(XsocsProject, self).__init__(*args, **kwargs)
@@ -65,6 +67,7 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
         self.__sourceModel.appendFile(self.filename)
         self.__proxyModel = ProjectModel()
         self.__proxyModel.setSourceModel(self.__sourceModel)
+
         return self.__proxyModel
 
     def view(self, parent=None):
@@ -87,6 +90,8 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
             idx = view.model().index(index.row(), 1, index.parent())
             view.openPersistentEditor(idx)
         return view
+
+    workdir = property(lambda self: os.path.dirname(self.filename))
 
     @property
     def xsocsFile(self):
@@ -124,7 +129,7 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
         path_tpl = '{0}/{{0}}'.format(XsocsProject.H5_INPUT_DATA)
         globalIntensityGrp = HybridItem(self.filename,
                                         path_tpl.format('intensity'),
-                                        processLevel=ProjectItem.XsocsInput)
+                                        processLevel=XsocsProject.XsocsInput)
 
         gIntensity = None
         gPos_0 = None
@@ -139,7 +144,7 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
             dataGrp = HybridItem(self.filename,
                                  path_tpl.format(entry,
                                                  'intensity'),
-                                 processLevel=ProjectItem.XsocsInput)
+                                 processLevel=XsocsProject.XsocsInput)
             data = h5f.image_cumul(entry)
             pos_0, pos_1 = h5f.scan_positions(entry)
 

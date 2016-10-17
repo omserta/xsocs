@@ -29,32 +29,29 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-import sys
-
 from silx.gui import qt as Qt
-print('Using Qt {0}'.format(Qt.qVersion()))
-
-from .XsocsGui import XsocsGui
-from .MergeWidget import MergeWidget
-from .process.RecipSpaceWidget import RecipSpaceWidget
 
 
-def merge_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = MergeWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
+class DataViewWidget(Qt.QMainWindow):
+    sigProcessApplied = Qt.Signal(object)
+
+    def __init__(self, index, parent=None, **kwargs):
+        super(DataViewWidget, self).__init__(parent, **kwargs)
+        self.__index = index
+
+    def _emitEvent(self, event):
+        self.sigProcessApplied.emit(event)
+
+    index = property(lambda self: self.__index)
 
 
-def conversion_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = RecipSpaceWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
+class DataViewEvent(object):
 
+    def __init__(self, view, data=None):
+        super(DataViewEvent, self).__init__()
+        self.__index = view.index
+        self.__data = data
 
-def xsocs_main(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = XsocsGui(*args, **kwargs)
-    mw.show()
-    app.exec_()
+    data = property(lambda self: self.__data)
+
+    index = property(lambda self: self.__index)

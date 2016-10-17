@@ -1,13 +1,44 @@
+# coding: utf-8
+# /*##########################################################################
+#
+# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# ###########################################################################*/
+
+from __future__ import absolute_import
+
+__authors__ = ["D. Naudet"]
+__license__ = "MIT"
+__date__ = "15/09/2016"
+
 from functools import partial
 from collections import namedtuple
 
 from silx.gui import qt as Qt
 
-from .Widgets import (AcqParamsWidget,
-                      _AdjustedLabel,
-                      _AdjustedLineEdit,
-                      _AdjustedPushButton)
-from ..process.qspace import RecipSpaceConverter
+from .ProcessWidget import ProcessWidget, ProcessWidgetEvent
+from ..Widgets import (AcqParamsWidget,
+                       AdjustedLineEdit,
+                       AdjustedPushButton)
+from ...process.qspace import RecipSpaceConverter
 
 _MAX_BEAM_ENERGY_EV = 10**6
 
@@ -32,13 +63,13 @@ class ConversionParamsWidget(Qt.QWidget):
         h_layout = Qt.QHBoxLayout()
         layout.addLayout(h_layout, row, 1,
                          alignment=Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-        imgbin_h_edit = _AdjustedLineEdit(5)
+        imgbin_h_edit = AdjustedLineEdit(5)
         imgbin_h_edit.setValidator(Qt.QIntValidator(imgbin_h_edit))
         imgbin_h_edit.setAlignment(Qt.Qt.AlignRight)
         imgbin_h_edit.setText(str(_DEFAULT_IMG_BIN[0]))
         h_layout.addWidget(imgbin_h_edit, alignment=Qt.Qt.AlignLeft)
         h_layout.addWidget(Qt.QLabel(' x '))
-        imgbin_v_edit = _AdjustedLineEdit(5)
+        imgbin_v_edit = AdjustedLineEdit(5)
         imgbin_v_edit.setValidator(Qt.QIntValidator(imgbin_v_edit))
         imgbin_v_edit.setAlignment(Qt.Qt.AlignRight)
         imgbin_v_edit.setText(str(_DEFAULT_IMG_BIN[1]))
@@ -55,17 +86,17 @@ class ConversionParamsWidget(Qt.QWidget):
         h_layout = Qt.QHBoxLayout()
         layout.addLayout(h_layout, row, 1,
                          alignment=Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-        qsize_x_edit = _AdjustedLineEdit(5)
+        qsize_x_edit = AdjustedLineEdit(5)
         qsize_x_edit.setValidator(Qt.QDoubleValidator(qsize_x_edit))
         qsize_x_edit.setAlignment(Qt.Qt.AlignRight)
         h_layout.addWidget(qsize_x_edit)
         h_layout.addWidget(Qt.QLabel(' x '))
-        qsize_y_edit = _AdjustedLineEdit(5)
+        qsize_y_edit = AdjustedLineEdit(5)
         qsize_y_edit.setValidator(Qt.QDoubleValidator(qsize_y_edit))
         qsize_y_edit.setAlignment(Qt.Qt.AlignRight)
         h_layout.addWidget(qsize_y_edit)
         h_layout.addWidget(Qt.QLabel(' x '))
-        qsize_z_edit = _AdjustedLineEdit(5)
+        qsize_z_edit = AdjustedLineEdit(5)
         qsize_z_edit.setValidator(Qt.QDoubleValidator(qsize_z_edit))
         qsize_z_edit.setAlignment(Qt.Qt.AlignRight)
         h_layout.addWidget(qsize_z_edit)
@@ -129,7 +160,11 @@ class ConversionParamsWidget(Qt.QWidget):
         self.__qsize_z_edit.setText(str(int(qspace_size[2])))
 
 
-class RecipSpaceWidget(Qt.QDialog):
+class RecipSpaceWidgetEvent(ProcessWidgetEvent):
+    pass
+
+
+class RecipSpaceWidget(ProcessWidget):
 
     __sigConvertDone = Qt.Signal()
 
@@ -140,14 +175,17 @@ class RecipSpaceWidget(Qt.QDialog):
                  image_binning=None,
                  rect_roi=None,
                  **kwargs):
-        super(Qt.QWidget, self).__init__(**kwargs)
-        Qt.QGridLayout(self)
+        super(RecipSpaceWidget, self).__init__(**kwargs)
+
+        self.__central = Qt.QWidget()
+        self.setCentralWidget(self.__central)
+        topLayout = Qt.QGridLayout(self.__central)
 
         self.__rectRoi = rect_roi
 
         # ATTENTION : this is done to allow the stretch
         # of the QTableWidget containing the scans info
-        self.layout().setColumnStretch(1, 1)
+        topLayout.setColumnStretch(1, 1)
 
         # ################
         # input QGroupBox
@@ -155,16 +193,16 @@ class RecipSpaceWidget(Qt.QDialog):
 
         input_gbx = Qt.QGroupBox("Input")
         layout = Qt.QHBoxLayout(input_gbx)
-        self.layout().addWidget(input_gbx,
-                                0, 0,
-                                1, 2)
+        topLayout.addWidget(input_gbx,
+                            0, 0,
+                            1, 2)
 
         # data HDF5 file input
         lab = Qt.QLabel('HDF5 file :')
         h5_file_edit = Qt.QLineEdit()
         fm = h5_file_edit.fontMetrics()
         h5_file_edit.setMinimumWidth(fm.width(' ' * 100))
-        h5_file_bn = _AdjustedPushButton('...')
+        h5_file_bn = AdjustedPushButton('...')
         layout.addWidget(lab,
                          stretch=0,
                          alignment=Qt.Qt.AlignLeft)
@@ -180,21 +218,19 @@ class RecipSpaceWidget(Qt.QDialog):
         # Scans
         # ################
         scans_gbx = Qt.QGroupBox("Scans")
-        self.layout().addWidget(scans_gbx, 1, 1, 2, 1)
-        self.layout().setRowStretch(2, 1000)
+        topLayout.addWidget(scans_gbx, 1, 1, 2, 1)
+        topLayout.setRowStretch(2, 1000)
 
         grp_layout = Qt.QVBoxLayout(scans_gbx)
         info_layout = Qt.QGridLayout()
         grp_layout.addLayout(info_layout)
 
-        fm = self.fontMetrics()
-
         line = 0
         label = Qt.QLabel('# Roi :')
-        xMinText = _AdjustedLineEdit(width=5, read_only=True)
-        xMaxText = _AdjustedLineEdit(width=5, read_only=True)
-        yMinText = _AdjustedLineEdit(width=5, read_only=True)
-        yMaxText = _AdjustedLineEdit(width=5, read_only=True)
+        xMinText = AdjustedLineEdit(width=5, read_only=True)
+        xMaxText = AdjustedLineEdit(width=5, read_only=True)
+        yMinText = AdjustedLineEdit(width=5, read_only=True)
+        yMaxText = AdjustedLineEdit(width=5, read_only=True)
         roi_layout = Qt.QHBoxLayout()
         roi_layout.addWidget(xMinText)
         roi_layout.addWidget(xMaxText)
@@ -205,7 +241,7 @@ class RecipSpaceWidget(Qt.QDialog):
 
         line += 1
         label = Qt.QLabel('# points :')
-        n_img_label = _AdjustedLineEdit(width=16, read_only=True)
+        n_img_label = AdjustedLineEdit(width=16, read_only=True)
         nImgLayout = Qt.QHBoxLayout()
         info_layout.addWidget(label, line, 0)
         info_layout.addLayout(nImgLayout, line, 1, alignment=Qt.Qt.AlignLeft)
@@ -214,9 +250,10 @@ class RecipSpaceWidget(Qt.QDialog):
 
         line += 1
         label = Qt.QLabel(u'# {0} :'.format(_ETA_LOWER))
-        n_angles_label = _AdjustedLineEdit(5, read_only=True)
+        n_angles_label = AdjustedLineEdit(5, read_only=True)
         info_layout.addWidget(label, line, 0)
-        info_layout.addWidget(n_angles_label, line, 1, alignment=Qt.Qt.AlignLeft)
+        info_layout.addWidget(n_angles_label, line, 1,
+                              alignment=Qt.Qt.AlignLeft)
         info_layout.setColumnStretch(2, 1)
 
         scans_table = Qt.QTableWidget(0, 2)
@@ -228,8 +265,8 @@ class RecipSpaceWidget(Qt.QDialog):
         # ################
         params_gbx = Qt.QGroupBox("Acq. Parameters")
         grp_layout = Qt.QVBoxLayout(params_gbx)
-        self.layout().addWidget(params_gbx,
-                                1, 0, alignment=Qt.Qt.AlignTop)
+        topLayout.addWidget(params_gbx,
+                            1, 0, alignment=Qt.Qt.AlignTop)
 
         def_acqparam_bn = Qt.QCheckBox('Use input file values')
         def_acqparam_bn.setCheckState(Qt.Qt.Checked)
@@ -257,8 +294,7 @@ class RecipSpaceWidget(Qt.QDialog):
 
         conv_gbx = Qt.QGroupBox("Conversion parameters")
         grp_layout = Qt.QVBoxLayout(conv_gbx)
-        self.layout().addWidget(conv_gbx,
-                                2, 0, alignment=Qt.Qt.AlignTop)
+        topLayout.addWidget(conv_gbx, 2, 0, alignment=Qt.Qt.AlignTop)
 
         conv_params_wid = ConversionParamsWidget()
         grp_layout.addWidget(conv_params_wid)
@@ -269,14 +305,12 @@ class RecipSpaceWidget(Qt.QDialog):
 
         output_gbx = Qt.QGroupBox("Output")
         layout = Qt.QHBoxLayout(output_gbx)
-        self.layout().addWidget(output_gbx,
-                                3, 0,
-                                1, 2)
+        topLayout.addWidget(output_gbx, 3, 0, 1, 2)
         lab = Qt.QLabel('File :')
         output_file_edit = Qt.QLineEdit()
         fm = output_file_edit.fontMetrics()
         output_file_edit.setMinimumWidth(fm.width(' ' * 100))
-        output_file_bn = _AdjustedPushButton('...')
+        output_file_bn = AdjustedPushButton('...')
         layout.addWidget(lab,
                          stretch=0,
                          alignment=Qt.Qt.AlignLeft)
@@ -295,10 +329,8 @@ class RecipSpaceWidget(Qt.QDialog):
         convert_bn = Qt.QPushButton('Convert')
         cancel_bn = Qt.QPushButton('Cancel')
         h_layout = Qt.QHBoxLayout()
-        self.layout().addLayout(h_layout,
-                                4, 0,
-                                1, 2,
-                                Qt.Qt.AlignHCenter | Qt.Qt.AlignTop)
+        topLayout.addLayout(h_layout, 4, 0, 1, 2,
+                            Qt.Qt.AlignHCenter | Qt.Qt.AlignTop)
         h_layout.addWidget(convert_bn)
         h_layout.addWidget(cancel_bn)
 
@@ -374,7 +406,7 @@ class RecipSpaceWidget(Qt.QDialog):
         if output_f is not None:
             output_file_edit.setText(output_f)
 
-    def __convertBnClicked(self, *args, **kwargs):
+    def __convertBnClicked(self, checked):
         widgets = self.__widgets
         converter = self.__converter
         if converter is None:
@@ -436,19 +468,26 @@ class RecipSpaceWidget(Qt.QDialog):
 
         self.__converter = converter
         procDialog = _ConversionProcessDialog(converter, parent=self, **kwargs)
-        procDialog.accepted.connect(partial(self.__convertDone, status=True))
-        procDialog.rejected.connect(partial(self.__convertDone, status=False))
+        procDialog.accepted.connect(partial(
+            self.__convertDone, status=ProcessWidget.StatusCompleted))
+        procDialog.rejected.connect(partial(
+            self.__convertDone, status=ProcessWidget.StatusAborted))
+        self._setStatus(ProcessWidget.StatusRunning)
         procDialog.exec_()
 
     def __convertDone(self, status=None):
-        if status:
+        self._setStatus(status)
+        if status == ProcessWidget.StatusCompleted:
             self.__qspaceH5 = self.__widgets.output_file_edit.text()
-            self.accept()
+            self.hide()
         else:
             self.__qspaceH5 = None
-            self.reject()
+        self._emitEvent(RecipSpaceWidgetEvent(self, self._processData()))
 
     qspaceH5 = property(lambda self: self.__qspaceH5)
+
+    def _processData(self):
+        return self.qspaceH5
 
     def __acqParamChkBnStateChanged(self, state):
         """
@@ -477,7 +516,9 @@ class RecipSpaceWidget(Qt.QDialog):
 
         widgets.output_file_edit.setText('')
 
-    def __pickOutputFile(self, *args, **kwargs):
+        self._setStatus(ProcessWidget.StatusInit)
+
+    def __pickOutputFile(self, checked):
         """
         output HDF5 file picker
         """
@@ -491,7 +532,7 @@ class RecipSpaceWidget(Qt.QDialog):
             file_name = dialog.selectedFiles()[0]
             widgets.output_file_edit.setText(file_name)
 
-    def __pickInputFile(self, *args, **kwargs):
+    def __pickInputFile(self, checked):
         """
         HDF5 file picker
         """
@@ -650,8 +691,6 @@ class _ConversionProcessDialog(Qt.QDialog):
         layout.addWidget(status_lab)
 
         bn_box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Abort)
-        #bn_box.button(Qt.QDialogButtonBox.Ok).setText('Done')
-        #bn_box.button(Qt.QDialogButtonBox.Ok).setEnabled(False)
         layout.addWidget(bn_box)
         bn_box.accepted.connect(self.accept)
         bn_box.rejected.connect(self.__onAbort)
@@ -670,8 +709,8 @@ class _ConversionProcessDialog(Qt.QDialog):
         converter.convert(blocking=False,
                           overwrite=True,
                           callback=self.__sigConvertDone.emit,
-                          # pos_indices=range(10),
                           **kwargs)
+
         self.__qtimer.start(1000)
 
     def __onAbort(self):
@@ -704,6 +743,7 @@ class _ConversionProcessDialog(Qt.QDialog):
             okBn.setText('Close')
 
     status = property(lambda self: 0 if self.__aborted else 1)
+
 
 if __name__ == '__main__':
     pass

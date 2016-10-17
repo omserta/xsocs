@@ -28,33 +28,3 @@ from __future__ import absolute_import
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
-
-import sys
-
-from silx.gui import qt as Qt
-print('Using Qt {0}'.format(Qt.qVersion()))
-
-from .XsocsGui import XsocsGui
-from .MergeWidget import MergeWidget
-from .process.RecipSpaceWidget import RecipSpaceWidget
-
-
-def merge_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = MergeWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
-
-
-def conversion_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = RecipSpaceWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
-
-
-def xsocs_main(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = XsocsGui(*args, **kwargs)
-    mw.show()
-    app.exec_()

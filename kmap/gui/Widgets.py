@@ -5,6 +5,7 @@ _MU_LOWER = u'\u03BC'
 _PHI_LOWER = u'\u03C6'
 _ETA_LOWER = u'\u03B7'
 
+
 class AcqParamsWidget(Qt.QWidget):
 
     def __init__(self,
@@ -33,12 +34,12 @@ class AcqParamsWidget(Qt.QWidget):
                 return super(DblValidator, self).validate(text, pos)
 
         def dblLineEditWidget(width):
-            wid = _AdjustedLineEdit(width,
-                                    validator_cls=DblValidator,
-                                    read_only=read_only,
-                                    reset_on_empty=True,
-                                    highlight_change=highlight_change,
-                                    field_type=float)
+            wid = AdjustedLineEdit(width,
+                                   validator_cls=DblValidator,
+                                   read_only=read_only,
+                                   reset_on_empty=True,
+                                   highlight_change=highlight_change,
+                                   field_type=float)
             wid.setReadOnly(read_only)
             return wid
 
@@ -153,7 +154,7 @@ class AcqParamsWidget(Qt.QWidget):
             det_mu_rb = Qt.QRadioButton(u'Width is {0}.'.format(_MU_LOWER))
             h_layout.addWidget(det_mu_rb)
         else:
-            det_orient_edit = _AdjustedLineEdit(5, read_only=True)
+            det_orient_edit = AdjustedLineEdit(5, read_only=True)
             det_orient_edit.setAlignment(Qt.Qt.AlignCenter)
             h_layout.addWidget(det_orient_edit, alignment=Qt.Qt.AlignLeft)
         layout.addLayout(h_layout, row, 1)
@@ -304,14 +305,14 @@ class AcqParamsWidget(Qt.QWidget):
         self.__detector_orient = detector_orient
 
 
-class _AdjustedPushButton(Qt.QPushButton):
+class AdjustedPushButton(Qt.QPushButton):
     """
     It seems that by default QPushButtons minimum width is 75.
     This is a workaround.
     For _AdjustedPushButton to work text has to be set at creation time.
     """
-    def __init__(self, text, padding=None, **kwargs):
-        super(_AdjustedPushButton, self).__init__(text, **kwargs)
+    def __init__(self, text, parent=None, padding=None):
+        super(AdjustedPushButton, self).__init__(text, parent)
 
         fm = self.fontMetrics()
 
@@ -322,26 +323,25 @@ class _AdjustedPushButton(Qt.QPushButton):
         self.setMaximumWidth(width)
 
 
-class _AdjustedLineEdit(Qt.QLineEdit):
+class AdjustedLineEdit(Qt.QLineEdit):
     """
     """
     def __init__(self,
                  width=None,
+                 parent=None,
                  padding=None,
                  alignment=Qt.Qt.AlignRight,
                  validator_cls=None,
                  field_type=None,
                  read_only=False,
                  reset_on_empty=False,
-                 highlight_change=False,
-                 **kwargs):
-        super(_AdjustedLineEdit, self).__init__(**kwargs)
+                 highlight_change=False):
+        super(AdjustedLineEdit, self).__init__(parent)
 
         self.__defaultText = self.text()
         self.__highlightChange = highlight_change
         self.__resetOnEmpty = reset_on_empty
         self.__fieldType = field_type
-
 
         if width is not None:
             fm = self.fontMetrics()
@@ -385,6 +385,8 @@ class _AdjustedLineEdit(Qt.QLineEdit):
         else:
             pass
 
+        same_txt = False
+
         if len(value) == 0:
             if len(self.__defaultText) == 0:
                 same_txt = True
@@ -398,6 +400,7 @@ class _AdjustedLineEdit(Qt.QLineEdit):
                     value = self.__fieldType(value)
                     default_value = self.__fieldType(self.__defaultText)
                 except:
+                    # TODO : filter specific exception
                     same_txt = False
             else:
                 default_value = self.__defaultText
@@ -439,10 +442,10 @@ class _AdjustedLineEdit(Qt.QLineEdit):
         if ev.type() == Qt.QEvent.EnabledChange:
             self.style().unpolish(self)
             self.style().polish(self)
-        return super(_AdjustedLineEdit, self).event(ev)
+        return super(AdjustedLineEdit, self).event(ev)
 
 
-class _AdjustedLabel(Qt.QLabel):
+class AdjustedLabel(Qt.QLabel):
     """
     """
     def __init__(self,
@@ -450,7 +453,7 @@ class _AdjustedLabel(Qt.QLabel):
                  padding=None,
                  alignment=Qt.Qt.AlignRight,
                  **kwargs):
-        super(_AdjustedLabel, self).__init__(**kwargs)
+        super(AdjustedLabel, self).__init__(**kwargs)
 
         self.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Sunken)
 

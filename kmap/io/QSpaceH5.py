@@ -29,32 +29,21 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-import sys
+import weakref
+from collections import OrderedDict
+from contextlib import contextmanager
 
-from silx.gui import qt as Qt
-print('Using Qt {0}'.format(Qt.qVersion()))
+import h5py as _h5py
+import numpy as _np
 
-from .XsocsGui import XsocsGui
-from .MergeWidget import MergeWidget
-from .process.RecipSpaceWidget import RecipSpaceWidget
-
-
-def merge_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = MergeWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
+from .XsocsH5Base import XsocsH5Base
 
 
-def conversion_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = RecipSpaceWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
+class QspaceH5(XsocsH5Base):
 
+    def __init__(self, entry, h5_f, mode='r'):
+        super(QspaceH5, self).__init__(h5_f, mode=mode)
 
-def xsocs_main(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = XsocsGui(*args, **kwargs)
-    mw.show()
-    app.exec_()
+        self.__entry = entry
+
+    # def

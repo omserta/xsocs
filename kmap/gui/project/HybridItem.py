@@ -75,18 +75,13 @@ class HybridItemDelegate(Qt.QWidget):
     def __onClicked(self, checked, type=None):
         obj = self.__index.data(Hdf5TreeModel.H5PY_OBJECT_ROLE)
         instance = ProjectItem.load(obj.file.filename, obj.name)
-        event = HybridItemEvent(instance, type)
+        # TODO : weakref, or make sure persistent.isValid returns False if
+        # model item is destroyed.
+        event = HybridItemEvent(instance, type, self.__index)
         self.sigEditorEvent.emit(event)
 
     def sizeHint(self):
-        print super(HybridItem, self).sizeHint()
         return Qt.QSize(0, 0)
-    # def sizeHint(self):
-    #     # TODO connect to cell resize
-    #     if self.__sizeHint:
-    #         return self.parent().sizeHint()
-    #         # return Qt.QSize(self.__sizeHint)
-    #     return super(XsocsProjectDataGroupDelegate, self).sizeHint()
 
 
 @ItemClassDef('HybridItem', editor=HybridItemDelegate)

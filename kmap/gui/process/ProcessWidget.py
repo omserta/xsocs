@@ -29,32 +29,53 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-import sys
+from collections import namedtuple
 
 from silx.gui import qt as Qt
-print('Using Qt {0}'.format(Qt.qVersion()))
-
-from .XsocsGui import XsocsGui
-from .MergeWidget import MergeWidget
-from .process.RecipSpaceWidget import RecipSpaceWidget
 
 
-def merge_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = MergeWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
+ProcessResult = namedtuple('ProcessResult', ['status', 'data'])
 
 
-def conversion_window(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = RecipSpaceWidget(*args, **kwargs)
-    mw.show()
-    app.exec_()
+class ProcessWidget(Qt.QMainWindow):
+
+    sigProcessDone = Qt.Signal(object)
+
+    (StatusUnknown, StatusInit, StatusRunning, StatusCompleted, StatusAborted,
+     StatusCanceled) = StatusList = range(6)
+
+    def __init__(self, index=None, parent=None, **kwargs):
+        super(ProcessWidget, self).__init__(parent, **kwargs)
+        self.__index = index
+        self.__status = ProcessWidget.StatusInit
+
+    status = property(lambda self: self.__status)
+
+    def _setStatus(self, status):
+        if status not in ProcessWidget.StatusList:
+            raise ValueError('Unknown status value : {0}.'
+                             ''.format(status))
+        self.__status = status
+
+    def processResult(self):
+        return ProcessResult(status=self.status, data=self._processData())
+
+    def _processData(self):
+        return None
+
+    def _emitEvent(self, event):
+        self.sigProcessDone.emit(event)
+
+    index = property(lambda self: self.__index)
 
 
-def xsocs_main(*args, **kwargs):
-    app = Qt.QApplication(sys.argv)
-    mw = XsocsGui(*args, **kwargs)
-    mw.show()
-    app.exec_()
+class ProcessWidgetEvent(object):
+
+    def __init__(self, widget, data=None):
+        super(ProcessWidgetEvent, self).__init__()
+        self.__index = widget.index
+        self.__data = data
+
+    data = property(lambda self: self.__data)
+
+    index = property(lambda self: self.__index)

@@ -1,14 +1,48 @@
-import os
-import numpy as np
-from silx.gui import qt as Qt
+# coding: utf-8
+# /*##########################################################################
+#
+# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# ###########################################################################*/
 
+from __future__ import absolute_import
+
+__authors__ = ["D. Naudet"]
+__license__ = "MIT"
+__date__ = "15/09/2016"
+
+import numpy as np
+from matplotlib import cm
+
+from silx.gui import qt as Qt
 from silx.gui.plot import PlotWindow
+
+from .DataViewWidget import DataViewWidget, DataViewEvent
 
 try:
     from silx.gui.plot.ImageRois import ImageRoiManager
-except:
+except ImportError:
     # TODO remove this import once the ROIs are added to the silx release.
-    from .silx_imports.ImageRois import ImageRoiManager
+    from ..silx_imports.ImageRois import ImageRoiManager
+
 
 class RectRoiWidget(Qt.QWidget):
     sigRoiApplied = Qt.Signal(object)
@@ -16,7 +50,7 @@ class RectRoiWidget(Qt.QWidget):
     def __init__(self, roiManager, parent=None):
         # TODO :
         # support multiple ROIs then batch them
-        super(RectRoiWidget, self).__init__(parent=parent)
+        super(RectRoiWidget, self).__init__(parent)
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -65,11 +99,11 @@ class RectRoiWidget(Qt.QWidget):
         # TODO : weakref
         self.__roiManager = roiManager
         roiManager.sigRoiDrawingFinished.connect(self.__roiDrawingFinished,
-                                       Qt.Qt.QueuedConnection)
+                                                 Qt.Qt.QueuedConnection)
         roiManager.sigRoiRemoved.connect(self.__roiRemoved,
                                          Qt.Qt.QueuedConnection)
         roiManager.sigRoiMoved.connect(self.__roiMoved,
-                                        Qt.Qt.QueuedConnection)
+                                       Qt.Qt.QueuedConnection)
 
     def __discardRoi(self, checked):
         self.__roiManager.clear()
@@ -97,9 +131,11 @@ class RectRoiWidget(Qt.QWidget):
 
     def __display(self, xData, yData):
         xMin, xMax = xData[0], xData[2]
-        if xMax < xMin: xMin, xMax = xMax, xMin
+        if xMax < xMin:
+            xMin, xMax = xMax, xMin
         yMin, yMax = yData[0], yData[1]
-        if yMax < yMin : yMin, yMax = yMax, yMin 
+        if yMax < yMin:
+            yMin, yMax = yMax, yMin
         self._xEdit.setText(str(xMin))
         self._yEdit.setText(str(yMin))
         self._wEdit.setText(str(xMax - xMin))
@@ -114,15 +150,18 @@ class RectRoiWidget(Qt.QWidget):
         self.__display(event['xdata'], event['ydata'])
 
 
-class IntensityWindow(Qt.QMainWindow):
-    sigRoiApplied = Qt.Signal(object)
+class RealSpaceWidgetEvent(DataViewEvent):
+    pass
+
+
+class RealSpaceWidget(DataViewWidget):
 
     plot = property(lambda self: self.__plotWindow)
 
-    def __init__(self, parent=None, **kwargs):
-        super(IntensityWindow, self).__init__(parent=parent)
+    def __init__(self, index, parent=None, **kwargs):
+        super(RealSpaceWidget, self).__init__(index, parent=parent)
 
-        self.__plotWindow = plotWindow = PlotWindow(**kwargs)
+        self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True, **kwargs)
         plotWindow.setKeepDataAspectRatio(True)
         plotWindow.setActiveCurveHandling(False)
 
@@ -133,12 +172,44 @@ class IntensityWindow(Qt.QMainWindow):
 
         rectRoiWidget = RectRoiWidget(roiManager)
         roiToolBar.addWidget(rectRoiWidget)
-        rectRoiWidget.sigRoiApplied.connect(self.sigRoiApplied)
+        rectRoiWidget.sigRoiApplied.connect(self.__roiApplied)
 
         plotWindow.addToolBarBreak()
         plotWindow.addToolBar(roiToolBar)
 
         self.setCentralWidget(plotWindow)
+
+    def setPlotData(self, x, y, data):
+        plot = self.__plotWindow
+        if data.ndim == 1:
+            # scatter
+            min_, max_ = data.min(), data.max()
+            colormap = cm.jet
+            colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
+            plot.addCurve(x, y,
+                          color=colors,
+                          symbol='s',
+                          linestyle='')
+        elif data.ndim == 2:
+            # image
+            min_, max_ = data.min(), data.max()
+            colormap = {'name': 'temperature',
+                        'normalization': 'linear',
+                        'autoscale': True,
+                        'vmin': min_,
+                        'vmax': max_}
+            origin = x[0], y[0]
+            scale = (x[-1] - x[0]) / len(x), (y[-1] - y[0]) / len(y)
+            plot.addImage(data,
+                          origin=origin,
+                          scale=scale,
+                          colormap=colormap)
+        else:
+            raise ValueError('data has {0} dimensions, expected 1 or 2.'
+                             ''.format(data.ndim))
+
+    def __roiApplied(self, roi):
+        self._emitEvent(RealSpaceWidgetEvent(self, roi))
 
 
 if __name__ == '__main__':

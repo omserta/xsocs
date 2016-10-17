@@ -27,20 +27,16 @@ from __future__ import absolute_import
 
 import os
 
-import numpy as np
-from matplotlib import cm
 from silx.gui import qt as Qt
-from plot3d.IsosurfaceView import IsosurfaceView
 
-from ..io import XsocsH5
+from .Utils import (viewWidgetFromProjectEvent,
+                    processWidgetFromViewEvent)
 from .MergeWidget import MergeWidget
-from .RecipSpaceWidget import RecipSpaceWidget
 from .Widgets import (AcqParamsWidget,
-                      _AdjustedLineEdit,
-                      _AdjustedPushButton)
+                      AdjustedLineEdit,
+                      AdjustedPushButton)
 from .project.XsocsProject import XsocsProject
-
-from .PlotWidgets import IntensityWindow
+from ..io import XsocsH5
 
 
 _COMPANY_NAME = 'ESRF'
@@ -71,58 +67,28 @@ class XsocsGui(Qt.QMainWindow):
         self.__greeterDiag = None
         self.__readSettings()
 
-    def __dataDockSlot(self, event):
+    def __projectViewSlot(self, event):
         # TODO : store the plot window in a dictionary + weakref w delete
         #   callback when object is destroyed
-        type = event.type
-        plotData = event.plotData()
-        x, y, data = plotData
-        if type == 'scatter':
-            self.showScatterPlot(x, y, data)
-        elif type == 'image':
-            self.showImage(x, y, data)
-
-    def showScatterPlot(self, x, y, data):
         mdi = self.centralWidget()
-        min_, max_ = data.min(), data.max()
-        colormap = cm.jet
-        colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
-        plotWin = IntensityWindow(aspectRatio=True)
+        plotWin = viewWidgetFromProjectEvent(self.__project, event)
         plotWin.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        plotWin.plot.addCurve(x, y, color=colors, symbol='s', linestyle='')
-        plotWin.sigRoiApplied.connect(self.__roiApplied)
+        plotWin.sigProcessApplied.connect(self.__processApplied)
         mdi.addSubWindow(plotWin)
         plotWin.show()
-        return plotWin
 
-    def showImage(self, x, y, data):
+    def __processApplied(self, event):
         mdi = self.centralWidget()
-        plotWin = IntensityWindow(aspectRatio=True)
-        plotWin.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        min_, max_ = data.min(), data.max()
-        colormap = {'name': 'temperature',
-                    'normalization': 'linear',
-                    'autoscale':True,
-                    'vmin':min_,
-                    'vmax':max_}
-        origin = x[0], y[0]
-        scale = (x[-1] - x[0]) / len(x), (y[-1] - y[0]) / len(y)
-        plotWin.plot.addImage(data, origin=origin, scale=scale,
-                              colormap=colormap)
-        plotWin.sigRoiApplied.connect(self.__roiApplied)
-        mdi.addSubWindow(plotWin)
-        plotWin.show()
-        return plotWin
+        widget = processWidgetFromViewEvent(self.__project, event, parent=self)
+        widget.setWindowFlags(Qt.Qt.Dialog)
+        widget.setWindowModality(Qt.Qt.WindowModal)
+        widget.sigProcessDone.connect(self.__processDone)
+        widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
+        widget.show()
 
-    def __roiApplied(self, roiData):
-        widget = RecipSpaceWidget(data_h5f=self.__workspace.xsocsFile,
-                                  output_f=None,
-                                  qspace_size=None,
-                                  image_binning=None,
-                                  rect_roi=roiData)
-        widget.exec_()
-        if widget.result() == Qt.QDialog.Accepted:
-            self.__workspace.addQSpaceH5(widget.qspaceH5)
+    def __processDone(self, event):
+        print 'event', event
+
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)
@@ -187,7 +153,7 @@ class XsocsGui(Qt.QMainWindow):
             wkSpace.xsocsFile = xsocsH5
         self.__sessionDock.widget().setXsocsWorkspace(wkSpace)
         self.__dataDock.widget().setXsocsWorkspace(wkSpace)
-        self.__workspace = wkSpace
+        self.__project = wkSpace
 
         self.__closeGreeter()
 
@@ -292,7 +258,7 @@ class XsocsGui(Qt.QMainWindow):
         plotDataDock.setWidget(PlotDataWidget())
         plotDataDock.setObjectName('DataDock')
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, plotDataDock)
-        plotDataDock.widget().sigItemEvent.connect(self.__dataDockSlot,
+        plotDataDock.widget().sigViewEvent.connect(self.__projectViewSlot,
                                                    Qt.Qt.QueuedConnection)
 
     def __writeSettings(self):
@@ -347,7 +313,7 @@ class XsocsGui(Qt.QMainWindow):
 
 
 class PlotDataWidget(Qt.QWidget):
-    sigItemEvent = Qt.Signal(object)
+    sigViewEvent = Qt.Signal(object)
 
     def __init__(self, parent=None):
         super(PlotDataWidget, self).__init__(parent)
@@ -369,7 +335,7 @@ class PlotDataWidget(Qt.QWidget):
                 self.__treeView.deleteLater()
                 self.__treeView = None
             view = self.__xsocsProject.view(parent=self)
-            view.sigItemEvent.connect(self.sigItemEvent)
+            view.sigItemEvent.connect(self.sigViewEvent)
             self.layout().addWidget(view)
             self.__treeView = view
 
@@ -392,7 +358,7 @@ class SessionWidget(Qt.QWidget):
         # #########
         gbox = Qt.QGroupBox('XSocs file')
         boxLayout = Qt.QVBoxLayout(gbox)
-        self.__fileLabel = fileLabel = _AdjustedLineEdit(read_only=True)
+        self.__fileLabel = fileLabel = AdjustedLineEdit(read_only=True)
         fileLabel.setAlignment(Qt.Qt.AlignLeft)
         boxLayout.addWidget(fileLabel)
 
@@ -406,18 +372,18 @@ class SessionWidget(Qt.QWidget):
 
         # number of angles
         rowIdx = 0
-        self.__anglesText = anglesText = _AdjustedLineEdit(3, read_only=True)
+        self.__anglesText = anglesText = AdjustedLineEdit(3, read_only=True)
         gridLayout.addWidget(Qt.QLabel('# angles :'),
                              rowIdx, 0, alignment=Qt.Qt.AlignLeft)
         gridLayout.addWidget(anglesText,
                              rowIdx, 1, alignment=Qt.Qt.AlignLeft)
 
         rowIdx += 1
-        self.__nImgText = nImgText = _AdjustedLineEdit(5, read_only=True)
+        self.__nImgText = nImgText = AdjustedLineEdit(5, read_only=True)
         gridLayout.addWidget(Qt.QLabel('Images :'),
                              rowIdx, 0, alignment=Qt.Qt.AlignLeft)
         gridLayout.addWidget(nImgText, rowIdx, 1, alignment=Qt.Qt.AlignLeft)
-        self.__imgSizeText = imgSizeText = _AdjustedLineEdit(10, read_only=True)
+        self.__imgSizeText = imgSizeText = AdjustedLineEdit(10, read_only=True)
         gridLayout.addWidget(Qt.QLabel('Size :'),
                              rowIdx, 2, alignment=Qt.Qt.AlignLeft)
         gridLayout.addWidget(imgSizeText, rowIdx, 3, alignment=Qt.Qt.AlignLeft)
@@ -528,9 +494,9 @@ class _WorkspaceDirDialog(Qt.QDialog):
         layout = Qt.QGridLayout(self)
 
         label = Qt.QLabel('Workspace :')
-        lineEdit = _AdjustedLineEdit(40)
+        lineEdit = AdjustedLineEdit(40)
         lineEdit.setAlignment(Qt.Qt.AlignLeft)
-        pickButton = _AdjustedPushButton('...')
+        pickButton = AdjustedPushButton('...')
         layout.addWidget(label,
                          0, 0,
                          Qt.Qt.AlignLeft)

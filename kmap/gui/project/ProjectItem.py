@@ -66,32 +66,43 @@ class ProjectItem(object):
     viewShowChildren = True
     icon = None
 
-    XsocsNone, XsocsInput, XsocsQSpace, XsocsFit = range(4)
-
     def __init__(self, h5File, nodePath, processLevel=None):
         # TODO : check if parent already has a child with the same name
         super(ProjectItem, self).__init__()
         self.__nodePath = nodePath
         self.__h5File = h5File
-        self.__processLevel = processLevel or ProjectItem.XsocsNone
+        self.__processLevel = None
+        self.__processLevelIn = processLevel
 
     path = property(lambda self: self.__nodePath)
 
     file = property(lambda self: self.__h5File)
 
-    dataLevel = property(lambda self: self.__dataLevel)
+    @property
+    def processLevel(self):
+        if self.__processLevel is None:
+            if self.__processLevelIn is None:
+                with h5py.File(self.__h5File, 'r') as h5f:
+                    processLevel = h5f[self.__nodePath].attrs.get('XsocsLevel')
+                    self.__processLevel = processLevel
+            else:
+                self.__processLevel = self.__processLevelIn
+        return self.__processLevel
 
     def _commit(self):
         with h5py.File(self.file, 'a') as h5f:
             grp = h5f.require_group(self.path)
-            grp.attrs.update({'XsocsType': self.itemName})
-            grp.attrs.update({'XsocsLevel': self.__processLevel or 'None'})
+            grp.attrs['XsocsType'] = self.itemName
+            if self.__processLevelIn is not None:
+                grp.attrs['XsocsLevel'] = self.__processLevelIn
+            del grp
 
     @classmethod
     def load(cls, h5File, groupPath):
         with h5py.File(h5File, 'r') as h5f:
             grp = h5f[groupPath]
             xsocsType = grp.attrs.get('XsocsType')
+            del grp
             if xsocsType is None:
                 return None
             klass = _registeredItems.get(xsocsType)
@@ -102,10 +113,11 @@ class ProjectItem(object):
 
 
 class ItemEvent(object):
-    def __init__(self, item, eventType):
+    def __init__(self, item, eventType, index):
         super(ItemEvent, self).__init__()
         self.__item = item
         self.__type = eventType
+        self.__index = index
 
     def plotData(self):
         raise NotImplementedError('')
@@ -113,3 +125,5 @@ class ItemEvent(object):
     type = property(lambda self: self.__type)
 
     item = property(lambda self: self.__item)
+
+    index = property(lambda self: self.__index)

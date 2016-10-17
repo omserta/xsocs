@@ -106,6 +106,51 @@ class HybridNode(XsocsNode):
         return 0
 
 
+class ExternalLinkDelegate(Qt.QWidget):
+    sigEditorEvent = Qt.Signal(object)
+
+    def __init__(self, parent, option, index):
+        super(ExternalLinkDelegate, self).__init__(parent)
+        self.__index = Qt.QPersistentModelIndex(index)
+        layout = Qt.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        style = Qt.QApplication.style()
+        icon = style.standardIcon(Qt.QStyle.SP_FileDialogContentsView)
+        bn = Qt.QToolButton()
+        bn.setIcon(icon)
+        layout.addWidget(bn, Qt.Qt.AlignLeft)
+        bn.clicked.connect(self.__onClicked)
+        layout.addStretch(1)
+
+    def __onClicked(self):
+        print 'CLICKED', self
+        # obj = self.__index.data(Hdf5TreeModel.H5PY_OBJECT_ROLE)
+        # instance = ProjectItem.load(obj.file.filename, obj.name)
+        # event = HybridItemEvent(instance, type)
+        # self.sigEditorEvent.emit(event)
+
+    def sizeHint(self):
+        return Qt.QSize(0, 0)
+
+
+@NodeClassDef(nodeType=h5py.ExternalLink,
+              icon=Qt.QStyle.SP_FileLinkIcon,
+              editor=ExternalLinkDelegate)
+class ExternalLinkNode(XsocsNode):
+    def __init__(self, *args, **kwargs):
+        super(ExternalLinkNode, self).__init__(*args, **kwargs)
+        with h5py.File(self.projectFile) as h5f:
+            item = h5f[self.path]
+            followLink = item.attrs.get('XsocsExpand')
+            del item
+        self.__followLink = followLink if followLink is not None else False
+
+    def childCount(self):
+        if not self.__followLink:
+            return 0
+        return super(ExternalLinkNode, self).childCount()
+
+
 @NodeClassDef(nodeType=h5py.Dataset, icon=None, editor=None)
 class DatasetNode(ProjectNode):
 

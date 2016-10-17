@@ -48,10 +48,17 @@ class ProjectNode(object):
         self.__children = None
         self.__childCount = None
         self.__data = [{}, {}]
-        if self.icon is not None:
-            self.setData(ModelColumns.NameColumn,
-                         icons.getQIcon(self.icon),
-                         role=Qt.Qt.DecorationRole)
+        icon = self.icon
+        if icon is not None:
+            if isinstance(icon, str):
+                self.setData(ModelColumns.NameColumn,
+                             icons.getQIcon(self.icon),
+                             role=Qt.Qt.DecorationRole)
+            elif isinstance(icon, Qt.QStyle.StandardPixmap):
+                style = Qt.QApplication.style()
+                self.setData(ModelColumns.NameColumn,
+                             style.standardIcon(icon),
+                             role=Qt.Qt.DecorationRole)
 
         nodeName = path.rstrip('/').split('/')[-1]
         self.setData(ModelColumns.NameColumn,

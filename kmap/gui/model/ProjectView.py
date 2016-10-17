@@ -53,8 +53,7 @@ class ProjectView(Qt.QTreeView):
                                      ModelRoles.IsXsocsNodeRole,
                                      True,
                                      hits=-1,
-                                     flags=(Qt.Qt.MatchExactly |
-                                            Qt.Qt.MatchRecursive))
+                                     flags=Qt.Qt.MatchExactly)
         for index in indices:
             # had to do this otherwise the openPersistentEditor wouldnt work
             idx = self.model().index(index.row(), 1, start.parent())

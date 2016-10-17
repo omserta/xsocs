@@ -83,10 +83,13 @@ def nodeFactory(projectFile, path, parent=None, nodeType=None):
         with h5py.File(projectFile) as h5f:
             item = h5f[path]
             xsocsType = item.attrs.get('XsocsType')
-            itemClass = item.__class__
+            itemClass = h5f.get(path, getclass=True)
+            itemLink = h5f.get(path, getclass=True, getlink=True)
             del item
         if xsocsType is not None:
             klass = getNodeClass(xsocsType)
+        if klass is None:
+            klass = getNodeClass(itemLink)
         if klass is None:
             klass = getNodeClass(itemClass)
         if klass is None:

@@ -31,29 +31,37 @@ __date__ = "15/09/2016"
 
 import os
 
+from silx.gui.hdf5 import Hdf5TreeView
+
 from .view.RealSpaceWidget import RealSpaceWidget, RealSpaceWidgetEvent
 from .process.RecipSpaceWidget import RecipSpaceWidget
+from .model.ModelDef import ModelRoles
+import h5py
 from .project import XsocsProject
 
 
 def viewWidgetFromProjectEvent(project, event):
-    item = event.item
+    # item = event.item
     index = event.index
-    processLevel = item.processLevel
+    # processLevel = item.processLevel
 
     widget = None
+    xsocsType = index.data(ModelRoles.XsocsNodeType)
+    if xsocsType == h5py.ExternalLink:
+        widget = Hdf5TreeView()
+        widget.findHdf5TreeModel().appendFile(event.data)
 
-    if processLevel == XsocsProject.XsocsInput:
-        # show raw data
-        plotData = event.plotData()
-        x, y, data = plotData
-        widget = RealSpaceWidget(index)
-        widget.setPlotData(x, y, data)
-    elif processLevel == XsocsProject.XsocsQSpace:
-        # show qspace data
-        pass
-    else:
-        raise ValueError('Unknown process level {0}.'.format(processLevel))
+    # if processLevel == XsocsProject.XsocsInput:
+    #     # show raw data
+    #     plotData = event.plotData()
+    #     x, y, data = plotData
+    #     widget = RealSpaceWidget(index)
+    #     widget.setPlotData(x, y, data)
+    # elif processLevel == XsocsProject.XsocsQSpace:
+    #     # show qspace data
+    #     pass
+    # else:
+    #     raise ValueError('Unknown process level {0}.'.format(processLevel))
 
     return widget
 

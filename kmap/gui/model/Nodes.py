@@ -35,7 +35,7 @@ from functools import partial
 import h5py
 from silx.gui import qt as Qt, icons
 from .ModelDef import NodeClassDef, ModelColumns, ModelRoles
-from .ProjectNode import ProjectNode, DelegateEvent
+from .ProjectNode import ProjectNode, DelegateEvent, NodeDelegate
 
 
 @NodeClassDef(nodeType='RootNode')
@@ -50,20 +50,18 @@ class GroupNode(ProjectNode):
 
 class HybridItemEvent(DelegateEvent):
     def plotData(self):
-        eventType = self.type
-        if eventType == 'scatter':
-            return self.item.getScatter()
-        if eventType == 'image':
-            return self.item.getImage()
+        # eventType = self.data
+        # if eventType == 'scatter':
+        #     return self.item.getScatter()
+        # if eventType == 'image':
+        #     return self.item.getImage()
         return None
 
 
-class HybridItemDelegate(Qt.QWidget):
-    sigEditorEvent = Qt.Signal(object)
+class HybridItemDelegate(NodeDelegate):
 
     def __init__(self, parent, option, index):
-        super(HybridItemDelegate, self).__init__(parent)
-        self.__index = Qt.QPersistentModelIndex(index)
+        super(HybridItemDelegate, self).__init__(parent, option, index)
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         icon = icons.getQIcon('item-1dim')
@@ -77,8 +75,6 @@ class HybridItemDelegate(Qt.QWidget):
         bn.clicked.connect(partial(self.__onClicked, eventType='image'))
         layout.addWidget(bn, Qt.Qt.AlignLeft)
         layout.addStretch(1)
-        # self.setAutoFillBackground(True)
-        # layout.setSizeConstraint(Qt.QLayout.SetMinimumSize)
 
     def __onClicked(self, eventType=None):
         print 'CLICKED', self, eventType
@@ -86,9 +82,6 @@ class HybridItemDelegate(Qt.QWidget):
         # instance = ProjectItem.load(obj.file.filename, obj.name)
         # event = HybridItemEvent(instance, type)
         # self.sigEditorEvent.emit(event)
-
-    def sizeHint(self):
-        return Qt.QSize(0, 0)
 
 
 class XsocsNode(ProjectNode):
@@ -100,18 +93,21 @@ class XsocsNode(ProjectNode):
 
 
 @NodeClassDef(nodeType='HybridItem',
-              icon='item-ndim', editor=HybridItemDelegate)
+              icon='item-ndim',
+              editor=HybridItemDelegate)
 class HybridNode(XsocsNode):
     def childCount(self):
         return 0
 
 
-class ExternalLinkDelegate(Qt.QWidget):
-    sigEditorEvent = Qt.Signal(object)
+class ExternalLinkEvent(DelegateEvent):
+    pass
+
+
+class ExternalLinkDelegate(NodeDelegate):
 
     def __init__(self, parent, option, index):
-        super(ExternalLinkDelegate, self).__init__(parent)
-        self.__index = Qt.QPersistentModelIndex(index)
+        super(ExternalLinkDelegate, self).__init__(parent, option, index)
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         style = Qt.QApplication.style()
@@ -123,14 +119,13 @@ class ExternalLinkDelegate(Qt.QWidget):
         layout.addStretch(1)
 
     def __onClicked(self):
-        print 'CLICKED', self
-        # obj = self.__index.data(Hdf5TreeModel.H5PY_OBJECT_ROLE)
-        # instance = ProjectItem.load(obj.file.filename, obj.name)
-        # event = HybridItemEvent(instance, type)
-        # self.sigEditorEvent.emit(event)
-
-    def sizeHint(self):
-        return Qt.QSize(0, 0)
+        persistentIndex = self.index
+        index = persistentIndex.model().index(persistentIndex.row(),
+                                              persistentIndex.column(),
+                                              persistentIndex.parent())
+        node = index.internalPointer()
+        event = ExternalLinkEvent(self.index, data=node.externalFile)
+        self.sigEditorEvent.emit(event)
 
 
 @NodeClassDef(nodeType=h5py.ExternalLink,
@@ -141,7 +136,7 @@ class ExternalLinkNode(XsocsNode):
         super(ExternalLinkNode, self).__init__(*args, **kwargs)
         with h5py.File(self.projectFile) as h5f:
             item = h5f[self.path]
-            filename = item.file.filename
+            self.__externalFile = filename = item.file.filename
             followLink = item.attrs.get('XsocsExpand')
             del item
         self.__followLink = followLink if followLink is not None else False
@@ -157,6 +152,8 @@ class ExternalLinkNode(XsocsNode):
         if not self.__followLink:
             return 0
         return super(ExternalLinkNode, self).childCount()
+
+    externalFile = property(lambda self: self.__externalFile)
 
 
 @NodeClassDef(nodeType=h5py.Dataset, icon=None, editor=None)

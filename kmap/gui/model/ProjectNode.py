@@ -33,11 +33,11 @@ __date__ = "15/09/2016"
 from silx.gui import qt as Qt
 import h5py
 from silx.gui import icons
-from .ModelDef import nodeFactory, ModelColumns
+from .ModelDef import nodeFactory, ModelColumns, ModelRoles
 
 
 class ProjectNode(object):
-    nodeName = None
+    nodeType = None
     icon = None
     editor = None
 
@@ -64,6 +64,10 @@ class ProjectNode(object):
         self.setData(ModelColumns.NameColumn,
                      nodeName,
                      role=Qt.Qt.DisplayRole)
+        for colIdx in range(ModelColumns.ColumnMax):
+            self.setData(colIdx,
+                         data=self.nodeType,
+                         role=ModelRoles.XsocsNodeType)
 
     def parent(self):
         return self.__parent
@@ -124,17 +128,27 @@ class ProjectNode(object):
 
 
 class DelegateEvent(object):
-    def __init__(self, item, eventType, index):
+    def __init__(self, index, data=None):
         super(DelegateEvent, self).__init__()
-        self.__item = item
-        self.__type = eventType
+        self.__data = data
         self.__index = index
 
-    def plotData(self):
-        raise NotImplementedError('')
+    data = property(lambda self: self.__data)
 
-    type = property(lambda self: self.__type)
+    index = property(lambda self: self.__index)
 
-    item = property(lambda self: self.__item)
+
+class NodeDelegate(Qt.QWidget):
+    sigEditorEvent = Qt.Signal(object)
+
+    def __init__(self, parent, option, index):
+        super(NodeDelegate, self).__init__(parent)
+        self.__index = Qt.QPersistentModelIndex(index)
+
+    def sizeHint(self):
+        return Qt.QSize(0, 0)
+
+    def emit(self, event):
+        self.sigEditorEvent.emit(event)
 
     index = property(lambda self: self.__index)

@@ -70,15 +70,24 @@ class XsocsGui(Qt.QMainWindow):
         # TODO : store the plot window in a dictionary + weakref w delete
         #   callback when object is destroyed
         mdi = self.centralWidget()
-        plotWin = viewWidgetFromProjectEvent(self.__project, event)
-        plotWin.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        plotWin.sigProcessApplied.connect(self.__processApplied)
-        mdi.addSubWindow(plotWin)
-        plotWin.show()
+        widget = viewWidgetFromProjectEvent(self.__project, event)
+        if widget is None:
+            print 'UNKNOWN VIEW EVENT'
+            return
+        widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
+        try:
+            widget.sigProcessApplied.connect(self.__processApplied)
+        except AttributeError:
+            pass
+        mdi.addSubWindow(widget)
+        widget.show()
 
     def __processApplied(self, event):
         mdi = self.centralWidget()
         widget = processWidgetFromViewEvent(self.__project, event, parent=self)
+        if widget is None:
+            print 'UNKNOWN PROCESS EVENT'
+            return
         widget.setWindowFlags(Qt.Qt.Dialog)
         widget.setWindowModality(Qt.Qt.WindowModal)
         widget.sigProcessDone.connect(self.__processDone)

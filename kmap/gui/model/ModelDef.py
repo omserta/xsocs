@@ -37,8 +37,8 @@ _registeredNodes = {}
 
 
 class ModelRoles(object):
-    IsXsocsNodeRole, XsocsProcessId, RoleMax = \
-        range(Qt.Qt.UserRole, Qt.Qt.UserRole + 3)
+    IsXsocsNodeRole, XsocsNodeType, XsocsProcessId, RoleMax = \
+        range(Qt.Qt.UserRole, Qt.Qt.UserRole + 4)
 
 
 class ModelColumns(object):

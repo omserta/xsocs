@@ -28,3 +28,34 @@ from __future__ import absolute_import
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
+
+
+class ProcessId(object):
+    Input, QSpace, Fit = range(3)
+
+_registeredItems = {}
+
+
+def getItemClass(itemName):
+    return _registeredItems.get(itemName)
+
+
+def registerItemClass(klass):
+    global _registeredItems
+
+    itemName = klass.itemName
+    if itemName in _registeredItems:
+        raise AttributeError('Failed to register item class {0}.'
+                             'attribute is already registered.'
+                             ''.format(klass.__name__))
+
+    # TODO : some kind of checks on the klass
+    _registeredItems[itemName] = klass
+
+
+def ItemClassDef(itemName):
+    def inner(cls):
+        cls.itemName = itemName
+        registerItemClass(cls)
+        return cls
+    return inner

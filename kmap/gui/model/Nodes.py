@@ -29,7 +29,7 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-
+import os
 from functools import partial
 
 import h5py
@@ -141,9 +141,17 @@ class ExternalLinkNode(XsocsNode):
         super(ExternalLinkNode, self).__init__(*args, **kwargs)
         with h5py.File(self.projectFile) as h5f:
             item = h5f[self.path]
+            filename = item.file.filename
             followLink = item.attrs.get('XsocsExpand')
             del item
         self.__followLink = followLink if followLink is not None else False
+        basename = os.path.basename(filename).rpartition('.')[0]
+        self.setData(ModelColumns.NameColumn,
+                     basename,
+                     role=Qt.Qt.DisplayRole)
+        self.setData(ModelColumns.NameColumn,
+                     filename,
+                     role=Qt.Qt.ToolTipRole)
 
     def childCount(self):
         if not self.__followLink:
@@ -174,7 +182,7 @@ class DatasetNode(ProjectNode):
 
         self.setData(ModelColumns.NameColumn, icon, Qt.Qt.DecorationRole)
 
-        self.setData(ModelColumns.NameColumn,
+        self.setData(ModelColumns.ValueColumn,
                      text,
                      role=Qt.Qt.DisplayRole)
 

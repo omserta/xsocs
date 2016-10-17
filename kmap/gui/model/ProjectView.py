@@ -44,6 +44,7 @@ class ProjectView(Qt.QTreeView):
         self.setItemDelegateForColumn(1, delegate)
         delegate.sigDelegateEvent.connect(self.sigItemEvent)
         self.expanded.connect(self.__expanded)
+        self.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
         # self.collapsed.connect(self.__collapsed)
 
     def __expanded(self, index):

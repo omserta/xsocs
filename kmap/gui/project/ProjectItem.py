@@ -30,59 +30,29 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 import h5py
+import numpy as np
 
-_registeredItems = {}
-
-
-def getItemClass(itemName):
-    return _registeredItems.get(itemName)
+from .ProjectDef import getItemClass
+from ...io.XsocsH5Base import XsocsH5Base
 
 
-def registerItemClass(klass):
-    global _registeredItems
-
-    itemName = klass.itemName
-    if itemName in _registeredItems:
-        raise AttributeError('Failed to register item class {0}.'
-                             'attribute is already registered.'
-                             ''.format(klass.__name__))
-
-    # TODO : some kind of checks on the klass
-    _registeredItems[itemName] = klass
-
-
-def ItemClassDef(itemName, editor=None):
-    def inner(cls):
-        cls.itemName = itemName
-        cls.editor = editor
-        registerItemClass(cls)
-        return cls
-    return inner
-
-
-class ProjectItem(object):
+class ProjectItem(XsocsH5Base):
     itemName = None
-    editor = None
-    viewShowChildren = True
-    icon = None
 
-    def __init__(self, h5File, nodePath, processLevel=None):
+    def __init__(self, h5File, nodePath, mode='r+', processLevel=None):
         # TODO : check if parent already has a child with the same name
-        super(ProjectItem, self).__init__()
+        super(ProjectItem, self).__init__(h5File, mode=mode)
         self.__nodePath = nodePath
-        self.__h5File = h5File
         self.__processLevel = None
         self.__processLevelIn = processLevel
 
     path = property(lambda self: self.__nodePath)
 
-    file = property(lambda self: self.__h5File)
-
     @property
     def processLevel(self):
         if self.__processLevel is None:
             if self.__processLevelIn is None:
-                with h5py.File(self.__h5File, 'r') as h5f:
+                with self._get_file() as h5f:
                     processLevel = h5f[self.__nodePath].attrs.get('XsocsLevel')
                     self.__processLevel = processLevel
             else:
@@ -90,9 +60,9 @@ class ProjectItem(object):
         return self.__processLevel
 
     def _commit(self):
-        with h5py.File(self.file, 'a') as h5f:
+        with self._get_file() as h5f:
             grp = h5f.require_group(self.path)
-            grp.attrs['XsocsType'] = self.itemName
+            grp.attrs['XsocsType'] = np.string_(self.itemName)
             if self.__processLevelIn is not None:
                 grp.attrs['XsocsLevel'] = self.__processLevelIn
             del grp
@@ -105,25 +75,8 @@ class ProjectItem(object):
             del grp
             if xsocsType is None:
                 return None
-            klass = _registeredItems.get(xsocsType)
+            klass = getItemClass(xsocsType)
             if klass is None:
                 return None
         instance = klass(h5File, groupPath)
         return instance
-
-
-class ItemEvent(object):
-    def __init__(self, item, eventType, index):
-        super(ItemEvent, self).__init__()
-        self.__item = item
-        self.__type = eventType
-        self.__index = index
-
-    def plotData(self):
-        raise NotImplementedError('')
-
-    type = property(lambda self: self.__type)
-
-    item = property(lambda self: self.__item)
-
-    index = property(lambda self: self.__index)

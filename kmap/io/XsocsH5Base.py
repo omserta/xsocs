@@ -59,14 +59,31 @@ class XsocsH5Base(object):
     filename = property(lambda self: self.__h5_f)
 
     @contextmanager
-    def _get_file(self):
+    def _get_file(self, mode=None):
         """
         This protected context manager opens the hdf5 file if it isn't already
         opened (i.e : if the XsocsH5Base isn't already used as a context
         manager).
         """
+        # TODO : lots of tests...
+        prev_mode = None
+        if mode is not None:
+            if self.__file is not None:
+                if self.__file.mode != mode:
+                    raise ValueError('File is already opened with '
+                                     'a different mode.\n'
+                                     'File : {0}, current mode : {1}, '
+                                     'requested mode : {2}'
+                                     ''.format(self.filename,
+                                               self.__file.mode,
+                                               mode))
+            else:
+                prev_mode = self.mode
+                self.mode = mode
         with self:
             yield self.__file
+        if prev_mode is not None:
+            self.mode = prev_mode
 
     def _open(self):
         if self.__file is None:

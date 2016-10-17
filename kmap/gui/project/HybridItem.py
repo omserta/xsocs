@@ -32,14 +32,11 @@ __date__ = "15/09/2016"
 import h5py
 
 from .ProjectItem import ProjectItem
+from .ProjectDef import ItemClassDef
 
 
+@ItemClassDef('HybridItem')
 class HybridItem(ProjectItem):
-    viewShowChildren = False
-    icon = 'item-2dim'
-
-    def __init__(self, *args, **kwargs):
-        super(HybridItem, self).__init__(*args, **kwargs)
 
     def setScatter(self, x, y, data=None):
         self._commit(scatter=(x, y, data))
@@ -51,7 +48,7 @@ class HybridItem(ProjectItem):
     #     self._commit(imageSlice=(xSlice, ySlice))
 
     def getScatter(self):
-        with h5py.File(self.file, 'r') as h5f:
+        with self._get_file() as h5f:
             grp = h5f.get(self.path)
             if grp is None:
                 return None
@@ -72,7 +69,7 @@ class HybridItem(ProjectItem):
         return x, y, data
 
     def getImage(self):
-        with h5py.File(self.file, 'r') as h5f:
+        with self._get_file() as h5f:
             grp = h5f.get(self.path)
             if grp is None:
                 return None
@@ -114,7 +111,7 @@ class HybridItem(ProjectItem):
                 imageSlice=None):
         super(HybridItem, self)._commit()
         # TODO : check if data already exists in file.
-        with h5py.File(self.file, 'a') as h5f:
+        with self._get_file(mode='r+') as h5f:
             grp = h5f.require_group(self.path)
             if scatter:
                 x, y, data = scatter

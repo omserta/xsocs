@@ -48,7 +48,7 @@ import xrayutilities as xu
 from ..util.filt_utils import medfilt2D
 from ..util.histogramnd_lut import histogramnd_get_lut, histogramnd_from_lut
 # from silx.math import histogramnd
-from ..io import XsocsH5
+from ..io import XsocsH5, QSpaceH5
 
 disp_times = False
 
@@ -462,16 +462,17 @@ def _get_all_params(data_h5f):
             det_orients.append(det_orient)
             angles.append(angle)
 
-    result = {scan:dict(scans=entries[idx],
-                        n_images=n_images[idx],
-                        n_positions=n_positions[idx],
-                        img_size=img_sizes[idx],
-                        beam_energy=beam_energies[idx],
-                        chan_per_deg=chan_per_degs[idx],
-                        center_chan=center_chans[idx],
-                        pixelsize=pixel_sizes[idx],
-                        detector_orient=det_orients[idx],
-                        angle=angles[idx])
+    result = {scan: dict(scans=entries[idx],
+                         n_images=n_images[idx],
+                         n_positions=n_positions[idx],
+                         img_size=img_sizes[idx],
+                         beam_energy=beam_energies[idx],
+                         chan_per_deg=chan_per_degs[idx],
+                         center_chan=center_chans[idx],
+                         pixelsize=pixel_sizes[idx],
+                         detector_orient=det_orients[idx],
+                         angle=angles[idx])
+
               for idx, scan in enumerate(entries)}
     return result
 
@@ -753,16 +754,17 @@ def _img_2_qspace(data_h5f,
     # on linux apparently we dont because when fork() is called data is
     # only copied on write.
     # shared histo used by all processes
-    #histo_shared = mp_sharedctypes.RawArray(ctypes.c_int32, nx * ny * nz)
-    #histo = np.frombuffer(histo_shared, dtype='int32')
-    #histo.shape = nx, ny, nz
-    #histo[:] = 0
+    # histo_shared = mp_sharedctypes.RawArray(ctypes.c_int32, nx * ny * nz)
+    # histo = np.frombuffer(histo_shared, dtype='int32')
+    # histo.shape = nx, ny, nz
+    # histo[:] = 0
     histo = np.zeros(qspace_size, dtype=np.int32)
 
     # shared LUT used by all processes
-    #h_lut = None
-    #h_lut_shared = None
+    # h_lut = None
+    # h_lut_shared = None
     h_lut = []
+    lut = None
 
     for h_idx in range(n_entries):
         lut = histogramnd_get_lut(q_ar[h_idx, ...],
@@ -770,24 +772,24 @@ def _img_2_qspace(data_h5f,
                                   [nx, ny, nz],
                                   last_bin_closed=True)
 
-        #if h_lut_shared is None:
-            #lut_dtype = lut[0].dtype
-            #if lut_dtype == np.int16:
-                #lut_ctype = ctypes.c_int16
-            #elif lut_dtype == np.int32:
-                #lut_ctype = ctypes.c_int32
-            #elif lut_dtype == np.int64:
-                #lut_ctype == ctypes.c_int64
-            #else:
-                #raise TypeError('Unknown type returned by '
-                                #'histogramnd_get_lut : {0}.'
-                                #''.format(lut.dtype))
-            #h_lut_shared = mp_sharedctypes.RawArray(lut_ctype,
-                                                    #n_images * lut[0].size)
-            #h_lut = np.frombuffer(h_lut_shared, dtype=lut_dtype)
-            #h_lut.shape = (n_images, -1)
-
-        #h_lut[h_idx, ...] = lut[0]
+        # if h_lut_shared is None:
+        #     lut_dtype = lut[0].dtype
+        #     if lut_dtype == np.int16:
+        #         lut_ctype = ctypes.c_int16
+        #     elif lut_dtype == np.int32:
+        #         lut_ctype = ctypes.c_int32
+        #     elif lut_dtype == np.int64:
+        #         lut_ctype == ctypes.c_int64
+        #     else:
+        #         raise TypeError('Unknown type returned by '
+        #                         'histogramnd_get_lut : {0}.'
+        #                         ''.format(lut.dtype))
+        #     h_lut_shared = mp_sharedctypes.RawArray(lut_ctype,
+        #                                             n_images * lut[0].size)
+        #     h_lut = np.frombuffer(h_lut_shared, dtype=lut_dtype)
+        #     h_lut.shape = (n_images, -1)
+        #
+        # h_lut[h_idx, ...] = lut[0]
         h_lut.append(lut[0])
         histo += lut[1]
 
@@ -795,15 +797,16 @@ def _img_2_qspace(data_h5f,
     del q_ar
 
     # TODO : split the output file into several files? speedup?
-    output_shape = (n_images,) + histo.shape
+    output_shape = histo.shape
 
     chunks = (1,
+              max(output_shape[0]//4, 1),
               max(output_shape[1]//4, 1),
-              max(output_shape[2]//4, 1),
-              max(output_shape[3]//4, 1),)
+              max(output_shape[2]//4, 1),)
+    qspace_sum_chunks = max((n_images)//10, 1),
+
     _create_result_file(output_f,
                         output_shape,
-                        np.float64,
                         sample_x[pos_indices],
                         sample_y[pos_indices],
                         qx_idx,
@@ -811,7 +814,8 @@ def _img_2_qspace(data_h5f,
                         qz_idx,
                         histo,
                         compression='lzf',
-                        chunks=chunks,
+                        qspace_chunks=chunks,
+                        qspace_sum_chunks=qspace_sum_chunks,
                         overwrite=overwrite)
 
     if manager is None:
@@ -848,18 +852,20 @@ def _img_2_qspace(data_h5f,
                 self.t_sum = 0.
                 self.t_mask = 0.
                 self.t_read = 0.
+                self.t_context = 0.
                 self.t_dnsamp = 0.
                 self.t_medfilt = 0.
                 self.t_write = 0.
                 self.t_w_lock = 0.
 
             def update(self, arg):
-                (t_read_, t_dnsamp_, t_medfilt_, t_histo_,
+                (t_read_, t_context_, t_dnsamp_, t_medfilt_, t_histo_,
                  t_mask_, t_sum_, t_write_, t_w_lock_) = arg[2]
                 self.t_histo += t_histo_
                 self.t_sum += t_sum_
                 self.t_mask += t_mask_
                 self.t_read += t_read_
+                self.t_context += t_context_
                 self.t_dnsamp += t_dnsamp_
                 self.t_medfilt += t_medfilt_
                 self.t_write += t_write_
@@ -902,6 +908,7 @@ def _img_2_qspace(data_h5f,
     if(disp_times):
         print('TOTAL {0}'.format(tb - ta))
         print('Read {0}'.format(res_times.t_read))
+        print('Context {0}'.format(res_times.t_context))
         print('Dn Sample {0}'.format(res_times.t_dnsamp))
         print('Medfilt {0}'.format(res_times.t_medfilt))
         print('Histo {0}'.format(res_times.t_histo))
@@ -945,8 +952,8 @@ def _init_thread(idx_queue_,
 
 
 def _create_result_file(h5_fn,
-                        shape,
-                        dtype,
+                        qspace_shape,
+                        # dtype,
                         pos_x,
                         pos_y,
                         bins_x,
@@ -954,7 +961,8 @@ def _create_result_file(h5_fn,
                         bins_z,
                         histo,
                         compression='lzf',
-                        chunks=None,
+                        qspace_chunks=None,
+                        qspace_sum_chunks=None,
                         overwrite=False):
 
     if not overwrite:
@@ -966,18 +974,18 @@ def _create_result_file(h5_fn,
     if len(dir_name) > 0 and not os.path.exists(dir_name):
         os.makedirs(dir_name)
 
-    with h5py.File(h5_fn, mode) as h5f:
-        h5f.create_dataset('data/qspace', shape, dtype=dtype,
-                           shuffle=True, compression=compression,
-                           chunks=chunks)
-        h5f.create_dataset('data/qspace_sum', (len(pos_x),), dtype=np.float64,
-                           shuffle=True, compression=compression)
-        h5f.create_dataset('bins_edges/x', data=bins_x)
-        h5f.create_dataset('bins_edges/y', data=bins_y)
-        h5f.create_dataset('bins_edges/z', data=bins_z)
-        h5f.create_dataset('geom/x', data=pos_x)
-        h5f.create_dataset('geom/y', data=pos_y)
-        h5f.create_dataset('histo', data=histo)
+    qspace_h5 = QSpaceH5.QSpaceH5Writer(h5_fn, mode=mode)
+    qspace_h5.init_file(len(pos_x),
+                        qspace_shape,
+                        qspace_chunks=qspace_chunks,
+                        qspace_sum_chunks=qspace_sum_chunks,
+                        compression=compression)
+    qspace_h5.set_histo(histo)
+    qspace_h5.set_sample_x(pos_x)
+    qspace_h5.set_sample_y(pos_y)
+    qspace_h5.set_qx(bins_x)
+    qspace_h5.set_qy(bins_y)
+    qspace_h5.set_qz(bins_z)
 
 
 def _to_qspace(th_idx,
@@ -991,7 +999,6 @@ def _to_qspace(th_idx,
     print('Thread {0} started.'.format(th_idx))
 
     t_histo = 0.
-    t_fit = 0.
     t_mask = 0.
     t_sum = 0.
     t_read = 0.
@@ -999,7 +1006,10 @@ def _to_qspace(th_idx,
     t_medfilt = 0.
     t_write = 0.
     t_w_lock = 0.
-    
+    t_context = 0.
+
+    output_h5 = QSpaceH5.QSpaceH5Writer(output_fn, mode='r+')
+
     if shared_progress is not None:
         progress_np = np.frombuffer(shared_progress, dtype='int32')
         progress_np[th_idx] = 0
@@ -1060,10 +1070,13 @@ def _to_qspace(th_idx,
                     # TODO : add a lock on the files if there is no SWMR
                     # test if it slows down things much
                     with XsocsH5.XsocsH5(entry_files[entry_idx],
-                                         mode='r').image_dset_ctx(entry) as img_data:  # noqa
+                                         mode='r').image_dset_ctx(entry) \
+                            as img_data:  # noqa
+                        t1 = time.time()
                         img_data.read_direct(img,
                                              source_sel=np.s_[image_idx],
                                              dest_sel=None)
+                        t_context = time.time() - t1
                         #img = img_data[image_idx].astype(np.float64)
                 except Exception as ex:
                     raise RuntimeError('Error in proc {0} while reading '
@@ -1117,9 +1130,7 @@ def _to_qspace(th_idx,
             t_w_lock += time.time() - t0
             t0 = time.time()
             try:
-                with h5py.File(output_fn, 'r+') as output_h5:
-                    output_h5['data/qspace'][result_idx] = cumul
-                    output_h5['data/qspace_sum'][result_idx] = cumul_sum
+                output_h5.set_position_data(result_idx, cumul, cumul_sum)
             except Exception as ex:
                 raise RuntimeError('Error in proc {0} while writing result '
                                    'for img {1} (idx = {3}) : {2}.)'
@@ -1137,9 +1148,9 @@ def _to_qspace(th_idx,
         
     if disp_times:
         print('Thread {0} is done. Times={1}'
-              ''.format(th_idx, (t_read, t_dnsamp,
+              ''.format(th_idx, (t_read, t_context, t_dnsamp,
                                  t_medfilt, t_histo,
                                  t_mask, t_sum, t_write, t_w_lock)))
-    return [is_done, '', (t_read, t_dnsamp,
+    return [is_done, '', (t_read, t_context, t_dnsamp,
                        t_medfilt, t_histo,
                        t_mask, t_sum, t_write, t_w_lock,)]

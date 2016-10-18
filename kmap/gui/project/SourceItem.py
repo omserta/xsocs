@@ -57,7 +57,7 @@ class SourceItem(ProjectItem):
         """ The name of the input data file. """
         if self.__xsocsFile is None:
             with self._get_file() as h5f:
-                path = self.path + SourceItem.XSocsFilePath
+                path = self.path + '/' + SourceItem.XSocsFilePath
                 group = h5f.get(path)
                 if group:
                     self.__xsocsFile = group.file.filename
@@ -74,15 +74,15 @@ class SourceItem(ProjectItem):
             raise ValueError('Xsocs input file is already set.')
 
         # adding a link to the source file
-        xsocsH5 = h5f = XsocsH5(xsocs_f)
+        xsocsH5 = XsocsH5(xsocs_f)
         self.__xsocsFile = xsocs_f
         path = '/'.join([self.path, SourceItem.XSocsFilePath])
         self.add_file_link(path, xsocs_f, '/')
 
         # adding parameter values to the source folder
-        entries = h5f.entries()
+        entries = xsocsH5.entries()
         # TODO : make sure that all parameters are consistent
-        scan_params = h5f.scan_params(entries[0])
+        scan_params = xsocsH5.scan_params(entries[0])
         path_tpl = '{0}/{1}/{{0}}'.format(self.path, SourceItem.AcqParamsPath)
 
         for key, value in scan_params.items():
@@ -111,14 +111,14 @@ class SourceItem(ProjectItem):
                                  path_tpl.format(entry_stripped,
                                                  'intensity'),
                                  processLevel=ProcessId.Input)
-            data = h5f.image_cumul(entry)
-            pos_0, pos_1 = h5f.scan_positions(entry)
+            data = xsocsH5.image_cumul(entry)
+            pos_0, pos_1 = xsocsH5.scan_positions(entry)
 
             # intensity as a scatter plot
             dataGrp.setScatter(pos_0, pos_1, data)
 
             # intensity as an image
-            scan_params = h5f.scan_params(entry)
+            scan_params = xsocsH5.scan_params(entry)
             # xSlice = np.s_[0:scan_params['motor_0_steps']:1]
             # ySlice = np.s_[0::scan_params['motor_0_steps']]
             # dataGrp.setImageFromScatter(xSlice, ySlice)

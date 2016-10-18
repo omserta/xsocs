@@ -46,7 +46,7 @@ def viewWidgetFromProjectEvent(project, event):
     index = event.index
     processId = index.data(ModelRoles.XsocsProcessId)
     eventData = event.data
-    print index, processId, eventData
+
     widgetCls = None
     xsocsType = index.data(ModelRoles.XsocsNodeType)
     if xsocsType == h5py.ExternalLink:
@@ -72,15 +72,6 @@ def viewWidgetFromProjectEvent(project, event):
         widget.setPlotData(*plotData)
         return widget
 
-    #     # show raw data
-    #     plotData = event.plotData()
-    #     x, y, data = plotData
-    #     widget = RealSpaceWidget(index)
-    #     widget.setPlotData(x, y, data)
-    # elif processLevel == XsocsProject.XsocsQSpace:
-    #     # show qspace data
-    #     pass
-    # else:
     print('Nothing to DO')
     return None
 

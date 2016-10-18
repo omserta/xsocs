@@ -29,7 +29,7 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-
+import weakref
 from functools import partial
 from contextlib import contextmanager
 
@@ -146,6 +146,22 @@ class XsocsH5Base(object):
     def add_file_link(self, in_path, file_name, ext_path):
         with self._get_file() as h5_file:
             h5_file[in_path] = _h5py.ExternalLink(file_name, ext_path)
+
+    @contextmanager
+    def item_context(self, item_path, **kwargs):
+        """
+        Context manager for the image dataset.
+        WARNING: only to be used as a context manager!
+        WARNING: the data set must exist. see also QSpaceH5Writer.init_cube
+        """
+        no_proxy = kwargs.get('no_proxy') is not None
+        with self._get_file() as h5_file:
+            item = h5_file[item_path]
+            if no_proxy:
+                yield item
+            else:
+                yield weakref.proxy(item)
+            del item
 
     def copy_group(self, src_h5f, src_path, dest_path):
         """

@@ -28,7 +28,6 @@ __authors__ = ["D. Naudet"]
 __date__ = "01/06/2016"
 __license__ = "MIT"
 
-import os
 import time
 import ctypes
 import multiprocessing as mp
@@ -39,6 +38,7 @@ import numpy as np
 
 from scipy.optimize import leastsq
 #from silx.math import curve_fit
+from ..io import QSpaceH5
 
 disp_times = False
 
@@ -105,22 +105,19 @@ def peak_fit(qspace_f,
     if fit_type == FitTypes.CENTROID:
         fit_fn = _qspace_centroid
 
-    with h5py.File(qspace_f, 'r') as qspace_h5:
+    with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
+        with qspace_h5.qspace_dset_ctx() as dset:
+            qdata_shape = dset.shape
 
-        q_x = qspace_h5['bins_edges/x'][:]
-        q_y = qspace_h5['bins_edges/y'][:]
-        q_z = qspace_h5['bins_edges/z'][:]
-        qdata = qspace_h5['data/qspace']
-
-        n_points = qdata.shape[0]
+        n_points = qdata_shape[0]
 
         if indices is None:
             indices = range(n_points)
 
         n_indices = len(indices)
 
-        x_pos = qspace_h5['geom/x'][indices]
-        y_pos = qspace_h5['geom/y'][indices]
+        x_pos = qspace_h5.sample_x[indices]
+        y_pos = qspace_h5.sample_y[indices]
 
         shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
         # TODO : find something better
@@ -128,9 +125,32 @@ def peak_fit(qspace_f,
         success = np.ndarray((n_indices,), dtype=np.bool)
         success[:] = True
 
-        # this has to be done otherwise h5py complains about not being
-        # able to open compressed datasets from other processes
-        del qdata
+    # with h5py.File(qspace_f, 'r') as qspace_h5:
+    #
+    #     q_x = qspace_h5['bins_edges/x'][:]
+    #     q_y = qspace_h5['bins_edges/y'][:]
+    #     q_z = qspace_h5['bins_edges/z'][:]
+    #     qdata = qspace_h5['data/qspace']
+    #
+    #     n_points = qdata.shape[0]
+    #
+    #     if indices is None:
+    #         indices = range(n_points)
+    #
+    #     n_indices = len(indices)
+    #
+    #     x_pos = qspace_h5['geom/x'][indices]
+    #     y_pos = qspace_h5['geom/y'][indices]
+    #
+    #     shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
+    #     # TODO : find something better
+    #     shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
+    #     success = np.ndarray((n_indices,), dtype=np.bool)
+    #     success[:] = True
+    #
+    #     # this has to be done otherwise h5py complains about not being
+    #     # able to open compressed datasets from other processes
+    #     del qdata
 
     results = np.ndarray((n_indices, 11), dtype=np.double)
     results[:, 0] = x_pos
@@ -256,17 +276,29 @@ def _fit_process(th_idx):
         results = np.frombuffer(shared_res)
         results.shape = result_shape
         success = np.frombuffer(shared_success, dtype=bool)
+        qspace_h5 = QSpaceH5.QSpaceH5(qspace_f)
 
         #TODO : timeout to check if it has been canceled
         #read_lock.acquire()
-        with h5py.File(qspace_f, 'r') as qspace_h5:
-            q_x = qspace_h5['bins_edges/x'][:]
-            q_y = qspace_h5['bins_edges/y'][:]
-            q_z = qspace_h5['bins_edges/z'][:]
-            q_shape = qspace_h5['data/qspace'].shape
-            q_dtype = qspace_h5['data/qspace'].dtype
-            mask = np.where(qspace_h5['histo'][:] > 0)
-            weights = qspace_h5['histo'][:][mask]
+        # with h5py.File(qspace_f, 'r') as qspace_h5:
+        #     q_x = qspace_h5['bins_edges/x'][:]
+        #     q_y = qspace_h5['bins_edges/y'][:]
+        #     q_z = qspace_h5['bins_edges/z'][:]
+        #     q_shape = qspace_h5['data/qspace'].shape
+        #     q_dtype = qspace_h5['data/qspace'].dtype
+        #     mask = np.where(qspace_h5['histo'][:] > 0)
+        #     weights = qspace_h5['histo'][:][mask]
+        with qspace_h5 as qspace_h5:
+            q_x = qspace_h5.qx
+            q_y = qspace_h5.qy
+            q_z = qspace_h5.qz
+            with qspace_h5.qspace_dset_ctx() as dset:
+                q_shape = dset.shape
+                q_dtype = dset.dtype
+            histo = qspace_h5.histo
+            mask = np.where(histo > 0)
+            weights = histo[mask]
+
         #read_lock.release()
         #print weights.max(), min(weights)
         cube = np.ascontiguousarray(np.zeros(q_shape[1:]),
@@ -287,10 +319,14 @@ def _fit_process(th_idx):
                 print('Processing cube {0}/{1}.'.format(i_cube, result_shape[0]))
 
             t0 = time.time()
-            with h5py.File(qspace_f, 'r') as qspace_h5:
-                qspace_h5['data/qspace'].read_direct(cube,
-                                                source_sel=np.s_[i_cube],
-                                                dest_sel=None)
+            # with h5py.File(qspace_f, 'r') as qspace_h5:
+            #     qspace_h5['data/qspace'].read_direct(cube,
+            #                                     source_sel=np.s_[i_cube],
+            #                                     dest_sel=None)
+            with qspace_h5.qspace_dset_ctx() as dset:
+                dset.read_direct(cube,
+                                 source_sel=np.s_[i_cube],
+                                 dest_sel=None)
             t_read += time.time() - t0
 
             t0 = time.time()

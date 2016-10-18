@@ -30,9 +30,11 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 
-from silx.gui import qt as Qt
+import weakref
+
 import h5py
 from silx.gui import icons
+from silx.gui import qt as Qt
 from .ModelDef import nodeFactory, ModelColumns, ModelRoles
 
 
@@ -68,6 +70,9 @@ class ProjectNode(object):
             self.setData(colIdx,
                          data=self.nodeType,
                          role=ModelRoles.XsocsNodeType)
+            self.setData(colIdx,
+                         data=weakref.proxy(self),
+                         role=ModelRoles.InternalDataRole)
 
     def parent(self):
         return self.__parent
@@ -141,6 +146,7 @@ class DelegateEvent(object):
 class NodeDelegate(Qt.QWidget):
     sigEditorEvent = Qt.Signal(object)
 
+    # noinspection PyUnusedLocal
     def __init__(self, parent, option, index):
         super(NodeDelegate, self).__init__(parent)
         self.__index = Qt.QPersistentModelIndex(index)

@@ -31,31 +31,37 @@ __date__ = "15/09/2016"
 
 
 import h5py
-from .ModelDef import NodeClassDef, ModelColumns, ModelRoles
+from silx.gui import qt as Qt, icons
+from .ModelDef import NodeClassDef, ModelColumns
 from .ProjectNode import ProjectNode
 
 
-@NodeClassDef(nodeType='RootNode')
-class RootNode(ProjectNode):
-    pass
+@NodeClassDef(nodeType=h5py.Dataset, icon=None, editor=None)
+class DatasetNode(ProjectNode):
 
-
-@NodeClassDef(nodeType=h5py.Group, icon='folder', editor=None)
-class GroupNode(ProjectNode):
-    pass
-
-
-class XsocsNode(ProjectNode):
     def __init__(self, *args, **kwargs):
-        super(XsocsNode, self).__init__(*args, **kwargs)
-        self.setData(ModelColumns.NameColumn,
-                     data=True,
-                     role=ModelRoles.IsXsocsNodeRole)
+        super(DatasetNode, self).__init__(*args, **kwargs)
+        iconTpl = 'item-{0}dim'
         with h5py.File(self.projectFile) as h5f:
             item = h5f[self.path]
-            processId = item.attrs.get('XsocsLevel')
+            ndims = len(item.shape)
+            if ndims == 0:
+                text = str(item[()])
+            else:
+                text = '...'
             del item
-        for colIdx in range(ModelColumns.ColumnMax):
-            self.setData(colIdx,
-                         data=processId,
-                         role=ModelRoles.XsocsProcessId)
+
+        icon = iconTpl.format(ndims)
+        try:
+            icon = icons.getQIcon(icon)
+        except ValueError:
+            icon = icons.getQIcon('item-ndim')
+
+        self.setData(ModelColumns.NameColumn, icon, Qt.Qt.DecorationRole)
+
+        self.setData(ModelColumns.ValueColumn,
+                     text,
+                     role=Qt.Qt.DisplayRole)
+
+    def childCount(self):
+        return 0

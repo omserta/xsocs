@@ -72,7 +72,7 @@ class XsocsGui(Qt.QMainWindow):
         mdi = self.centralWidget()
         widget = viewWidgetFromProjectEvent(self.__project, event)
         if widget is None:
-            print 'UNKNOWN VIEW EVENT'
+            print('UNKNOWN VIEW EVENT')
             return
         widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
         try:
@@ -86,7 +86,7 @@ class XsocsGui(Qt.QMainWindow):
         mdi = self.centralWidget()
         widget = processWidgetFromViewEvent(self.__project, event, parent=self)
         if widget is None:
-            print 'UNKNOWN PROCESS EVENT'
+            print('UNKNOWN PROCESS EVENT')
             return
         widget.setWindowFlags(Qt.Qt.Dialog)
         widget.setWindowModality(Qt.Qt.WindowModal)
@@ -95,7 +95,7 @@ class XsocsGui(Qt.QMainWindow):
         widget.show()
 
     def __processDone(self, event):
-        print 'event', event
+        print('event', event)
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)

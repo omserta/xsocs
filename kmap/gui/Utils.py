@@ -30,28 +30,48 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 import os
+import h5py
 
 from silx.gui.hdf5 import Hdf5TreeView
 
-from .view.RealSpaceWidget import RealSpaceWidget, RealSpaceWidgetEvent
-from .process.RecipSpaceWidget import RecipSpaceWidget
 from .model.ModelDef import ModelRoles
-import h5py
-from .project import XsocsProject
+from .project.ProjectDef import ProcessId
+from .project.HybridItem import HybridItem
+from .process.RecipSpaceWidget import RecipSpaceWidget
+from .view.RealSpaceWidget import RealSpaceWidget, RealSpaceWidgetEvent
 
 
+# TODO : something a bit more... flexible
 def viewWidgetFromProjectEvent(project, event):
-    # item = event.item
     index = event.index
-    # processLevel = item.processLevel
-
-    widget = None
+    processId = index.data(ModelRoles.XsocsProcessId)
+    eventData = event.data
+    print index, processId, eventData
+    widgetCls = None
     xsocsType = index.data(ModelRoles.XsocsNodeType)
     if xsocsType == h5py.ExternalLink:
         widget = Hdf5TreeView()
         widget.findHdf5TreeModel().appendFile(event.data)
+        return widget
 
-    # if processLevel == XsocsProject.XsocsInput:
+    if xsocsType == 'HybridItem':
+        if eventData.evtType == 'scatter':
+            plotData = HybridItem(project.filename,
+                                  eventData.path).getScatter()
+        elif eventData.evtType == 'image':
+            plotData = HybridItem(project.filename,
+                                  eventData.path).getImage()
+        else:
+            plotData = None
+
+    if processId == ProcessId.Input:
+        widgetCls = RealSpaceWidget
+
+    if widgetCls is not None and plotData is not None:
+        widget = widgetCls(index)
+        widget.setPlotData(*plotData)
+        return widget
+
     #     # show raw data
     #     plotData = event.plotData()
     #     x, y, data = plotData
@@ -61,9 +81,8 @@ def viewWidgetFromProjectEvent(project, event):
     #     # show qspace data
     #     pass
     # else:
-    #     raise ValueError('Unknown process level {0}.'.format(processLevel))
-
-    return widget
+    print('Nothing to DO')
+    return None
 
 
 # TODO : something better!

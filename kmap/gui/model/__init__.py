@@ -30,3 +30,8 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 from . import Nodes  # noqa
+
+# loading the modules to register the node types
+from . import DataSetNode as _DataSetNode
+from . import ExternalLinkNode as _ExternalLinkNode
+from . import HybridNode as _HybridNode

@@ -63,6 +63,7 @@ class RecipSpaceConverter(object):
 
         self.__pos_indices = None
         self.__rect_roi = None
+        self.__roi_shape = None
 
         self.reset(data_h5f, output_f)
 
@@ -123,7 +124,7 @@ class RecipSpaceConverter(object):
             raise ValueError('Cannot set a rectangular ROI, pos_indices are '
                              'already set, remove them first.')
         self.__rect_roi = rect_roi
-        self.__pos_indices = self.__indices_from_roi()
+        self.__pos_indices, self.__roi_shape = self.__indices_from_roi()
 
     def __indices_from_roi(self):
         # TODO : check all positions
@@ -131,6 +132,7 @@ class RecipSpaceConverter(object):
         with XsocsH5.XsocsH5(self.__data_h5f) as xsocsH5:
             entries = xsocsH5.entries()
             x_pos, y_pos = xsocsH5.scan_positions(entries[0])
+            scan_params = xsocsH5.scan_params(entries[0])
 
         if self.__rect_roi is None:
             return np.arange(len(x_pos))
@@ -140,9 +142,28 @@ class RecipSpaceConverter(object):
         y_min = self.__rect_roi[2]
         y_max = self.__rect_roi[3]
 
+        # we cant do this because the points arent perfectly aligned!
+        # we could end up with non rectangular rois
         pos_indices = np.where((x_pos >= x_min) & (x_pos <= x_max) &
                                (y_pos >= y_min) & (y_pos <= y_max))[0]
-        return pos_indices
+        # # TODO : rework this
+        # n_x = scan_params['motor_0_steps']
+        # n_y = scan_params['motor_1_steps']
+        # steps_0 = scan_params['motor_0_steps']
+        # steps_1 = scan_params['motor_1_steps']
+        # x = np.linspace(scan_params['motor_0_start'],
+        #                 scan_params['motor_0_end'], steps_0, endpoint=False)
+        # y = np.linspace(scan_params['motor_1_start'],
+        #                 scan_params['motor_1_end'], steps_1, endpoint=False)
+
+
+        # x_pos = x_pos[]
+        #
+        # x_pos.shape = (n_y, n_x)
+        # y_pos.shape = (n_y, n_x)
+        # pos_indices_2d = np.where((x_pos >= x_min) & (x_pos <= x_max) &
+        #                           (y_pos >= y_min) & (y_pos <= y_max))[0]
+        return pos_indices, (-1, -1) #pos_indices_2d.shape
 
     output_f = property(__get_output_f)
 
@@ -293,6 +314,8 @@ class RecipSpaceConverter(object):
         Binning applied to the image before converting to qspace
         """
         err = False
+        if image_binning is None:
+            image_binning = (1, 1)
         if len(image_binning) != 2:
             raise ValueError('image_binning must be a two elements array.')
         if None in image_binning:
@@ -483,7 +506,7 @@ def img_2_qspace(data_h5f,
                  beam_energy=None,
                  center_chan=None,
                  chan_per_deg=None,
-                 nav=(4, 4),
+                 image_binning=(4, 4),
                  rect_roi=None,
                  pos_indices=None,
                  n_proc=None,
@@ -518,9 +541,9 @@ def img_2_qspace(data_h5f,
         this will overwrite the values found (if any) in the HDF5 file.
     :type chan_per_deg: *optional* `array_like`
 
-    :param nav: size of the averaging window to use when downsampling
+    :param image_binning: size of the averaging window to use when downsampling
         the images (TODO : rephrase)
-    :type nav: *optional* `array_like`
+    :type image_binning: *optional* `array_like`
 
     :param rect_roi: rectangular region which will be converted to qspace.
         This must be a four elements array containing x_min, x_max, y_min,
@@ -545,7 +568,14 @@ def img_2_qspace(data_h5f,
     elif pos_indices is not None:
         converter.pos_indices = pos_indices
 
-    converter.convert(overwrite=overwrite)
+    converter.image_binning = image_binning
+
+    converter.n_proc = n_proc
+
+    converter.convert(overwrite=overwrite,
+                      beam_energy=beam_energy,
+                      center_chan=center_chan,
+                      chan_per_deg=chan_per_deg)
 
 def _img_2_qspace(data_h5f,
                   output_f,
@@ -557,6 +587,7 @@ def _img_2_qspace(data_h5f,
                   pixelsize=None,  # unused at the moment
                   image_binning=(1, 1),
                   pos_indices=None,
+                  roi_shape=(-1, -1),
                   n_proc=None,
                   overwrite=False,
                   shared_progress=None,
@@ -631,9 +662,6 @@ def _img_2_qspace(data_h5f,
     if img_size is None or 0 in img_size:
         raise ValueError('Invalid image size (img_size={0}).'
                          ''.format(img_size))
-
-    # TODO : implement ROI
-    roi = [0, img_size[0], 0, img_size[1]]
 
     # TODO value testing
     if pos_indices is None:
@@ -813,6 +841,7 @@ def _img_2_qspace(data_h5f,
                         qy_idx,
                         qz_idx,
                         histo,
+                        np.array(roi_shape, dtype=int),
                         compression='lzf',
                         qspace_chunks=chunks,
                         qspace_sum_chunks=qspace_sum_chunks,
@@ -960,6 +989,7 @@ def _create_result_file(h5_fn,
                         bins_y,
                         bins_z,
                         histo,
+                        roi_shape,
                         compression='lzf',
                         qspace_chunks=None,
                         qspace_sum_chunks=None,
@@ -986,6 +1016,7 @@ def _create_result_file(h5_fn,
     qspace_h5.set_qx(bins_x)
     qspace_h5.set_qy(bins_y)
     qspace_h5.set_qz(bins_z)
+    qspace_h5.set_image_shape(roi_shape)
 
 
 def _to_qspace(th_idx,

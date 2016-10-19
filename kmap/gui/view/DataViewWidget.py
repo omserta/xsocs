@@ -37,7 +37,7 @@ class DataViewWidget(Qt.QMainWindow):
 
     def __init__(self, index, parent=None, **kwargs):
         super(DataViewWidget, self).__init__(parent, **kwargs)
-        self.__index = index
+        self.__index = Qt.QPersistentModelIndex(index)
 
     def _emitEvent(self, event):
         self.sigProcessApplied.emit(event)

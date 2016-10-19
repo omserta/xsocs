@@ -80,7 +80,7 @@ class QSpaceItem(ProjectItem):
         sumPath = qspaceRoot + '/' + QSpaceH5.qspace_sum_path
         xPath = qspaceRoot + '/' + QSpaceH5.sample_x_path
         yPath = qspaceRoot + '/' + QSpaceH5.sample_y_path
-        print sumPath, xPath, yPath
+
         sumLink = h5py.SoftLink(sumPath)
         xLink = h5py.SoftLink(xPath)
         yLink = h5py.SoftLink(yPath)

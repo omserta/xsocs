@@ -46,6 +46,7 @@ class QSpaceH5(XsocsH5Base):
     sample_x_path = 'Data/sample_x'
     sample_y_path = 'Data/sample_y'
     qspace_sum_path = 'Data/qspace_sum'
+    image_shape_path = 'Data/image_shape'
 
     def __init__(self, h5_f, mode='r'):
         super(QSpaceH5, self).__init__(h5_f, mode=mode)
@@ -76,6 +77,10 @@ class QSpaceH5(XsocsH5Base):
 
     qspace = property(lambda self: self._get_array_data(QSpaceH5.qspace_path))
 
+    def qspace_slice(self, index):
+        with self.item_context(self.qspace_path) as dset:
+            return dset[index]
+
     qx = property(lambda self: self._get_array_data(QSpaceH5.qx_path))
 
     qy = property(lambda self: self._get_array_data(QSpaceH5.qy_path))
@@ -92,6 +97,9 @@ class QSpaceH5(XsocsH5Base):
 
     qspace_sum = property(lambda self:
                           self._get_array_data(QSpaceH5.qspace_sum_path))
+
+    image_shape = property(lambda self:
+                           self._get_array_data(QSpaceH5.image_shape_path))
 
 
 class QSpaceH5Writer(QSpaceH5):
@@ -121,7 +129,8 @@ class QSpaceH5Writer(QSpaceH5):
                           qspace_shape,
                           (n_positions,),
                           (n_positions,),
-                          (n_positions,)]
+                          (n_positions,),
+                          (2,)]
                 paths = [QSpaceH5.qspace_path,
                          QSpaceH5.qx_path,
                          QSpaceH5.qy_path,
@@ -129,7 +138,8 @@ class QSpaceH5Writer(QSpaceH5):
                          QSpaceH5.histo_path,
                          QSpaceH5.sample_x_path,
                          QSpaceH5.sample_y_path,
-                         QSpaceH5.qspace_sum_path]
+                         QSpaceH5.qspace_sum_path,
+                         QSpaceH5.image_shape_path]
                 dtypes = [QSpaceH5Writer.cube_dtype,
                           QSpaceH5Writer.q_bins_dtype,
                           QSpaceH5Writer.q_bins_dtype,
@@ -137,10 +147,11 @@ class QSpaceH5Writer(QSpaceH5):
                           QSpaceH5Writer.histo_dtype,
                           QSpaceH5Writer.position_dtype,
                           QSpaceH5Writer.position_dtype,
-                          QSpaceH5Writer.cube_dtype]
+                          QSpaceH5Writer.cube_dtype,
+                          int]
                 chunks = [qspace_chunks,
                           None, None, None, None, None, None,
-                          qspace_sum_chunks]
+                          qspace_sum_chunks, None]
                 params = zip(shapes, paths, dtypes, chunks)
                 for shape, path, dtype, chunk in params:
                     h5f.require_dataset(path,
@@ -174,3 +185,6 @@ class QSpaceH5Writer(QSpaceH5):
         with self._get_file() as h5f:
             h5f[QSpaceH5.qspace_path][pos_idx] = qspace
             h5f[QSpaceH5.qspace_sum_path][pos_idx] = qspace_sum
+
+    def set_image_shape(self, image_shape):
+        self._set_array_data(QSpaceH5.image_shape_path, image_shape)

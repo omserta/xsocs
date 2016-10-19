@@ -768,8 +768,8 @@ def _spec_get_img_filenames(spec_h5_filename):
         regx = re.compile(_IMAGEFILE_LINE_PATTERN)
 
         for k_scan, v_scan in h5_f.items():
-            header = [s.decode()
-                      for s in v_scan['instrument/specfile/scan_header']]
+            header = v_scan['instrument/specfile/scan_header'][()]
+            header = header.decode().split('\n')
             imgfile_match = [m for line in header
                              if line.startswith('#C imageFile')
                              for m in [regx.match(line.strip())] if m]

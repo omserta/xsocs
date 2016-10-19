@@ -12,10 +12,18 @@ qspace_f = '/path/to/qspace.h5'
 # result file
 result_file = os.path.join(workdir, 'results.txt')
 
+# positions (on the sample) to convert to qspace
+# indices = array with indices (of the sample positions array)
+indices = None
+
+# number of processes to use
+# If None, will use the number of availble core (see multiprocessing.cpu_count)
+n_proc = None
+
 results, success = peak_fit.peak_fit(qspace_f,
-                                     indices=range(10),
+                                     indices=indice,
                                      fit_type=peak_fit.FitTypes.LEASTSQ,
-                                     n_proc=None)
+                                     n_proc=n_proc)
 
 with open(result_file, 'w+') as res_f:
     res_f.write('# X Y qx qy qz q I valid\n')

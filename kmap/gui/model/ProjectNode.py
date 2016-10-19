@@ -76,6 +76,7 @@ class ProjectNode(object):
 
     def reload(self):
         self.__children = None
+        self._children()
 
     def parent(self):
         return self.__parent

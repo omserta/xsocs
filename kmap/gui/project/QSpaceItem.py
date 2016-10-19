@@ -70,16 +70,17 @@ class QSpaceItem(ProjectItem):
         # adding a link to the source file
         qspaceH5 = QSpaceH5(qspace_f)
         self.__qspaceFile = qspace_f
-        qspaceRoot = '/'.join([self.path, QSpaceItem.QSpaceFilePath])
+        qspaceRoot = '/' + '/'.join([self.path, QSpaceItem.QSpaceFilePath])
         self.add_file_link(qspaceRoot, qspace_f, '/')
 
+        sumItemPath = '/'.join([self.path, QSpaceItem.SumPath])
         intensityGrp = HybridItem(self.filename,
-                                  QSpaceItem.SumPath,
+                                  sumItemPath,
                                   processLevel=ProcessId.QSpace)
-
         sumPath = qspaceRoot + '/' + QSpaceH5.qspace_sum_path
         xPath = qspaceRoot + '/' + QSpaceH5.sample_x_path
         yPath = qspaceRoot + '/' + QSpaceH5.sample_y_path
+        print sumPath, xPath, yPath
         sumLink = h5py.SoftLink(sumPath)
         xLink = h5py.SoftLink(xPath)
         yLink = h5py.SoftLink(yPath)

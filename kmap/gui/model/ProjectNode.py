@@ -74,6 +74,9 @@ class ProjectNode(object):
                          data=weakref.proxy(self),
                          role=ModelRoles.InternalDataRole)
 
+    def reload(self):
+        self.__children = None
+
     def parent(self):
         return self.__parent
 

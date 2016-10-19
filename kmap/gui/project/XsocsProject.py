@@ -60,6 +60,9 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
 
         return self.__projectModel
 
+    def reload(self):
+        self.__model().refresh()
+
     def view(self, parent=None):
         view = ProjectView(parent)
         view.setModel(self.__model())

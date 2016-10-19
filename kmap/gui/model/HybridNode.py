@@ -33,38 +33,41 @@ from functools import partial
 from collections import namedtuple
 
 from silx.gui import qt as Qt, icons
-from .ModelDef import NodeClassDef
-from .ProjectNode import DelegateEvent, NodeDelegate
+
 from .Nodes import XsocsNode
+from ..project.HybridItem import HybridItem
+from .ModelDef import NodeClassDef, ModelRoles
+from .ProjectNode import DelegateEvent, NodeDelegate
 
 
 class HybridItemEvent(DelegateEvent):
     HybridEventData = namedtuple('HybridEventData', ['evtType', 'path'])
-    def plotData(self):
-        # eventType = self.data
-        # if eventType == 'scatter':
-        #     return self.item.getScatter()
-        # if eventType == 'image':
-        #     return self.item.getImage()
-        return None
 
 
 class HybridItemDelegate(NodeDelegate):
 
     def __init__(self, parent, option, index):
         super(HybridItemDelegate, self).__init__(parent, option, index)
+        if not index.isValid():
+            return
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        icon = icons.getQIcon('item-1dim')
-        bn = Qt.QToolButton()
-        bn.setIcon(icon)
-        bn.clicked.connect(partial(self.__onClicked, eventType='scatter'))
-        layout.addWidget(bn, Qt.Qt.AlignLeft)
-        icon = icons.getQIcon('item-2dim')
-        bn = Qt.QToolButton()
-        bn.setIcon(icon)
-        bn.clicked.connect(partial(self.__onClicked, eventType='image'))
-        layout.addWidget(bn, Qt.Qt.AlignLeft)
+
+        node = index.data(ModelRoles.InternalDataRole)
+        item = HybridItem(node.projectFile, node.path)
+
+        if item.hasScatter():
+            icon = icons.getQIcon('item-1dim')
+            bn = Qt.QToolButton()
+            bn.setIcon(icon)
+            bn.clicked.connect(partial(self.__onClicked, eventType='scatter'))
+            layout.addWidget(bn, Qt.Qt.AlignLeft)
+        if item.hasImage():
+            icon = icons.getQIcon('item-2dim')
+            bn = Qt.QToolButton()
+            bn.setIcon(icon)
+            bn.clicked.connect(partial(self.__onClicked, eventType='image'))
+            layout.addWidget(bn, Qt.Qt.AlignLeft)
         layout.addStretch(1)
 
     def __onClicked(self, eventType=None):

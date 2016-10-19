@@ -47,6 +47,16 @@ class HybridItem(ProjectItem):
     # def setImageFromScatter(self, xSlice, ySlice):
     #     self._commit(imageSlice=(xSlice, ySlice))
 
+    def hasImage(self):
+        with self._get_file() as h5f:
+            attr = h5f[self.path].attrs.get('XsocsImage') is not None
+        return attr
+
+    def hasScatter(self):
+        with self._get_file() as h5f:
+            attr = h5f[self.path].attrs.get('XsocsScatter') is not None
+        return attr
+
     def getScatter(self):
         with self._get_file() as h5f:
             grp = h5f.get(self.path)

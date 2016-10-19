@@ -37,8 +37,13 @@ from silx.gui.hdf5 import Hdf5TreeView
 from .model.ModelDef import ModelRoles
 from .project.ProjectDef import ProcessId
 from .project.HybridItem import HybridItem
-from .process.RecipSpaceWidget import RecipSpaceWidget
-from .view.RealSpaceWidget import RealSpaceWidget, RealSpaceWidgetEvent
+from .process.RecipSpaceWidget import (RecipSpaceWidget,
+                                       RecipSpaceWidgetEvent)
+from .view.RealSpaceViewWidget import (RealSpaceViewWidget,
+                                       RealSpaceViewWidgetEvent)
+from .view.QspaceViewWidget import (QSpaceViewWidget,
+                                    QSpaceViewWidgetEvent)
+from .project.QSpaceItem import QSpaceItem
 
 
 # TODO : something a bit more... flexible
@@ -65,7 +70,9 @@ def viewWidgetFromProjectEvent(project, event):
             plotData = None
 
     if processId == ProcessId.Input:
-        widgetCls = RealSpaceWidget
+        widgetCls = RealSpaceViewWidget
+    elif processId == ProcessId.QSpace:
+        widgetCls = QSpaceViewWidget
 
     if widgetCls is not None and plotData is not None:
         widget = widgetCls(index)
@@ -92,7 +99,7 @@ def processWidgetFromViewEvent(project, event, parent=None):
     widget = None
     index = event.index
 
-    if isinstance(event, RealSpaceWidgetEvent):
+    if isinstance(event, RealSpaceViewWidgetEvent):
         xsocsPrefix = os.path.basename(project.xsocsFile).rpartition('.')[0]
         template = '{0}_qspace_{{0:>04}}.h5'.format(xsocsPrefix)
         output_f = nextFileName(project.workdir, template)
@@ -104,3 +111,19 @@ def processWidgetFromViewEvent(project, event, parent=None):
                                   image_binning=None,
                                   rect_roi=event.data)
     return widget
+
+
+# TODO : rework this
+def processDoneEvent(project, event):
+    eventData = event.data
+
+    if isinstance(event, RecipSpaceWidgetEvent):
+        qspaceH5 = eventData.qspaceH5
+        prefix = os.path.basename(qspaceH5).rpartition('.')[0]
+        processLevel = ProcessId.QSpace
+        itemPath = 'Qspace/' + prefix
+        item = QSpaceItem(project.filename,
+                          itemPath,
+                          processLevel=processLevel)
+        item.qspaceFile = qspaceH5
+        project.reload()

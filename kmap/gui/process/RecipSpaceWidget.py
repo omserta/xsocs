@@ -161,7 +161,7 @@ class ConversionParamsWidget(Qt.QWidget):
 
 
 class RecipSpaceWidgetEvent(ProcessWidgetEvent):
-    pass
+    RecipSpaceEventData = namedtuple('RecipSpaceEventData', ['qspaceH5'])
 
 
 class RecipSpaceWidget(ProcessWidget):
@@ -482,7 +482,10 @@ class RecipSpaceWidget(ProcessWidget):
             self.hide()
         else:
             self.__qspaceH5 = None
-        self._emitEvent(RecipSpaceWidgetEvent(self, self._processData()))
+        processedData = self._processData()
+        evtData = RecipSpaceWidgetEvent.RecipSpaceEventData(
+            qspaceH5=processedData)
+        self._emitEvent(RecipSpaceWidgetEvent(self, evtData))
 
     qspaceH5 = property(lambda self: self.__qspaceH5)
 

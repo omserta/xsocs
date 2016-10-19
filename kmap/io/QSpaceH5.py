@@ -143,7 +143,6 @@ class QSpaceH5Writer(QSpaceH5):
                           qspace_sum_chunks]
                 params = zip(shapes, paths, dtypes, chunks)
                 for shape, path, dtype, chunk in params:
-                    print shape, path, dtype, chunk
                     h5f.require_dataset(path,
                                         shape=shape,
                                         dtype=dtype,

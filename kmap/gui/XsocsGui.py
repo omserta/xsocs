@@ -31,7 +31,8 @@ from silx.gui import qt as Qt
 from .project.XsocsProject import XsocsProject
 from .MergeWidget import MergeWidget
 from .Utils import (viewWidgetFromProjectEvent,
-                    processWidgetFromViewEvent)
+                    processWidgetFromViewEvent,
+                    processDoneEvent)
 from .Widgets import (AcqParamsWidget,
                       AdjustedLineEdit,
                       AdjustedPushButton)
@@ -95,7 +96,7 @@ class XsocsGui(Qt.QMainWindow):
         widget.show()
 
     def __processDone(self, event):
-        print('event', event)
+        processDoneEvent(self.__project, event)
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)
@@ -175,6 +176,7 @@ class XsocsGui(Qt.QMainWindow):
         openAct = Qt.QAction(icon, '&Open', self)
         openAct.setShortcuts(Qt.QKeySequence.Open)
         openAct.setStatusTip('Open session')
+        openAct.triggered.connect(self.__loadProject)
         actions['open'] = openAct
 
         # new session
@@ -283,6 +285,22 @@ class XsocsGui(Qt.QMainWindow):
         self.move(settings.value("MainWindow/pos", Qt.QPoint(200, 200)))
         self.restoreState(settings.value("MainWindow/state", Qt.QByteArray()))
         settings.endGroup()
+
+    def __loadProject(self, checked=None):
+        dialog = Qt.QFileDialog(parent=self,
+                                caption='Select an XSOCS project file',
+                                filter=('Project files (*.ws);;'
+                                        'Any files (*)'))
+        dialog.setFileMode(Qt.QFileDialog.ExistingFile)
+        dialog.setModal(True)
+        ans = dialog.exec_()
+        selectedFiles = dialog.selectedFiles()
+        dialog.deleteLater()
+        if not ans:
+            return False
+        projectH5 = selectedFiles[0]
+
+        return self.__setupWorkspace(ws_file=projectH5)
 
     def __loadData(self, checked=None, xsocsH5=None):
         if xsocsH5 is None:

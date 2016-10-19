@@ -98,6 +98,11 @@ class ProjectModel(Qt.QAbstractItemModel):
             return self.createIndex(row, column, child)
         return Qt.QModelIndex()
 
+    def refresh(self):
+        self.beginResetModel()
+        self.__root.reload()
+        self.endResetModel()
+
     def rowCount(self, parent=Qt.QModelIndex(), **kwargs):
         if not parent.isValid():
             node = self.__root

@@ -150,18 +150,22 @@ class RectRoiWidget(Qt.QWidget):
         self.__display(event['xdata'], event['ydata'])
 
 
-class RealSpaceWidgetEvent(DataViewEvent):
+class RealSpaceViewWidgetEvent(DataViewEvent):
     pass
 
 
-class RealSpaceWidget(DataViewWidget):
+class RealSpaceViewWidget(DataViewWidget):
 
     plot = property(lambda self: self.__plotWindow)
 
     def __init__(self, index, parent=None, **kwargs):
-        super(RealSpaceWidget, self).__init__(index, parent=parent)
+        super(RealSpaceViewWidget, self).__init__(index, parent=parent)
 
-        self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True, **kwargs)
+        self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True,
+                                                    curveStyle=False,
+                                                    mask=False,
+                                                    roi=False,
+                                                    **kwargs)
         plotWindow.setKeepDataAspectRatio(True)
         plotWindow.setActiveCurveHandling(False)
 
@@ -209,7 +213,7 @@ class RealSpaceWidget(DataViewWidget):
                              ''.format(data.ndim))
 
     def __roiApplied(self, roi):
-        self._emitEvent(RealSpaceWidgetEvent(self, roi))
+        self._emitEvent(RealSpaceViewWidgetEvent(self, roi))
 
 
 if __name__ == '__main__':

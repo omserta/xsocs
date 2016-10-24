@@ -106,7 +106,11 @@ class SourceItem(ProjectItem):
                                                      SourceItem.DataPath,
                                                      SourceItem.EntriesPath)
         for entry in entries:
-            entry_stripped = entry.lstrip(xsocs_f_prefix)
+            idx = entry.find(xsocs_f_prefix)
+            if idx == 0:
+                entry_stripped = entry[len(xsocs_f_prefix):]
+            else:
+                entry_stripped = entry
             dataGrp = HybridItem(self.filename,
                                  path_tpl.format(entry_stripped,
                                                  'intensity'),

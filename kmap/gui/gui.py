@@ -35,7 +35,7 @@ from silx.gui import qt as Qt
 print('Using Qt {0}'.format(Qt.qVersion()))
 
 from .XsocsGui import XsocsGui
-from .MergeWidget import MergeWidget
+from .process.MergeWidget import MergeWidget
 from .process.RecipSpaceWidget import RecipSpaceWidget
 
 

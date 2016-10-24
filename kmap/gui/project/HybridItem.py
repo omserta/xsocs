@@ -130,14 +130,14 @@ class HybridItem(ProjectItem):
                 scatterGrp['y'] = y
                 if data is not None:
                     grp['scatter/data'] = data
-                grp.attrs.update({'XsocsScatter': 'scatter'})
+                grp.attrs['XsocsScatter'] = 'scatter'
 
             if image:
                 x, y, data = image
                 grp['image/data'] = data
                 grp['image/x'] = x
                 grp['image/y'] = y
-                grp.attrs.update({'XsocsImage': 'image'})
+                grp.attrs['XsocsImage'] = 'image'
             elif imageSlice:
                 xSlice, ySlice = imageSlice
                 dataSet = grp.get('scatter/data')
@@ -158,10 +158,10 @@ class HybridItem(ProjectItem):
                 imageGrp['y'] = y
                 imageGrp['data'] = dataSet
                 print imageGrp['x'], x
-                imageGrp.attrs.update({'XsocsShape': [yShape[0],
-                                                      xShape[0]]})
+                imageGrp.attrs['XsocsShape'] = [yShape[0],
+                                                      xShape[0]]
 
-                grp.attrs.update({'XsocsImage': 'image'})
+                grp.attrs['XsocsImage'] = 'image'
 
             if cube:
-                grp.attrs.update({'XsocsCube': 'cube'})
+                grp.attrs['XsocsCube'] = 'cube'

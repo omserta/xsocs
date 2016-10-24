@@ -160,7 +160,6 @@ class XsocsH5(XsocsH5Base):
         return cumul
 
     def scan_positions(self, entry):
-        # TODO : check the motors : could by x/y x/z y/z
         path = self.measurement_tpl.format(entry)
         params = self.scan_params(entry)
         m0 = '/adc{0}'.format(params['motor_0'][-1].upper())

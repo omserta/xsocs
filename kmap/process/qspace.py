@@ -718,8 +718,9 @@ def _img_2_qspace(data_h5f,
 
         entry_files = []
 
-        sample_x = master_h5.measurement(entries[0], 'adcX')
-        sample_y = master_h5.measurement(entries[0], 'adcY')
+        # sample_x = master_h5.measurement(entries[0], 'adcX')
+        # sample_y = master_h5.measurement(entries[0], 'adcY')
+        sample_x, sample_y = master_h5.scan_positions(entries[0])
 
         for entry_idx, entry in enumerate(entries):
             entry_file = master_h5.entry_filename(entry)

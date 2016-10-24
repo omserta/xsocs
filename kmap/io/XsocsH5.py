@@ -162,8 +162,12 @@ class XsocsH5(XsocsH5Base):
     def scan_positions(self, entry):
         # TODO : check the motors : could by x/y x/z y/z
         path = self.measurement_tpl.format(entry)
-        x_pos = self._get_array_data(path + '/adcX')
-        y_pos = self._get_array_data(path + '/adcY')
+        params = self.scan_params(entry)
+        m0 = '/adc{0}'.format(params['motor_0'][-1].upper())
+        m1 = '/adc{0}'.format(params['motor_1'][-1].upper())
+
+        x_pos = self._get_array_data(path + m0)
+        y_pos = self._get_array_data(path + m1)
         return (x_pos, y_pos)
 
     def scan_params(self, entry):

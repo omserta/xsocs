@@ -5,15 +5,13 @@ from types import MethodType
 from functools import partial
 from collections import namedtuple
 
-from ..util.id01_spec import Id01DataMerger
-from .Widgets import (AcqParamsWidget,
-                      AdjustedLabel,
-                      AdjustedLineEdit,
-                      AdjustedPushButton)
+from ...util.id01_spec import Id01DataMerger
+from ..Widgets import (AcqParamsWidget,
+                       AdjustedPushButton)
 
 from silx.gui import qt as Qt
 
-_MAX_BEAM_ENERGY_EV = 10**6
+_MAX_BEAM_ENERGY_EV = 10**7
 
 _MU_LOWER = u'\u03BC'
 _PHI_LOWER = u'\u03C6'
@@ -31,6 +29,7 @@ def _create_tmp_dir():
 
     qt_tmp_tpl = os.path.join(Qt.QDir.tempPath(),
                               'tmpXsocsXXXXXX')
+    tmp_dir = delete_tmp = q_tmp_dir = None
     try:
         q_tmp_dir = Qt.QTemporaryDir(qt_tmp_tpl)
         isValid = q_tmp_dir.isValid()
@@ -78,9 +77,6 @@ class _ScansSelectDialog(Qt.QDialog):
         table_widget.sizeHint = MethodType(_sizeHint, table_widget)
         table_widget.minimumSize = MethodType(_sizeHint, table_widget)
         table_widget.maximumSize = MethodType(_sizeHint, table_widget)
-        #layout.setSizeConstraint(Qt.QLayout.SetMinimumSize)
-        #table_widget.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.Fixed,
-                                   #Qt.QSizePolicy.Minimum))
         self.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.Fixed,
                                           Qt.QSizePolicy.Minimum))
 
@@ -106,11 +102,11 @@ class _ScansSelectDialog(Qt.QDialog):
             _add_col(command['motor_0'], self.M0_COL)
             _add_col(command['motor_0_start'], self.M0_START_COL)
             _add_col(command['motor_0_end'], self.M0_END_COL)
-            _add_col(command['motor_0_step'], self.M0_STEP_COL)
+            _add_col(command['motor_0_steps'], self.M0_STEP_COL)
             _add_col(command['motor_1'], self.M1_COL)
             _add_col(command['motor_1_start'], self.M1_START_COL)
             _add_col(command['motor_1_end'], self.M1_END_COL)
-            _add_col(command['motor_1_step'], self.M1_STEP_COL)
+            _add_col(command['motor_1_steps'], self.M1_STEP_COL)
 
             img_file = merger.get_scan_image(scan_id)
             item = Qt.QTableWidgetItem(os.path.basename(img_file))

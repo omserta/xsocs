@@ -27,15 +27,15 @@ from __future__ import absolute_import
 
 import os
 
+from .process.MergeWidget import MergeWidget
 from silx.gui import qt as Qt
-from .project.XsocsProject import XsocsProject
-from .MergeWidget import MergeWidget
 from .Utils import (viewWidgetFromProjectEvent,
                     processWidgetFromViewEvent,
                     processDoneEvent)
 from .Widgets import (AcqParamsWidget,
                       AdjustedLineEdit,
                       AdjustedPushButton)
+from .project.XsocsProject import XsocsProject
 from ..io import XsocsH5
 
 

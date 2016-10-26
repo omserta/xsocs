@@ -36,6 +36,7 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('project')
     config.add_subpackage('silx_imports')
     config.add_subpackage('view')
+    config.add_subpackage('widgets')
 
     return config
 

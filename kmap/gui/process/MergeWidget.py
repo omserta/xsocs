@@ -127,8 +127,19 @@ class _ScansSelectDialog(Qt.QDialog):
         table_widget.setColumnHidden(self.M1_END_COL, True)
         table_widget.setColumnHidden(self.M1_STEP_COL, True)
 
+        bnLayout = Qt.QGridLayout()
+        layout.addLayout(bnLayout, 1, 0)
+
+        selBn = Qt.QPushButton('Select')
+        unselBn = Qt.QPushButton('Unselect')
+        bnLayout.addWidget(selBn, 0, 0, Qt.Qt.AlignLeft)
+        bnLayout.addWidget(unselBn, 0, 1, Qt.Qt.AlignLeft)
+        selBn.clicked.connect(self.__selectClicked)
+        unselBn.clicked.connect(self.__unselectClicked)
+        bnLayout.setColumnStretch(2, 1)
+
         more_bn = AdjustedPushButton('More')
-        layout.addWidget(more_bn, 1, 0, Qt.Qt.AlignRight)
+        bnLayout.addWidget(more_bn, 0, 3, Qt.Qt.AlignRight)
 
         bn_box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Ok |
                                      Qt.QDialogButtonBox.Cancel)
@@ -142,6 +153,26 @@ class _ScansSelectDialog(Qt.QDialog):
         self.__table_widget = table_widget
         self.__more_bn = more_bn
         self.__merger = merger
+
+    def __selectClicked(self):
+        indices = self.__table_widget.selectionModel().selectedIndexes()
+        if len(indices) > 0:
+            rows = set()
+            for index in indices:
+                rows.add(index.row())
+            for row in rows:
+                item = self.__table_widget.item(row, self.SEL_COL)
+                item.setCheckState(Qt.Qt.Checked)
+
+    def __unselectClicked(self):
+        indices = self.__table_widget.selectionModel().selectedIndexes()
+        if len(indices) > 0:
+            rows = set()
+            for index in indices:
+                rows.add(index.row())
+            for row in rows:
+                item = self.__table_widget.item(row, self.SEL_COL)
+                item.setCheckState(Qt.Qt.Unchecked)
 
     def __showMore(self, *args, **kwargs):
         if self.__more_bn.text() == 'More':

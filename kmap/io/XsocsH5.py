@@ -63,7 +63,7 @@ class XsocsH5(XsocsH5Base):
     def title(self, entry):
         with self._get_file() as h5_file:
             path = entry + '/title'
-            return h5_file[path]
+            return h5_file[path][()]
 
     def entry_filename(self, entry):
         with self._get_file() as h5_file:

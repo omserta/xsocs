@@ -27,16 +27,19 @@ from __future__ import absolute_import
 
 import os
 
-from .process.MergeWidget import MergeWidget
+
+from ..io import XsocsH5
 from silx.gui import qt as Qt
-from .Utils import (viewWidgetFromProjectEvent,
-                    processWidgetFromViewEvent,
-                    processDoneEvent)
+
+from .widgets.Wizard import XsocsWizard
 from .Widgets import (AcqParamsWidget,
                       AdjustedLineEdit,
                       AdjustedPushButton)
+from .process.MergeWidget import MergeWidget
+from .Utils import (viewWidgetFromProjectEvent,
+                    processWidgetFromViewEvent,
+                    processDoneEvent)
 from .project.XsocsProject import XsocsProject
-from ..io import XsocsH5
 
 
 _COMPANY_NAME = 'ESRF'
@@ -44,14 +47,12 @@ _APP_NAME = 'XSOCS'
 
 
 class XsocsGui(Qt.QMainWindow):
-    
     __firstInitSig = Qt.Signal()
 
     def __init__(self,
                  parent=None,
                  workspaceH5File=None):
         super(XsocsGui, self).__init__(parent)
-        self.__pw = None
 
         mdiArea = Qt.QMdiArea()
         self.setCentralWidget(mdiArea)
@@ -62,10 +63,49 @@ class XsocsGui(Qt.QMainWindow):
 
         self.__startupWorkspaceH5File = workspaceH5File
         self.__widget_setup = False
-        
-        self.__firstInitSig.connect(self.__showGreeter, Qt.Qt.QueuedConnection)
-        self.__greeterDiag = None
+
+        self.__firstInitSig.connect(self.__showWizard, Qt.Qt.QueuedConnection)
         self.__readSettings()
+
+    def showEvent(self, event):
+        super(XsocsGui, self).showEvent(event)
+        if not self.__widget_setup:
+            self.__firstInitSig.emit()
+            self.__widget_setup = True
+
+    def closeEvent(self, event):
+        self.__writeSettings()
+        super(XsocsGui, self).closeEvent(event)
+
+    def __writeSettings(self):
+        settings = Qt.QSettings(_COMPANY_NAME, _APP_NAME)
+        settings.beginGroup("GUI")
+        settings.setValue("MainWindow/size", self.size())
+        settings.setValue("MainWindow/pos", self.pos())
+        settings.setValue('MainWindow/state', self.saveState())
+        settings.endGroup()
+
+    def __readSettings(self):
+        settings = Qt.QSettings(_COMPANY_NAME, _APP_NAME)
+        settings.beginGroup("gui")
+        self.resize(settings.value("MainWindow/size", Qt.QSize(400, 400)))
+        self.move(settings.value("MainWindow/pos", Qt.QPoint(200, 200)))
+        self.restoreState(settings.value("MainWindow/state", Qt.QByteArray()))
+        settings.endGroup()
+
+    def __showWizard(self):
+        projectFile = self.__startupWorkspaceH5File
+        if projectFile is None:
+            wizard = XsocsWizard(parent=self)
+            if wizard.exec_() == Qt.QDialog.Accepted:
+                # TODO : we suppose that we get a valid file... maybe we should
+                # perform some checks...
+                projectFile = wizard.projectFile
+                wizard.deleteLater()
+            else:
+                self.close()
+                return
+        self.__setupWorkspace(ws_file=projectFile)
 
     def __projectViewSlot(self, event):
         # TODO : store the plot window in a dictionary + weakref w delete
@@ -84,7 +124,6 @@ class XsocsGui(Qt.QMainWindow):
         widget.show()
 
     def __processApplied(self, event):
-        mdi = self.centralWidget()
         widget = processWidgetFromViewEvent(self.__project, event, parent=self)
         if widget is None:
             print('UNKNOWN PROCESS EVENT')
@@ -98,72 +137,12 @@ class XsocsGui(Qt.QMainWindow):
     def __processDone(self, event):
         processDoneEvent(self.__project, event)
 
-    def showEvent(self, event):
-        super(XsocsGui, self).showEvent(event)
-        if not self.__widget_setup:
-            self.__firstInitSig.emit()
-            self.__widget_setup = True
-
-    def closeEvent(self, event):
-        self.__writeSettings()
-        super(XsocsGui, self).closeEvent(event)
-
-    def __showGreeter(self):
-        if self.__startupWorkspaceH5File is None:
-            greeterDiag = _GreeterDialog(self.centralWidget(),
-                                         self.__actions['open'],
-                                         self.__actions['new'],
-                                         self.__actions['import'])
-            greeterDiag.setAttribute(Qt.Qt.WA_DeleteOnClose)
-            # greeterDiag.setWindowFlags(Qt.Qt.WindowStaysOnTopHint |
-            #                            greeterDiag.windowFlags())
-            greeterDiag.rejected.connect(self.close)
-            greeterDiag.show()
-            self.__greeterDiag = greeterDiag
-        else:
-            self.__setupWorkspace(ws_file=self.__startupWorkspaceH5File)
-
-    def __closeGreeter(self):
-        if self.__greeterDiag is not None:
-            self.__greeterDiag.accept()
-            self.__greeterDiag = None
-
-    def __setupWorkspace(self, ws_file=None, xsocsH5=None):
+    def __setupWorkspace(self, ws_file=None):
         mode = 'a'
-        if ws_file is None:
-            mode = 'w'
-            if xsocsH5 is not None:
-                nameHint = os.path.basename(xsocsH5).rsplit('.')[0]
-            else:
-                nameHint = None
-            dialog = _WorkspaceDirDialog(self, nameHint=nameHint)
-            ans = dialog.exec_()
-            ws_dir = dialog.workspaceFile
-            dialog.deleteLater()
-            if not ans == Qt.QDialog.Accepted:
-                return False
-            if not os.path.exists(ws_dir):
-                os.makedirs(ws_dir)
-            ws_file = os.path.join(ws_dir, 'xsocs.ws')
-            if os.path.exists(ws_file):
-                ans = Qt.QMessageBox.warning(self,
-                                             'Overwrite?',
-                                             ('Workspace file already exists.'
-                                              '\nDo you want to overwrite '
-                                              'it?'),
-                                             buttons=Qt.QMessageBox.Yes |
-                                             Qt.QMessageBox.No)
-            if ans == Qt.QMessageBox.No:
-                return False
-
         wkSpace = XsocsProject(ws_file, mode=mode)
-        if xsocsH5 is not None:
-            wkSpace.xsocsFile = xsocsH5
         self.__sessionDock.widget().setXsocsWorkspace(wkSpace)
         self.__dataDock.widget().setXsocsWorkspace(wkSpace)
         self.__project = wkSpace
-
-        self.__closeGreeter()
 
         return True
 
@@ -171,28 +150,28 @@ class XsocsGui(Qt.QMainWindow):
         style = Qt.QApplication.style()
         self.__actions = actions = {}
 
-        # open an existing session
-        icon = style.standardIcon(Qt.QStyle.SP_DialogOpenButton)
-        openAct = Qt.QAction(icon, '&Open', self)
-        openAct.setShortcuts(Qt.QKeySequence.Open)
-        openAct.setStatusTip('Open session')
-        openAct.triggered.connect(self.__loadProject)
-        actions['open'] = openAct
-
-        # new session
-        icon = style.standardIcon(Qt.QStyle.SP_FileDialogNewFolder)
-        newAct = Qt.QAction(icon, '&Load', self)
-        newAct.setStatusTip('Load data')
-        newAct.setShortcuts(Qt.QKeySequence.New)
-        newAct.triggered.connect(self.__loadData)
-        actions['new'] = newAct
-
-        # import data from spec
-        icon = style.standardIcon(Qt.QStyle.SP_DialogOkButton)
-        importAct = Qt.QAction(icon, '&Import', self)
-        importAct.setStatusTip('Import SPEC data')
-        importAct.triggered.connect(self.__importData)
-        actions['import'] = importAct
+        # # open an existing session
+        # icon = style.standardIcon(Qt.QStyle.SP_DialogOpenButton)
+        # openAct = Qt.QAction(icon, '&Open', self)
+        # openAct.setShortcuts(Qt.QKeySequence.Open)
+        # openAct.setStatusTip('Open session')
+        # openAct.triggered.connect(self.__loadProject)
+        # actions['open'] = openAct
+        #
+        # # new session
+        # icon = style.standardIcon(Qt.QStyle.SP_FileDialogNewFolder)
+        # newAct = Qt.QAction(icon, '&Load', self)
+        # newAct.setStatusTip('Load data')
+        # newAct.setShortcuts(Qt.QKeySequence.New)
+        # newAct.triggered.connect(self.__loadData)
+        # actions['new'] = newAct
+        #
+        # # import data from spec
+        # icon = style.standardIcon(Qt.QStyle.SP_DialogOkButton)
+        # importAct = Qt.QAction(icon, '&Import', self)
+        # importAct.setStatusTip('Import SPEC data')
+        # importAct.triggered.connect(self.__importData)
+        # actions['import'] = importAct
 
         # exit the application
         icon = style.standardIcon(Qt.QStyle.SP_DialogCancelButton)
@@ -222,9 +201,9 @@ class XsocsGui(Qt.QMainWindow):
         menuBar = self.menuBar()
 
         fileMenu = menuBar.addMenu('&File')
-        fileMenu.addAction(actions['open'])
-        fileMenu.addAction(actions['new'])
-        fileMenu.addAction(actions['import'])
+        # fileMenu.addAction(actions['open'])
+        # fileMenu.addAction(actions['new'])
+        # fileMenu.addAction(actions['import'])
         fileMenu.addSeparator()
         fileMenu.addAction(actions['quit'])
 
@@ -244,18 +223,18 @@ class XsocsGui(Qt.QMainWindow):
         self.__toolBars = toolBars = {}
         actions = self.__actions
 
-        fileToolBar = self.addToolBar('File')
-        fileToolBar.setObjectName('fileToolBar')
-        fileToolBar.addAction(actions['open'])
-        fileToolBar.addAction(actions['new'])
-        fileToolBar.addAction(actions['import'])
-        toolBars[fileToolBar.windowTitle()] = fileToolBar
-
-        viewToolBar = self.addToolBar('View')
-        viewToolBar.setObjectName('viewToolBar')
-        viewToolBar.addAction(actions['sessionDock'])
-        viewToolBar.addAction(actions['dataDock'])
-        toolBars[viewToolBar.windowTitle()] = viewToolBar
+        # fileToolBar = self.addToolBar('File')
+        # fileToolBar.setObjectName('fileToolBar')
+        # fileToolBar.addAction(actions['open'])
+        # fileToolBar.addAction(actions['new'])
+        # fileToolBar.addAction(actions['import'])
+        # toolBars[fileToolBar.windowTitle()] = fileToolBar
+        #
+        # viewToolBar = self.addToolBar('View')
+        # viewToolBar.setObjectName('viewToolBar')
+        # viewToolBar.addAction(actions['sessionDock'])
+        # viewToolBar.addAction(actions['dataDock'])
+        # toolBars[viewToolBar.windowTitle()] = viewToolBar
 
     def __createDocks(self):
         self.__sessionDock = sessionDock = Qt.QDockWidget('Infos')
@@ -269,67 +248,6 @@ class XsocsGui(Qt.QMainWindow):
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, plotDataDock)
         plotDataDock.widget().sigViewEvent.connect(self.__projectViewSlot,
                                                    Qt.Qt.QueuedConnection)
-
-    def __writeSettings(self):
-        settings = Qt.QSettings(_COMPANY_NAME, _APP_NAME)
-        settings.beginGroup("GUI")
-        settings.setValue("MainWindow/size", self.size())
-        settings.setValue("MainWindow/pos", self.pos())
-        settings.setValue('MainWindow/state', self.saveState())
-        settings.endGroup()
-
-    def __readSettings(self):
-        settings = Qt.QSettings(_COMPANY_NAME, _APP_NAME)
-        settings.beginGroup("gui")
-        self.resize(settings.value("MainWindow/size", Qt.QSize(400, 400)))
-        self.move(settings.value("MainWindow/pos", Qt.QPoint(200, 200)))
-        self.restoreState(settings.value("MainWindow/state", Qt.QByteArray()))
-        settings.endGroup()
-
-    def __loadProject(self, checked=None):
-        dialog = Qt.QFileDialog(parent=self,
-                                caption='Select an XSOCS project file',
-                                filter=('Project files (*.ws);;'
-                                        'Any files (*)'))
-        dialog.setFileMode(Qt.QFileDialog.ExistingFile)
-        dialog.setModal(True)
-        ans = dialog.exec_()
-        selectedFiles = dialog.selectedFiles()
-        dialog.deleteLater()
-        if not ans:
-            return False
-        projectH5 = selectedFiles[0]
-
-        return self.__setupWorkspace(ws_file=projectH5)
-
-    def __loadData(self, checked=None, xsocsH5=None):
-        if xsocsH5 is None:
-            # for some reason the exec doesnt show a modal dialog
-            # nor the Qt.QFileDialog.getOpenFileName method
-            dialog = Qt.QFileDialog(parent=self,
-                                    caption='Select an XSOCS data file',
-                                    filter=('Scan files (*.h5);;'
-                                            'Any files (*)'))
-            dialog.setFileMode(Qt.QFileDialog.ExistingFile)
-            dialog.setModal(True)
-            ans = dialog.exec_()
-            selectedFiles = dialog.selectedFiles()
-            dialog.deleteLater()
-            if not ans:
-                return False
-            xsocsH5 = selectedFiles[0]
-
-            return self.__setupWorkspace(xsocsH5=xsocsH5)
-        else:
-            return self.__setupWorkspace(xsocsH5=xsocsH5)
-
-    def __importData(self):
-        mw = MergeWidget(parent=self)
-        result = mw.exec_()
-        if result == Qt.QDialog.Accepted:
-            xsocsH5 = mw.xsocsH5
-            mw.deleteLater()
-            self.__loadData(xsocsH5=xsocsH5)
 
 
 # ####################################################################
@@ -492,7 +410,7 @@ class _GreeterDialog(Qt.QDialog):
         openToolBn = Qt.QToolButton()
         openToolBn.setDefaultAction(openAction)
         layout.addWidget(openToolBn, 0, 0)
-        layout.addWidget(Qt.QLabel('Open existing workspace'), 0, 1)
+        layout.addWidget(Qt.QLabel('Open existing project'), 0, 1)
 
         loadToolBn = Qt.QToolButton()
         loadToolBn.setDefaultAction(loadAction)
@@ -569,20 +487,3 @@ class _WorkspaceDirDialog(Qt.QDialog):
 
 if __name__ == '__main__':
     pass
-
-# f = os.path.expanduser(
-#     '~/data/xsocs/results/kmap/psic_nano_20150314_fast_00007/qspace/gepoly200_004_qspace.h5')
-# with h5py.File(f) as h5f:
-#     data = h5f['/data/qspace'][0]
-#     x = h5f['/bins_edges/x'][:]
-#     y = h5f['/bins_edges/y'][:]
-#     z = h5f['/bins_edges/z'][:]
-# wid = Qt.QWidget(self)
-# layout = Qt.QHBoxLayout(wid)
-# threedwin = IsosurfaceView()
-# layout.addWidget(threedwin)
-# threedwin.setIsoLevel(80.)
-# threedwin.setData(data, copy=True)
-# self.centralWidget().addSubWindow(wid)
-# wid.show()
-# print 'shown', wid.isVisible()

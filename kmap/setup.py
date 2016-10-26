@@ -36,6 +36,7 @@ def configuration(parent_package='', top_path=None):
     config.add_subpackage('gui')
     config.add_subpackage('io')
     config.add_subpackage('process')
+    config.add_subpackage('resources')
     config.add_subpackage('test')
     config.add_subpackage('util')
 

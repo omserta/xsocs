@@ -83,6 +83,10 @@ class XsocsH5(XsocsH5Base):
             self._update_entries()
         return self.__entries[:]
 
+    def scan_angle(self, entry):
+        # TODO : get the correct angle name
+        return self.positioner(entry, 'eta')
+
     def get_entry_name(self, entry_idx):
         """
         Get the entry found at position *entry_idx* (entries names sorted
@@ -168,6 +172,22 @@ class XsocsH5(XsocsH5Base):
         x_pos = self._get_array_data(path + m0)
         y_pos = self._get_array_data(path + m1)
         return (x_pos, y_pos)
+
+    def acquisition_params(self, entry):
+        beam_energy = self.beam_energy(entry)
+        direct_beam = self.direct_beam(entry)
+        pixel_size = self.pixel_size(entry)
+        chan_per_deg = self.chan_per_deg(entry)
+        detector_orient = self.detector_orient(entry)
+
+        result = OrderedDict()
+        result['beam_energy'] = beam_energy
+        result['direct_beam'] = direct_beam
+        result['pixel_size'] = pixel_size
+        result['chan_per_deg'] = chan_per_deg
+        result['detector_orient'] = detector_orient
+
+        return result
 
     def scan_params(self, entry):
         return self.__command_params(entry,

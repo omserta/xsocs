@@ -38,6 +38,8 @@ import numpy as _np
 
 
 class XsocsH5Base(object):
+    # TODO : mechanism to test file type (isValid whatever)
+
     def __init__(self, h5_f, mode='r'):
         self.mode = mode
         self.__h5_f = h5_f
@@ -45,12 +47,11 @@ class XsocsH5Base(object):
         self.__file = None
         self.__file_count = 0
 
-        # opening the file the first time if necessary
+        # opening the file the first time
         # (creating it if necessary)
         # all subsequent access will use the mode 'r' or 'a'
-        if mode == 'w':
-            with self._get_file() as h5_f:
-                pass
+        with self._get_file() as h5_f:
+            pass
 
         # setting the mode to append if mode was 'w' (so we don't erase it
         # when opening it later)

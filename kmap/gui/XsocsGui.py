@@ -25,17 +25,13 @@
 
 from __future__ import absolute_import
 
-import os
-
 
 from ..io import XsocsH5
 from silx.gui import qt as Qt
 
 from .widgets.Wizard import XsocsWizard
 from .Widgets import (AcqParamsWidget,
-                      AdjustedLineEdit,
-                      AdjustedPushButton)
-from .process.MergeWidget import MergeWidget
+                      AdjustedLineEdit)
 from .Utils import (viewWidgetFromProjectEvent,
                     processWidgetFromViewEvent,
                     processDoneEvent)
@@ -51,7 +47,7 @@ class XsocsGui(Qt.QMainWindow):
 
     def __init__(self,
                  parent=None,
-                 workspaceH5File=None):
+                 projectH5File=None):
         super(XsocsGui, self).__init__(parent)
 
         mdiArea = Qt.QMdiArea()
@@ -61,7 +57,7 @@ class XsocsGui(Qt.QMainWindow):
         self.__createMenus()
         self.__createToolBars()
 
-        self.__startupWorkspaceH5File = workspaceH5File
+        self.__startupprojectH5File = projectH5File
         self.__widget_setup = False
 
         self.__firstInitSig.connect(self.__showWizard, Qt.Qt.QueuedConnection)
@@ -94,7 +90,7 @@ class XsocsGui(Qt.QMainWindow):
         settings.endGroup()
 
     def __showWizard(self):
-        projectFile = self.__startupWorkspaceH5File
+        projectFile = self.__startupprojectH5File
         if projectFile is None:
             wizard = XsocsWizard(parent=self)
             if wizard.exec_() == Qt.QDialog.Accepted:
@@ -105,7 +101,7 @@ class XsocsGui(Qt.QMainWindow):
             else:
                 self.close()
                 return
-        self.__setupWorkspace(ws_file=projectFile)
+        self.__setupProject(ws_file=projectFile)
 
     def __projectViewSlot(self, event):
         # TODO : store the plot window in a dictionary + weakref w delete
@@ -137,11 +133,11 @@ class XsocsGui(Qt.QMainWindow):
     def __processDone(self, event):
         processDoneEvent(self.__project, event)
 
-    def __setupWorkspace(self, ws_file=None):
+    def __setupProject(self, ws_file=None):
         mode = 'a'
         wkSpace = XsocsProject(ws_file, mode=mode)
-        self.__sessionDock.widget().setXsocsWorkspace(wkSpace)
-        self.__dataDock.widget().setXsocsWorkspace(wkSpace)
+        self.__sessionDock.widget().setXsocsProject(wkSpace)
+        self.__dataDock.widget().setXsocsProject(wkSpace)
         self.__project = wkSpace
 
         return True
@@ -203,13 +199,12 @@ class XsocsGui(Qt.QMainWindow):
         fileMenu = menuBar.addMenu('&File')
         # fileMenu.addAction(actions['open'])
         # fileMenu.addAction(actions['new'])
-        # fileMenu.addAction(actions['import'])
         fileMenu.addSeparator()
         fileMenu.addAction(actions['quit'])
 
-        viewMenu = menuBar.addMenu('&View')
-        viewMenu.addAction(actions['sessionDock'])
-        viewMenu.addAction(actions['dataDock'])
+        # viewMenu = menuBar.addMenu('&View')
+        # viewMenu.addAction(actions['sessionDock'])
+        # viewMenu.addAction(actions['dataDock'])
 
         menuBar.addSeparator()
 
@@ -221,7 +216,7 @@ class XsocsGui(Qt.QMainWindow):
 
     def __createToolBars(self):
         self.__toolBars = toolBars = {}
-        actions = self.__actions
+        # actions = self.__actions
 
         # fileToolBar = self.addToolBar('File')
         # fileToolBar.setObjectName('fileToolBar')
@@ -266,8 +261,8 @@ class PlotDataWidget(Qt.QWidget):
         self.__treeView = treeView = Qt.QTreeView()
         layout.addWidget(treeView, 0, 0)
 
-    def setXsocsWorkspace(self, xsocsWorkspace):
-        self.__xsocsProject = xsocsWorkspace
+    def setXsocsProject(self, xsocsProject):
+        self.__xsocsProject = xsocsProject
         self.__setupWidget()
 
     def __setupWidget(self):
@@ -349,8 +344,8 @@ class SessionWidget(Qt.QWidget):
 
         layout.setRowStretch(layout.rowCount(), 1)
 
-    def setXsocsWorkspace(self, xsocsWorkspace):
-        self.__xsocsProject = xsocsWorkspace
+    def setXsocsProject(self, xsocsProject):
+        self.__xsocsProject = xsocsProject
         self.__setupWidget()
 
     def __setupWidget(self):
@@ -395,94 +390,6 @@ class SessionWidget(Qt.QWidget):
 # ####################################################################
 # ####################################################################
 # ####################################################################
-
-
-class _GreeterDialog(Qt.QDialog):
-    def __init__(self,
-                 parent,
-                 openAction,
-                 loadAction,
-                 importAction):
-        super(_GreeterDialog, self).__init__(parent)
-        self.setModal(True)
-        layout = Qt.QGridLayout(self)
-
-        openToolBn = Qt.QToolButton()
-        openToolBn.setDefaultAction(openAction)
-        layout.addWidget(openToolBn, 0, 0)
-        layout.addWidget(Qt.QLabel('Open existing project'), 0, 1)
-
-        loadToolBn = Qt.QToolButton()
-        loadToolBn.setDefaultAction(loadAction)
-        layout.addWidget(loadToolBn, 1, 0)
-        layout.addWidget(Qt.QLabel('Load XSOCS data'), 1, 1)
-
-        importToolBn = Qt.QToolButton()
-        importToolBn.setDefaultAction(importAction)
-        layout.addWidget(importToolBn, 2, 0)
-        layout.addWidget(Qt.QLabel('Import SPEC data'), 2, 1)
-
-        bnBox = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Cancel)
-        layout.addWidget(bnBox, 3, 0, 1, 2)
-        bnBox.rejected.connect(self.reject)
-
-
-class _WorkspaceDirDialog(Qt.QDialog):
-    def __init__(self,
-                 parent=None,
-                 nameHint=None,
-                 **kwargs):
-        super(_WorkspaceDirDialog, self).__init__(parent, **kwargs)
-        self.setModal(True)
-        layout = Qt.QGridLayout(self)
-
-        label = Qt.QLabel('Workspace :')
-        lineEdit = AdjustedLineEdit(40)
-        lineEdit.setAlignment(Qt.Qt.AlignLeft)
-        pickButton = AdjustedPushButton('...')
-        layout.addWidget(label,
-                         0, 0,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(lineEdit,
-                         0, 1,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(pickButton,
-                         0, 2,
-                         Qt.Qt.AlignLeft)
-        pickButton.clicked.connect(self.__pickFile)
-        if nameHint is not None:
-            wsPath = os.path.join(Qt.QDir.homePath(), 'xsocs', nameHint)
-            lineEdit.setText(wsPath)
-
-        bnBox = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Ok |
-                                     Qt.QDialogButtonBox.Cancel)
-        layout.addWidget(bnBox, 1, 0, 1, 3)
-        bnBox.rejected.connect(self.reject)
-        bnBox.accepted.connect(self.accept)
-
-        lineEdit.textChanged.connect(self.__textChanged)
-        if len(lineEdit.text()) == 0:
-            bnBox.button(Qt.QDialogButtonBox.Ok).setEnabled(False)
-
-        self.__lineEdit = lineEdit
-        self.__buttonBox = bnBox
-
-    workspaceFile = property(lambda self: self.__lineEdit.text())
-
-    def __pickFile(self):
-        dialog = Qt.QFileDialog(self,
-                                'Select workspace folder')
-        dialog.setFileMode(Qt.QFileDialog.Directory)
-        if dialog.exec_():
-            dir_name = dialog.selectedFiles()[0]
-            self.__lineEdit.setText(dir_name)
-
-    def __textChanged(self):
-        if len(self.__lineEdit.text()) == 0:
-            enabled = False
-        else:
-            enabled = True
-        self.__buttonBox.button(Qt.QDialogButtonBox.Ok).setEnabled(enabled)
 
 
 if __name__ == '__main__':

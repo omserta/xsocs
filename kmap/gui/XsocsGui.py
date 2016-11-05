@@ -284,7 +284,7 @@ class PlotDataWidget(Qt.QWidget):
 
 
 class SessionWidget(Qt.QWidget):
-    def __init__(self, parent=None, h5_f=None):
+    def __init__(self, parent=None):
         super(SessionWidget, self).__init__(parent)
 
         layout = Qt.QGridLayout(self)

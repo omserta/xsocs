@@ -969,7 +969,7 @@ class _MergeThread(Thread):
             mode = 'w'
 
         # trying to access the file (erasing it if necessary)
-        with XsocsH5.XsocsH5_Master_Writer(master_f, mode=mode) as m_h5f:
+        with XsocsH5.XsocsH5MasterWriter(master_f, mode=mode) as m_h5f:
             pass
 
         if self.__n_proc is None:
@@ -1025,7 +1025,7 @@ class _MergeThread(Thread):
         cumul = None
 
         if valid:
-            with XsocsH5.XsocsH5_Master_Writer(master_f, mode='a') as m_h5f:
+            with XsocsH5.XsocsH5MasterWriter(master_f, mode='a') as m_h5f:
                 items = self.__scans.items()
                 for proc_idx, (scan_id, infos) in enumerate(items):
                     entry_fn = infos['output']
@@ -1034,28 +1034,28 @@ class _MergeThread(Thread):
 
                     #entry = entry_fn.rpartition('.')[0]
                     #m_h5f.add_file_link(entry, entry_fn, entry)
-                    entry_fn = os.path.join(self.__output_dir, entry_fn)
+                    # entry_fn = os.path.join(self.__output_dir, entry_fn)
 
                     # computing the cumulated sum only if all individual
                     # datasets have the same size. This should always be the
                     # case... but who knows, if someone one day modify the code
                     # to allow data from two different scans to be merged...
-                    with XsocsH5.XsocsH5(entry_fn) as entry_h5:
-                        if proc_idx == 0:
-                            cumul = entry_h5.image_cumul(entry)
-                        elif cumul is None:
-                            pass
-                        else:
-                            cumul_data = entry_h5.image_cumul(entry)
-                            if cumul_data.shape == cumul.shape:
-                                cumul += cumul_data
-                            else:
-                                cumul = None
+                    # with XsocsH5.XsocsH5(entry_fn) as entry_h5:
+                    #     if proc_idx == 0:
+                    #         cumul = entry_h5.image_cumul(entry)
+                    #     elif cumul is None:
+                    #         pass
+                    #     else:
+                    #         cumul_data = entry_h5.image_cumul(entry)
+                    #         if cumul_data.shape == cumul.shape:
+                    #             cumul += cumul_data
+                    #         else:
+                    #             cumul = None
 
-                if cumul is not None:
-                    m_h5f.set_image_cumul(m_h5f.TOP_ENTRY,
-                                          cumul,
-                                          compression=self.__compression)
+                # if cumul is not None:
+                #     m_h5f.set_image_cumul(m_h5f.TOP_ENTRY,
+                #                           cumul,
+                #                           compression=self.__compression)
 
         if self.__callback:
             self.__callback((True, master_f) if valid else (False, None))
@@ -1148,7 +1148,7 @@ def _add_edf_data(scan_id,
         if g_term_evt.is_set():  # noqa
             raise Exception('Merge of scan {0} aborted.'.format(scan_id))
 
-        with XsocsH5.XsocsH5_Writer(entry_fn, mode='w') as entry_h5f:
+        with XsocsH5.XsocsH5Writer(entry_fn, mode='w') as entry_h5f:
             entry_h5f.create_entry(entry)
             progress[proc_idx] = 1
 
@@ -1200,7 +1200,7 @@ def _add_edf_data(scan_id,
             else:
                 cumul_dtype = np.float64
 
-            cumul_array = np.zeros((n_images,), dtype=cumul_dtype)
+            # cumul_array = np.zeros((n_images,), dtype=cumul_dtype)
 
             with entry_h5f.image_dset_ctx(entry=entry,
                                           create=True,
@@ -1216,10 +1216,10 @@ def _add_edf_data(scan_id,
                             raise Exception('Merge of scan {0} aborted.'
                                             ''.format(scan_id))
 
-                    data = edf_file.GetData(i)
-                    image_dset[i, :, :] = data
-                    cumul_array[i] = data.sum()
-            entry_h5f.set_image_cumul(entry, cumul_array)
+                    # data = edf_file.GetData(i)
+                    # image_dset[i, :, :] = data
+                    # cumul_array[i] = data.sum()
+            # entry_h5f.set_image_cumul(entry, cumul_array)
 
     except Exception as ex:
         print(ex)

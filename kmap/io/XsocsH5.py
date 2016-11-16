@@ -48,12 +48,9 @@ class XsocsH5(XsocsH5Base):
     TOP_ENTRY = 'global'
     positioners_tpl = '/{0}/instrument/positioners'
     img_data_tpl = '/{0}/measurement/image/data'
-    entry_cumul_tpl = '/processed/{0}/cumul'
-    entry_processed_tpl = '/processed/{0}/'
-    processed_grp = '/processed'
     measurement_tpl = '/{0}/measurement'
-    measurement_command_tpl = '/processed/{0}/command'
     detector_tpl = '/{0}/instrument/detector'
+    scan_params_tpl = '/{0}/scan'
 
     def __init__(self, h5_f, mode='r'):
         super(XsocsH5, self).__init__(h5_f, mode=mode)
@@ -107,16 +104,6 @@ class XsocsH5(XsocsH5Base):
                         for param in param_names]
             return h5_file.get(path.format(param_names), _np.array(None))[()]
 
-    def __command_params(self, entry, param_names):
-        with self._get_file() as h5_file:
-            path = self.measurement_command_tpl.format(entry) + '/{0}'
-            if isinstance(param_names, (list, set, tuple)):
-                return OrderedDict([(param, h5_file.get(path.format(param),
-                                                      _np.array(None))[()])
-                                    for param in param_names])
-            return {param_names: h5_file.get(path.format(param_names),
-                                             _np.array(None))[()]}
-
     def beam_energy(self, entry):
         return self.__detector_params(entry, 'beam_energy')
 
@@ -152,16 +139,24 @@ class XsocsH5(XsocsH5Base):
     def dset_shape(self, path):
         return self._get_array_data(path, shape=True)
 
-    def image_cumul(self, entry):
+    def image_cumul(self, entry, dtype=None):
         """
         Returns the summed intensity for each image.
+        :param dtype: dtype passed to the numpy.sum function.
+            Default is numpy.double.
+        :type dtype: numpy.dtype
         """
-        #if entry == self.TOP_ENTRY:
-            #path = self.full_cumul_tpl
-        #else:
-        path = self.entry_cumul_tpl.format(entry)
-        cumul = self._get_array_data(path)
-        return cumul
+        if dtype is None:
+            dtype = _np.double
+
+        with self.image_dset_ctx(entry) as ctx:
+            shape = ctx.shape
+            intensity = _np.ndarray(shape=(shape[0],), dtype=dtype)
+            img_buffer = _np.array(ctx[0], dtype=dtype)
+            for idx in range(1, shape[0]):
+                ctx.read_direct(img_buffer, idx)
+                intensity[idx] = _np.sum(img_buffer)
+        return intensity
 
     def scan_positions(self, entry):
         path = self.measurement_tpl.format(entry)
@@ -190,13 +185,20 @@ class XsocsH5(XsocsH5Base):
         return result
 
     def scan_params(self, entry):
-        return self.__command_params(entry,
-                                     ['motor_0', 'motor_0_start',
-                                      'motor_0_end', 'motor_0_steps',
-                                      'motor_1', 'motor_1_start',
-                                      'motor_1_end', 'motor_1_steps',
-                                      'delay'])
-
+        param_names = ['motor_0', 'motor_0_start',
+                       'motor_0_end', 'motor_0_steps',
+                       'motor_1', 'motor_1_start',
+                       'motor_1_end', 'motor_1_steps',
+                       'delay']
+        with self._get_file() as h5_file:
+            path = self.scan_params_tpl.format(entry) + '/{0}'
+            if isinstance(param_names, (list, set, tuple)):
+                return OrderedDict([(param, h5_file.get(path.format(param),
+                                                        _np.array(None))[
+                    ()])
+                                    for param in param_names])
+            return {param_names: h5_file.get(path.format(param_names),
+                                             _np.array(None))[()]}
 
     def positioner(self, entry, positioner):
         path = self.positioners_tpl.format(entry) + '/' + positioner
@@ -230,11 +232,11 @@ class XsocsH5(XsocsH5Base):
             del image_dset
 
 
-class XsocsH5_Writer(XsocsH5):
+class XsocsH5Writer(XsocsH5):
 
     def __init__(self, h5_f, mode='a', **kwargs):
         self.mode = mode
-        super(XsocsH5_Writer, self).__init__(h5_f, mode=mode, **kwargs)
+        super(XsocsH5Writer, self).__init__(h5_f, mode=mode, **kwargs)
 
     def __set_detector_params(self, entry, params):
         with self._get_file() as h5_file:
@@ -242,11 +244,11 @@ class XsocsH5_Writer(XsocsH5):
             for param_name, param_value in params.items():
                 self._set_scalar_data(path.format(param_name), param_value)
 
-    def __set_measurement_params(self, entry, params):
-        with self._get_file() as h5_file:
-            path = self.measurement_command_tpl.format(entry) + '/{0}'
-            for param_name, param_value in params.items():
-                self._set_scalar_data(path.format(param_name), param_value)
+    # def __set_measurement_params(self, entry, params):
+    #     with self._get_file() as h5_file:
+    #         path = self.scan_params_tpl.format(entry) + '/{0}'
+    #         for param_name, param_value in params.items():
+    #             self._set_scalar_data(path.format(param_name), param_value)
 
     def set_beam_energy(self, beam_energy, entry):
         return self.__set_detector_params(entry, {'beam_energy': beam_energy})
@@ -282,16 +284,20 @@ class XsocsH5_Writer(XsocsH5):
                         motor_1_steps,
                         delay,
                         **kwargs):
-        self.__set_measurement_params(entry,
-                                      {'motor_0': _np.string_(motor_0),
-                                       'motor_0_start': float(motor_0_start),
-                                       'motor_0_end': float(motor_0_end),
-                                       'motor_0_steps': int(motor_0_steps),
-                                       'motor_1': _np.string_(motor_1),
-                                       'motor_1_start': float(motor_1_start),
-                                       'motor_1_end': float(motor_1_end),
-                                       'motor_1_steps': int(motor_1_steps),
-                                       'delay': float(delay)})
+
+        params = OrderedDict([('motor_0', _np.string_(motor_0)),
+                              ('motor_0_start', float(motor_0_start)),
+                              ('motor_0_end', float(motor_0_end)),
+                              ('motor_0_steps', int(motor_0_steps)),
+                              ('motor_1', _np.string_(motor_1)),
+                              ('motor_1_start', float(motor_1_start)),
+                              ('motor_1_end', float(motor_1_end)),
+                              ('motor_1_steps', int(motor_1_steps)),
+                              ('delay', float(delay))])
+        with self._get_file():
+            path = self.scan_params_tpl.format(entry) + '/{0}'
+            for param_name, param_value in params.items():
+                self._set_scalar_data(path.format(param_name), param_value)
 
     def create_entry(self, entry):
         with self._get_file() as h5_file:
@@ -320,7 +326,7 @@ class XsocsH5_Writer(XsocsH5):
             grp = entry_grp.require_group('measurement/image')
             grp.attrs['NX_class'] = _np.string_('NXcollection')
 
-            ## creating some links
+            # creating some links
             grp = entry_grp.require_group('measurement/image')
             det_grp = entry_grp.require_group('instrument/detector')
             grp['info'] = det_grp
@@ -328,29 +334,9 @@ class XsocsH5_Writer(XsocsH5):
 
         self._update_entries()
 
-    def set_image_cumul(self,
-                        entry,
-                        cumul,
-                        **kwargs):
-        with self._get_file() as h5_file:
-            #if entry == self.TOP_ENTRY:
-                #path = self.full_cumul_tpl
-            #else:
-            path = self.entry_cumul_tpl.format(entry)
-            dset = h5_file.require_dataset(path,
-                                           shape=cumul.shape,
-                                           dtype=cumul.dtype,
-                                           **kwargs)
-            dset[:] = cumul
-            del dset
 
-
-class XsocsH5_Master_Writer(XsocsH5_Writer):
+class XsocsH5MasterWriter(XsocsH5Writer):
 
     def add_entry_file(self, entry, entry_file):
         with self._get_file() as h5_file:
             h5_file[entry] = _h5py.ExternalLink(entry_file, entry)
-            processed_grp = h5_file.require_group(self.processed_grp)
-            grp_path = self.entry_processed_tpl.format(entry)
-            processed_grp[grp_path] = _h5py.ExternalLink(entry_file,
-                                                         grp_path)

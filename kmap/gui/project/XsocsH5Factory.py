@@ -27,41 +27,22 @@ from __future__ import absolute_import
 
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
-__date__ = "15/09/2016"
+__date__ = "01/11/2016"
 
 
-import h5py
-from silx.gui import qt as Qt, icons
-from .ModelDef import NodeClassDef, ModelColumns
-from .ProjectNode import ProjectNode
+from .Hdf5Nodes import H5Base, H5NodeFactory
+from .ProjectItem import ProjectItem
 
 
-@NodeClassDef(nodeType=h5py.Dataset, icon=None, editor=None)
-class DatasetNode(ProjectNode):
+def h5NodeToProjectItem(h5Node, mode='r+'):
+    if not isinstance(h5Node, H5Base):
+        return None
+    return ProjectItem(h5Node.h5File, nodePath=h5Node.h5Path, mode=mode)
 
-    def __init__(self, *args, **kwargs):
-        super(DatasetNode, self).__init__(*args, **kwargs)
-        iconTpl = 'item-{0}dim'
-        with h5py.File(self.projectFile) as h5f:
-            item = h5f[self.path]
-            ndims = len(item.shape)
-            if ndims == 0:
-                text = str(item[()])
-            else:
-                text = '...'
-            del item
 
-        icon = iconTpl.format(ndims)
-        try:
-            icon = icons.getQIcon(icon)
-        except ValueError:
-            icon = icons.getQIcon('item-ndim')
-
-        self.setData(ModelColumns.NameColumn, icon, Qt.Qt.DecorationRole)
-
-        self.setData(ModelColumns.ValueColumn,
-                     text,
-                     role=Qt.Qt.DisplayRole)
-
-    def childCount(self):
-        return 0
+def XsocsH5Factory(h5File, h5Path):
+    node = H5NodeFactory(h5File, h5Path)
+    item = h5NodeToProjectItem(node)
+    if item and item.isHidden():
+        node.hidden = True
+    return node

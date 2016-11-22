@@ -256,7 +256,7 @@ class ProjectSummaryWidget(Qt.QWidget):
             # getting scan angles
             errMsg = 'Failed to read scan angles.'
             # TODO : check that there are at least 2 angles
-            text = '{0} [{0} -> {1}]'.format(
+            text = '{0} [{1} -> {2}]'.format(
                 str(len(entries)),
                 str(xsocsH5.scan_angle(entries[0])),
                 str(xsocsH5.scan_angle(entries[-1])))

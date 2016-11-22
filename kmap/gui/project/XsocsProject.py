@@ -30,14 +30,16 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 import os
-from ...io import XsocsH5 as _XsocsH5
-from ..model.ProjectModel import ProjectModel
-from ..model.ProjectView import ProjectView
-from .SourceItem import SourceItem
+from .ProjectItem import ProjectItem
+from .AcqDataGroup import AcqDataGroup
+from .IntensityGroup import IntensityGroup
+from .ScanPositionsItem import ScanPositionsItem
 
 
-class XsocsProject(_XsocsH5.XsocsH5Base):
-    InputItemPath = '/Source'
+class XsocsProject(ProjectItem):
+    AcquisitionGroupPath = '/Acquisition'
+    ScanPositionsPath = '/Positions'
+    IntensityGroupPath = '/Intensity'
 
     XsocsNone, XsocsInput, XsocsQSpace, XsocsFit = range(4)
 
@@ -47,37 +49,25 @@ class XsocsProject(_XsocsH5.XsocsH5Base):
         self.__xsocsH5 = None
         self.__projectModel = None
 
-    xsocsH5 = property(lambda self: _XsocsH5.XsocsH5(self.xsocsFile)
-                       if self.xsocsFile else None)
-    """ Returns an XsocsH5 instance if """
-
-    def __model(self):
-        """
-
-        """
-        if self.__projectModel is None:
-            self.__projectModel = ProjectModel(self.filename)
-
-        return self.__projectModel
-
-    def reload(self):
-        self.__model().refresh()
-
-    def view(self, parent=None):
-        view = ProjectView(parent)
-        view.setModel(self.__model())
-        return view
-
     workdir = property(lambda self: os.path.dirname(self.filename))
 
-    @property
-    def xsocsFile(self):
-        with self._get_file() as h5f:
-            if h5f.get(self.InputItemPath) is None:
-                return None
-        return SourceItem(self.filename, self.InputItemPath).xsocsFile
+    def _createItem(self):
+        AcqDataGroup(self.filename,
+                     self.AcquisitionGroupPath,
+                     mode=self.mode,
+                     gui=self.gui)
+        grp = ScanPositionsItem(self.filename,
+                                XsocsProject.ScanPositionsPath,
+                                mode=self.mode,
+                                gui=self.gui)
+        grp.setHidden(True)
+        IntensityGroup(self.filename,
+                       self.IntensityGroupPath,
+                       mode=self.mode,
+                       gui=self.gui)
 
-    @xsocsFile.setter
-    def xsocsFile(self, xsocs_f):
-        item = SourceItem(self.filename, self.InputItemPath)
-        item.xsocsFile = xsocs_f
+    def scan_positions(self):
+        return ScanPositionsItem(self.filename,
+                                 self.ScanPositionsPath,
+                                 mode='r',
+                                 gui=self.gui)

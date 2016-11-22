@@ -43,19 +43,19 @@ def getItemClass(itemName):
 def registerItemClass(klass):
     global _registeredItems
 
-    itemName = klass.itemName
-    if itemName in _registeredItems:
+    className = klass.XsocsClass
+    if className in _registeredItems:
         raise AttributeError('Failed to register item class {0}.'
                              'attribute is already registered.'
                              ''.format(klass.__name__))
 
     # TODO : some kind of checks on the klass
-    _registeredItems[itemName] = klass
+    _registeredItems[className] = klass
 
 
-def ItemClassDef(itemName):
+def ItemClassDef(XsocsClassName):
     def inner(cls):
-        cls.itemName = itemName
+        cls.XsocsClass = XsocsClassName
         registerItemClass(cls)
         return cls
     return inner

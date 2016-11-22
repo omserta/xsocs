@@ -27,75 +27,18 @@ from __future__ import absolute_import
 
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
-__date__ = "15/09/2016"
+__date__ = "01/11/2016"
 
-import h5py
+
 from silx.gui import qt as Qt
-
-
-_registeredNodes = {}
-
-
-class ModelRoles(object):
-    (IsXsocsNodeRole, XsocsNodeType,
-     XsocsProcessId, InternalDataRole, RoleMax) = \
-        range(Qt.Qt.UserRole, Qt.Qt.UserRole + 5)
 
 
 class ModelColumns(object):
     NameColumn, ValueColumn, ColumnMax = range(3)
+    ColumnNames = ['Name', 'Value']
 
 
-def getNodeClass(nodeType):
-    return _registeredNodes.get(nodeType)
-
-
-def registerNodeClass(klass):
-    global _registeredNodes
-
-    nodeType = klass.nodeType
-    if nodeType in _registeredNodes:
-        raise AttributeError('Failed to register node type {0}.'
-                             'Already registered.'
-                             ''.format(klass.__name__))
-
-    # TODO : some kind of checks on the klass
-    _registeredNodes[nodeType] = klass
-
-
-def NodeClassDef(nodeType, icon=None, editor=None):
-    def inner(cls):
-        cls.nodeType = nodeType
-        cls.editor = editor
-        cls.icon = icon
-        registerNodeClass(cls)
-        return cls
-
-    return inner
-
-
-def nodeFactory(projectFile, path, parent=None, nodeType=None):
-    klass = None
-    if nodeType is not None:
-        klass = getNodeClass(nodeType)
-        if klass is None:
-            raise ValueError('Unknown class type {0}.'.format(nodeType))
-    else:
-        with h5py.File(projectFile) as h5f:
-            item = h5f[path]
-            xsocsType = item.attrs.get('XsocsType')
-            itemClass = h5f.get(path, getclass=True)
-            itemLink = h5f.get(path, getclass=True, getlink=True)
-            del item
-        if xsocsType is not None:
-            klass = getNodeClass(xsocsType)
-        if klass is None:
-            klass = getNodeClass(itemLink)
-        if klass is None:
-            klass = getNodeClass(itemClass)
-        if klass is None:
-            klass = getNodeClass('default')
-    if klass is not None:
-        return klass(projectFile, path, parent)
-    else:
-        raise ValueError('Node creation failed.')
+class ModelRoles(object):
+    (InternalDataRole, EditorClassRole,
+     PersistentEditorRole, EnabledRole, RoleMax) = \
+        range(Qt.Qt.UserRole, Qt.Qt.UserRole + 5)

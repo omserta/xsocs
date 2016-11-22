@@ -280,16 +280,19 @@ class _MergeProcessDialog(Qt.QDialog):
         tree_widget.setColumnHidden(2, True)
         # TODO improve
         master_item = Qt.QTreeWidgetItem([files['master'], '', 'master'])
-        {master_item.addChild(Qt.QTreeWidgetItem([files[scan_id],
-                                                  '',
-                                                  scan_id]))
-         for scan_id in sorted(files.keys()) if scan_id != 'master'}
+        for scan_id in sorted(files.keys()):
+            if scan_id != 'master':
+                master_item.addChild(Qt.QTreeWidgetItem([files[scan_id],
+                                                         '',
+                                                         scan_id]))
+
         tree_widget.addTopLevelItem(master_item)
         tree_widget.setItemWidget(master_item, 1, Qt.QProgressBar())
-        {tree_widget.setItemWidget(master_item.child(i_child),
-                                   1,
-                                   Qt.QProgressBar())
-         for i_child in range(master_item.childCount())}
+        for i_child in range(master_item.childCount()):
+            tree_widget.setItemWidget(master_item.child(i_child),
+                                      1,
+                                      Qt.QProgressBar())
+
         master_item.setExpanded(True)
         tree_widget.resizeColumnToContents(0)
         tree_widget.resizeColumnToContents(1)

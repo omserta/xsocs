@@ -30,7 +30,7 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 import weakref
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 from contextlib import contextmanager
 
 import h5py as _h5py
@@ -41,6 +41,10 @@ from .XsocsH5Base import XsocsH5Base
 
 class InvalidEntryError(Exception):
     pass
+
+
+ScanPositions = namedtuple('ScanPositions',
+                           ['motor_0', 'pos_0', 'motor_1', 'pos_1', 'shape'])
 
 
 class XsocsH5(XsocsH5Base):
@@ -163,10 +167,16 @@ class XsocsH5(XsocsH5Base):
         params = self.scan_params(entry)
         m0 = '/adc{0}'.format(params['motor_0'][-1].upper())
         m1 = '/adc{0}'.format(params['motor_1'][-1].upper())
+        n_0 = params['motor_0_steps']
+        n_1 = params['motor_1_steps']
 
         x_pos = self._get_array_data(path + m0)
         y_pos = self._get_array_data(path + m1)
-        return (x_pos, y_pos)
+        return ScanPositions(motor_0=params['motor_0'],
+                             pos_0=x_pos,
+                             motor_1=params['motor_1'],
+                             pos_1=y_pos,
+                             shape=(n_0, n_1))
 
     def acquisition_params(self, entry):
         beam_energy = self.beam_energy(entry)
@@ -197,8 +207,6 @@ class XsocsH5(XsocsH5Base):
                                                         _np.array(None))[
                     ()])
                                     for param in param_names])
-            return {param_names: h5_file.get(path.format(param_names),
-                                             _np.array(None))[()]}
 
     def positioner(self, entry, positioner):
         path = self.positioners_tpl.format(entry) + '/' + positioner
@@ -243,12 +251,6 @@ class XsocsH5Writer(XsocsH5):
             path = self.detector_tpl.format(entry) + '/{0}'
             for param_name, param_value in params.items():
                 self._set_scalar_data(path.format(param_name), param_value)
-
-    # def __set_measurement_params(self, entry, params):
-    #     with self._get_file() as h5_file:
-    #         path = self.scan_params_tpl.format(entry) + '/{0}'
-    #         for param_name, param_value in params.items():
-    #             self._set_scalar_data(path.format(param_name), param_value)
 
     def set_beam_energy(self, beam_energy, entry):
         return self.__set_detector_params(entry, {'beam_energy': beam_energy})

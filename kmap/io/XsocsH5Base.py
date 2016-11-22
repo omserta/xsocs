@@ -59,6 +59,18 @@ class XsocsH5Base(object):
 
     filename = property(lambda self: self.__h5_f)
 
+    def _path_exists(self, path):
+        with self._get_file() as h5f:
+            return path in h5f
+
+    def set_attribute(self, path, name, value):
+        with self._get_file() as h5f:
+            h5f[path].attrs[name] = value
+
+    def attribute(self, path, name):
+        with self._get_file() as h5f:
+            return h5f[path].attrs.get(name)
+
     @contextmanager
     def _get_file(self, mode=None):
         """
@@ -148,6 +160,10 @@ class XsocsH5Base(object):
         with self._get_file() as h5_file:
             h5_file[in_path] = _h5py.ExternalLink(file_name, ext_path)
 
+    def add_soft_link(self, from_path, target_path):
+        with self._get_file() as h5_file:
+            h5_file[from_path] = _h5py.SoftLink(target_path)
+
     @contextmanager
     def item_context(self, item_path, **kwargs):
         """
@@ -193,3 +209,9 @@ class XsocsH5Base(object):
                                            src_grp=src_grp,
                                            dest_grp=dest_grp))
 
+    def object_filename(self, path):
+        with self._get_file() as h5f:
+            obj = h5f.get(path)
+            if obj is None:
+                return None
+            return obj.file.filename

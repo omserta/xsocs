@@ -1073,10 +1073,12 @@ class _MergeThread(Thread):
         progress = np.frombuffer(self.__shared_progress, dtype='int32')
         proc_indices = self.__proc_indices
         if proc_indices:
-            merge_progress = {scan_id: progress[proc_idx]
-                              for scan_id, proc_idx in proc_indices.items()}
+            merge_progress = dict([(scan_id, progress[proc_idx])
+                                   for scan_id, proc_idx in
+                                   proc_indices.items()])
         else:
-            merge_progress = {scan_id: 0 for scan_id in self.__scans.keys()}
+            merge_progress = dict([(scan_id, 0)
+                                   for scan_id in self.__scans.keys()])
         return merge_progress
 
     def results(self, wait=True):

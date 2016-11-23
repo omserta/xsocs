@@ -178,6 +178,7 @@ class TreeView(Qt.QTreeView):
         else:
             self.__userRoot = False
             self.__updateUniqueGroupVisibility()
+        self.__setHiddenNodes(self.rootIndex())
         self.__openPersistentEditors(self.rootIndex(), True)
 
     def setModel(self, model):

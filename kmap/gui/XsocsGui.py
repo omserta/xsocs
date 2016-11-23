@@ -37,10 +37,12 @@ from .Widgets import (AcqParamsWidget,
 #                     processDoneEvent)
 from .process.RecipSpaceWidget import RecipSpaceWidget
 from .view.IntensityView import IntensityView
+from .view.QspaceView import QSpaceView
 from .project.XsocsProject import XsocsProject
 from .model.TreeView import TreeView
 from .model.Model import Model
-from .project.IntensityGroup import IntensityGroup, IntensityItem
+from .project.IntensityGroup import IntensityGroup
+from .project.QSpaceGroup import QSpaceItem
 from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
 from .project.Hdf5Nodes import setH5NodeFactory, H5File
 from .Utils import nextFileName
@@ -70,7 +72,7 @@ class XsocsGui(Qt.QMainWindow):
         setH5NodeFactory(XsocsH5Factory)
 
         self.__intensityView = None
-        self.__qspaceView = None
+        self.__qspaceViews = {}
 
         mdiArea = Qt.QMdiArea()
         self.setCentralWidget(mdiArea)
@@ -100,9 +102,12 @@ class XsocsGui(Qt.QMainWindow):
             raise ValueError('Unknwown event for node {0} : {1}.'
                              ''.format(node, event))
 
-        if isinstance(projectItem, (IntensityGroup, IntensityItem))\
+        if isinstance(projectItem, IntensityGroup)\
                 and event['event'] == 'scatter':
             self.__showIntensity(node)
+        elif isinstance(projectItem, QSpaceItem)\
+                and event['event'] == 'qspace':
+            self.__showQSpace(node)
         else:
             ValueError('Unknwown event for item {0} : {1}.'
                        ''.format(projectItem, event))
@@ -130,12 +135,21 @@ class XsocsGui(Qt.QMainWindow):
         widget.exec_()
         if widget.status == RecipSpaceWidget.StatusCompleted:
             qspaceF = widget.qspaceH5
-        qspaceGroup = self.__project.qspaceGroup()
-        qspaceGroup.addQSpace(qspaceF)
-        self.model().refresh()
+            qspaceGroup = self.__project.qspaceGroup()
+            qspaceGroup.addQSpace(qspaceF)
+            self.model().reset()
+
+    def __showQSpace(self, node):
+        print node
+        view = self.__qspaceViews.get(node)
+        if not view:
+            view = QSpaceView(self, model=node.model, node=node)
+            self.__qspaceViews[node] = view
+            # view.sigProcessApplied.connect(self.__intensityRoiApplied)
+        view.show()
 
     def model(self):
-        self.centralWidget().model()
+        return self.centralWidget().model()
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)

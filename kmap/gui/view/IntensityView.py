@@ -197,6 +197,8 @@ class IntensityView(Qt.QMainWindow):
         tree.setRootIndex(index)
         tree.sigCurrentChanged.connect(self.__itemSelected)
         dock.setWidget(tree)
+        features = dock.features() ^ Qt.QDockWidget.DockWidgetClosable
+        dock.setFeatures(features)
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, dock)
 
         self.__roiManager = roiManager = ImageRoiManager(plotWindow)

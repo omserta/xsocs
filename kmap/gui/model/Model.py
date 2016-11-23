@@ -202,7 +202,6 @@ class Model(Qt.QAbstractItemModel):
 
         for child in children:
             child.clear()
-            print 'adding', child
             self.__root.appendChild(child)
 
     def rowCount(self, parent=Qt.QModelIndex(), **kwargs):

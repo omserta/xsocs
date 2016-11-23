@@ -254,6 +254,8 @@ class H5DatasetNode(H5Base):
                     text = data.replace('\n', ' ')
                 else:
                     text = str(data)
+            elif ndims == 1 and item.shape[0] < 5:
+                text = str(item[:])
             else:
                 text = '...'
             del item

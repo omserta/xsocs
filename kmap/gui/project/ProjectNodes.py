@@ -61,6 +61,29 @@ class ScatterPlotButton(EditorMixin, Qt.QWidget):
         self.notifyView(event)
 
 
+class QSpaceButton(EditorMixin, Qt.QWidget):
+    persistent = True
+
+    sigValueChanged = Qt.Signal()
+
+    def __init__(self, parent, option, index):
+        super(QSpaceButton, self).__init__(parent, option, index)
+        layout = Qt.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        icon = icons.getQIcon('item-ndim')
+        button = Qt.QToolButton()
+        button.setIcon(icon)
+        layout.addWidget(button)
+        layout.addStretch(1)
+
+        button.clicked.connect(self.__clicked)
+
+    def __clicked(self):
+        # node = self.node
+        event = {'event': 'qspace'}
+        self.notifyView(event)
+
+
 @H5NodeClassDef('IntensityGroupNode',
                 attribute=('XsocsClass', 'IntensityGroup'))
 class IntensityGroupNode(H5GroupNode):
@@ -77,3 +100,9 @@ class IntensityNode(H5DatasetNode):
             self.setData(ModelColumns.NameColumn,
                          str(item.projectRoot().shortName(item.entry)),
                          Qt.Qt.DisplayRole)
+
+
+@H5NodeClassDef('QSpaceItem',
+                attribute=('XsocsClass', 'QSpaceItem'))
+class QSpaceItemNode(H5GroupNode):
+    editors = QSpaceButton

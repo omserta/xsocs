@@ -31,6 +31,8 @@ __date__ = "15/09/2016"
 
 import os
 
+import numpy as np
+
 # from .ProjectDef import ProcessId
 # from .HybridItem import HybridItem
 from ...io.QSpaceH5 import QSpaceH5
@@ -45,6 +47,7 @@ class QSpaceGroup(ProjectItem):
         itemPath = self.path + '/' + itemName
         item = QSpaceItem(self.filename, itemPath, mode='a')
         item.qspaceFile = qspaceFile
+        return item
 
 
 @ItemClassDef('QSpaceItem')
@@ -85,10 +88,30 @@ class QSpaceItem(ProjectItem):
         self._createItem()
 
     def _createItem(self):
-        print 'CREATE', self.qspaceFile
         qspaceFile = self.qspaceFile
         if qspaceFile is None:
             return
+
+        with QSpaceH5(qspaceFile) as qspaceH5:
+            with self:
+                pathTpl = self.path + '/info/{0}'
+                with qspaceH5.qspace_dset_ctx() as ctx:
+                    shape = np.array(ctx.shape)
+                itemPath = pathTpl.format('#')
+                self._set_scalar_data(itemPath, shape[0])
+                itemPath = pathTpl.format('shape')
+                self._set_array_data(itemPath, shape[1:])
+                qx = qspaceH5.qx
+                qy = qspaceH5.qy
+                qz = qspaceH5.qz
+                itemPath = pathTpl.format('qx range')
+                self._set_array_data(itemPath, np.array([qx[0], qx[-1]]))
+                itemPath = pathTpl.format('qy range')
+                self._set_array_data(itemPath, np.array([qy[0], qy[-1]]))
+                itemPath = pathTpl.format('qz range')
+                self._set_array_data(itemPath, np.array([qz[0], qz[-1]]))
+
+
 
 # @ItemClassDef('QSpaceItem')
 # class QSpaceItem(ProjectItem):

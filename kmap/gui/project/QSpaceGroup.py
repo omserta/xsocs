@@ -58,6 +58,9 @@ class QSpaceItem(ProjectItem):
         self.__qspaceFile = None
         super(QSpaceItem, self).__init__(*args, **kwargs)
 
+    qspaceH5 = property(lambda self: QSpaceH5(self.qspaceFile)
+                        if self.qspaceFile else None)
+
     @property
     def qspaceFile(self):
         """ The name of the input data file. """

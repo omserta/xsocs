@@ -36,12 +36,14 @@ from matplotlib import cm
 from silx.gui import qt as Qt
 from silx.gui.plot import PlotWindow
 from plot3d.ScalarFieldView import ScalarFieldView
+from plot3d.SFViewParamTree import TreeView as SFTreeView
 
 from ...io.QSpaceH5 import QSpaceH5
 from ..model.ModelDef import ModelRoles
 # from ..project.HybridItem import HybridItem
 from ..project.QSpaceGroup import QSpaceItem
 from ..model.TreeView import TreeView
+from ..project.XsocsH5Factory import h5NodeToProjectItem
 
 
 class QSpaceTree(TreeView):
@@ -84,10 +86,21 @@ class QSpaceView(Qt.QMainWindow):
         plotWindow.sigPlotSignal.connect(self.__plotSignal)
         plotWindow.setKeepDataAspectRatio(True)
         plotWindow.setActiveCurveHandling(False)
-        # self.setCentralWidget(plotWindow)
-        self.__isoView = None
+        item = h5NodeToProjectItem(node)
+        with item.qspaceH5 as qspaceH5:
+            self.__setPlotData(qspaceH5.sample_x,
+                               qspaceH5.sample_y,
+                               qspaceH5.qspace_sum)
+        self.__node = node
+
+        self.__view3d = view3d = ScalarFieldView(self)
+        sfDock = Qt.QDockWidget()
+        sfTree = SFTreeView()
+        sfTree.setSfView(view3d)
+        sfDock.setWidget(sfTree)
+        view3d.addDockWidget(Qt.Qt.RightDockWidgetArea, sfDock)
+        self.setCentralWidget(view3d)
         self.__isoPosition = None
-        self.__plotType = None
 
         treeDock = Qt.QDockWidget(self)
         tree = TreeView(self, model=model)
@@ -104,43 +117,33 @@ class QSpaceView(Qt.QMainWindow):
         plotDock.setWidget(plotWindow)
         features = plotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         plotDock.setFeatures(features)
-        self.addDockWidget(Qt.Qt.RightDockWidgetArea, plotDock)
-        # self.splitDockWidget(treeDock, plotDock, Qt.Qt.Vertical)
+        # self.addDockWidget(Qt.Qt.RightDockWidgetArea, plotDock)
+        self.splitDockWidget(treeDock, plotDock, Qt.Qt.Vertical)
 
-    def _emitEvent(self, event):
-        self.sigProcessApplied.emit(event)
+        style = Qt.QApplication.style()
+        icon = style.standardIcon(Qt.QStyle.SP_DialogApplyButton)
+        toolBar = self.addToolBar('Fit')
+        action = Qt.QAction(icon, 'Fit', toolBar)
+        action.setIcon(icon)
+        action.triggered.connect(self.__roiApplied)
+        # fitBn = Qt.QToolButton()
+        # fitBn.setIcon(icon)
+        toolBar.addAction(action)
 
     # TODO : refactor this in a common base with RealSpaceViewWidget
-    def setPlotData(self, x, y, data):
+    def __setPlotData(self, x, y, data):
         plot = self.__plotWindow
-        if data.ndim == 1:
-            # scatter
-            min_, max_ = data.min(), data.max()
-            colormap = cm.jet
-            colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
-            plot.addCurve(x, y,
-                          color=colors,
-                          symbol='s',
-                          linestyle='')
-            self.__plotType = 'scatter'
-        elif data.ndim == 2:
-            # image
-            min_, max_ = data.min(), data.max()
-            colormap = {'name': 'temperature',
-                        'normalization': 'linear',
-                        'autoscale': True,
-                        'vmin': min_,
-                        'vmax': max_}
-            origin = x[0], y[0]
-            scale = (x[-1] - x[0]) / len(x), (y[-1] - y[0]) / len(y)
-            plot.addImage(data,
-                          origin=origin,
-                          scale=scale,
-                          colormap=colormap)
-            self.__plotType = 'image'
-        else:
-            raise ValueError('data has {0} dimensions, expected 1 or 2.'
-                             ''.format(data.ndim))
+        # scatter
+        min_, max_ = data.min(), data.max()
+        colormap = cm.jet
+        colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
+        plot.addCurve(x, y,
+                      color=colors,
+                      symbol='s',
+                      linestyle='')
+
+    def __roiApplied(self):
+        self.sigProcessApplied.emit(self.__node)
 
     def __plotSignal(self, event):
         if event['event'] not in ('curveClicked',): # , 'mouseClicked'):
@@ -150,64 +153,25 @@ class QSpaceView(Qt.QMainWindow):
         self.__showIsoView(x, y)
 
     def __showIsoView(self, x, y):
-        print 'SHOW'
-        # if self.__isoPosition is not None:
-        #     if self.__isoPosition[0] == x and self.__isoPosition[1] == y:
-        #         return
-        # isoView = self.__isoView
-        # if isoView is None:
-        #     isoView = IsoViewMainWindow(parent=self)
-        #     if isinstance(self.parent(), Qt.QMdiSubWindow):
-        #         self.parent().mdiArea().addSubWindow(isoView)
+        isoView = self.__view3d
+        plot = self.__plotWindow
+        item = h5NodeToProjectItem(self.__node)
 
-        # node = self.index.data(ModelRoles.InternalDataRole)
+        with item.qspaceH5 as qspaceH5:
+            sampleX = qspaceH5.sample_x
+            sampleY = qspaceH5.sample_y
 
-        # item = HybridItem(node.projectFile, node.path)
+            # TODO : better
+            try:
+                xIdx = (np.abs(sampleX - x) + np.abs(sampleY - y)).argmin()
+            except:
+                xIdx = (np.abs(sampleX - x[0]) + np.abs(sampleY - y[0])).argmin()
 
-        # if item.hasScatter():
-        #     xPos, yPos, _ = item.getScatter()
-        # elif item.hasImage():
-        #     xPos, yPos, _ = item.getImage()
-        # else:
-        #     return None
+            x = sampleX[xIdx]
+            y = sampleY[xIdx]
 
-        # # TODO : this wont work with images
-        # try:
-        #     xIdx = (np.abs(xPos - x)).argmin()
-        # except:
-        #     print x
-        #     xIdx = (np.abs(xPos - x[0])).argmin()
-        #
-        # # TODO : this is not robust at all
-        # qspaceNode = node.parent()
-        # qspaceItem = QSpaceItem(qspaceNode.projectFile, qspaceNode.path)
-        # qspaceH5 = QSpaceH5(qspaceItem.qspaceFile)
-        #
-        # qspace = qspaceH5.qspace_slice(xIdx)
-        #
-        # isoView.setData(qspace)
-        # self.__isoView = isoView
-        # isoView.show()
+            plot.addXMarker(x, legend='Xselection')
+            plot.addYMarker(y, legend='Yselection')
 
-#
-# class IsoViewMainWindow(ScalarFieldView):
-#     """Window displaying an isosurface and some controls."""
-#
-#     def __init__(self, *args, **kwargs):
-#         super(IsoViewMainWindow, self).__init__(*args, **kwargs)
-#         self.setAttribute(Qt.Qt.WA_DeleteOnClose)
-#
-#         # Adjust lighting
-#         self.plot3D.viewport.light.direction = 0., 0., -1.
-#         self.plot3D.viewport.light.shininess = 32
-#         self.plot3D.viewport.bgColor = 0.2, 0.2, 0.2, 1.
-#
-#         # Add controller dock widget
-#         self._control = _Controller(viewer=self)
-#         self._control.setWindowTitle('Isosurface')
-#         self.addDockWidget(Qt.Qt.RightDockWidgetArea, self._control)
-#
-#     def setData(self, data, copy=True):
-#         data = np.asarray(data)
-#         self._control.setRange(data.min(), data.max())
-#         super(IsoViewMainWindow, self).setData(data, copy)
+            qspace = qspaceH5.qspace_slice(xIdx)
+            isoView.setData(qspace)

@@ -140,13 +140,17 @@ class XsocsGui(Qt.QMainWindow):
             self.model().reset()
 
     def __showQSpace(self, node):
-        print node
         view = self.__qspaceViews.get(node)
         if not view:
             view = QSpaceView(self, model=node.model, node=node)
             self.__qspaceViews[node] = view
+            view.sigProcessApplied.connect(self.__qspaceRoiApplied)
             # view.sigProcessApplied.connect(self.__intensityRoiApplied)
         view.show()
+
+    def __qspaceRoiApplied(self, node):
+        item = h5NodeToProjectItem(node)
+        print item
 
     def model(self):
         return self.centralWidget().model()

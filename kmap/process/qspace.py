@@ -131,7 +131,9 @@ class RecipSpaceConverter(object):
         # at the moment using only the first scan's positions
         with XsocsH5.XsocsH5(self.__data_h5f) as xsocsH5:
             entries = xsocsH5.entries()
-            x_pos, y_pos = xsocsH5.scan_positions(entries[0])
+            positions = xsocsH5.scan_positions(entries[0])
+            x_pos = positions.pos_0
+            y_pos = positions.pos_1
             scan_params = xsocsH5.scan_params(entries[0])
 
         if self.__rect_roi is None:
@@ -718,9 +720,9 @@ def _img_2_qspace(data_h5f,
 
         entry_files = []
 
-        # sample_x = master_h5.measurement(entries[0], 'adcX')
-        # sample_y = master_h5.measurement(entries[0], 'adcY')
-        sample_x, sample_y = master_h5.scan_positions(entries[0])
+        positions = master_h5.scan_positions(entries[0])
+        sample_x = positions.pos_0
+        sample_y = positions.pos_1
 
         for entry_idx, entry in enumerate(entries):
             entry_file = master_h5.entry_filename(entry)

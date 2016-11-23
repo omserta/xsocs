@@ -62,27 +62,42 @@ class ProjectItem(XsocsH5Base):
 
         self.__gui = weakref.ref(gui) if gui is not None else None
 
+        # TODO : improve (maybe check if attributes are already present
+        if nodePath == '/':
+            self.__setXsocsAttributes(self.XsocsClass, processLevel)
+
         if self._path_exists(nodePath):
             self._loadItem()
         else:
             with self._get_file() as h5f:
                 if data is not None:
                     h5f[nodePath] = data
-                    item = h5f[nodePath]
                 else:
-                    item = h5f.require_group(nodePath)
-                if self.XsocsClass is not None:
-                    item.attrs['XsocsClass'] = np.string_(self.XsocsClass)
-                if processLevel is not None:
+                    h5f.require_group(nodePath)
+                self.__setXsocsAttributes(self.XsocsClass,
+                                          processLevel)
+            self._createItem()
+
+    def __setXsocsAttributes(self, xsocsClass, processLevel):
+        if self.mode not in ('r',):
+            with self._get_file() as h5f:
+                item = h5f[self.path]
+                if self.XsocsClass is not None\
+                        and 'XsocsClass' not in item.attrs:
+                    # for some reason there was an error when using
+                    # attrs.get(), so I had to use "not in" instead
+                    item.attrs['XsocsClass'] = np.string_(xsocsClass)
+                if processLevel is not None \
+                        and item.attrs.get('XsocsLevel') is None:
                     item.attrs['XsocsLevel'] = processLevel
                 del item
-            self._createItem()
 
     def cast(self):
         className = self.xsocsClass
         klass = getItemClass(className)
         if klass:
             return klass(self.filename, self.path, mode=self.mode)
+        return self
 
     def projectRoot(self):
         return ProjectItem(self.filename, '/', mode=self.mode).cast()

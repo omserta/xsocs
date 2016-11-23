@@ -40,7 +40,7 @@ from plot3d.ScalarFieldView import ScalarFieldView
 from ...io.QSpaceH5 import QSpaceH5
 from ..model.ModelDef import ModelRoles
 from ..project.HybridItem import HybridItem
-from ..project.QSpaceItem import QSpaceItem
+from ..project.QSpaceGroup import QSpaceItem
 
 from .DataViewWidget import DataViewWidget, DataViewEvent
 

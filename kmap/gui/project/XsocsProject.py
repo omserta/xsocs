@@ -34,7 +34,7 @@ from .ProjectDef import ItemClassDef
 from .ProjectItem import ProjectItem
 from .AcqDataGroup import AcqDataGroup
 from .IntensityGroup import IntensityGroup
-from .ScanPositionsItem import ScanPositionsItem
+from .QSpaceGroup import QSpaceGroup
 
 
 @ItemClassDef('XsocsProject')
@@ -42,6 +42,7 @@ class XsocsProject(ProjectItem):
     AcquisitionGroupPath = '/Acquisition'
     # ScanPositionsPath = '/Positions'
     IntensityGroupPath = '/Intensity'
+    QSpaceGroupPath = '/QSpace'
 
     XsocsNone, XsocsInput, XsocsQSpace, XsocsFit = range(4)
 
@@ -58,21 +59,29 @@ class XsocsProject(ProjectItem):
                      self.AcquisitionGroupPath,
                      mode=self.mode,
                      gui=self.gui)
-        # grp = ScanPositionsItem(self.filename,
-        #                         XsocsProject.ScanPositionsPath,
-        #                         mode=self.mode,
-        #                         gui=self.gui)
-        # grp.setHidden(True)
         IntensityGroup(self.filename,
                        self.IntensityGroupPath,
                        mode=self.mode,
                        gui=self.gui)
+        QSpaceGroup(self.filename,
+                    self.QSpaceGroupPath,
+                    mode=self.mode,
+                    gui=self.gui)
 
     def positions(self, entry):
         with self.xsocsH5 as xsocsH5:
-            print xsocsH5
+            if entry == 'Total':
+                entry = xsocsH5.entries()[0]
             return xsocsH5.scan_positions(entry)
-        # return ScanPositionsItem(self.filename,
-        #                          self.ScanPositionsPath,
-        #                          mode='r',
-        #                          gui=self.gui)
+
+    def shortName(self, entry):
+        if entry == 'Total':
+            return entry
+        with self.xsocsH5 as xsocsH5:
+            return str(xsocsH5.scan_angle(entry))
+
+    def qspaceGroup(self, mode=None):
+        mode = mode or self.mode
+        return QSpaceGroup(self.filename,
+                           self.QSpaceGroupPath,
+                           mode=mode)

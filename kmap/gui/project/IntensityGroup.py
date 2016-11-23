@@ -53,22 +53,12 @@ class IntensityItem(ProjectItem):
 
     @property
     def entry(self):
-        return self.path.rpartition('/')[-1]
-
-    @property
-    def name(self):
-        entry = self.entry
-        angle = self.xsocsH5.scan_angle(entry)
-        if angle is not None:
-            return str(angle)
-        return entry
+        return self.path.rsplit('/')[-1]
 
     def getScatterData(self):
         entry = self.entry
-        if entry == 'Total':
-            entry = self.xsocsH5.entries[0]
         intensity = self._get_array_data(self.path)
-        scanPositions = self.xsocsH5.scan_positions(entry)
+        scanPositions = self.projectRoot().positions(entry)
         return intensity, scanPositions
 
 
@@ -86,7 +76,10 @@ class IntensityGroup(ProjectItem):
             for entry in entries[1:]:
                 intensity += self._get_array_data(path_tpl.format(entry))
             itemPath = self.path + '/Total'
-            item = IntensityItem(self.filename, itemPath, mode=self.mode, data=intensity)
+            IntensityItem(self.filename,
+                          itemPath,
+                          mode=self.mode,
+                          data=intensity)
 
     def getScatterData(self):
         entry = self.xsocsH5.entries()[0]

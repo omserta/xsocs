@@ -137,6 +137,7 @@ class Node(object):
                  subject=None,
                  nodeName=None,
                  branchName=None,
+                 model=None,
                  **kwargs):
         super(Node, self).__init__()
 
@@ -148,6 +149,8 @@ class Node(object):
 
         self.__started = False
         self.__connected = False
+        self.__model = None
+        self.setModel(model)
 
         editors = kwargs.get('editors', None)
         if editors is not None:
@@ -272,6 +275,16 @@ class Node(object):
 
     hidden = property(lambda self: self.__hidden)
 
+    def setModel(self, model):
+        if model:
+            self.__model = weakref.ref(model)
+        else:
+            self.__model = None
+
+    @property
+    def model(self):
+        return (self.__model and self.__model()) or None
+
     @hidden.setter
     def hidden(self, hidden):
         self.__hidden = hidden
@@ -339,6 +352,31 @@ class Node(object):
     def _setupNode(self):
         pass
 
+    def _getDepth(self):
+
+        parent = self.parent()
+        row = self.row()
+
+        if row < 0:
+            return []
+        if parent:
+            depth = parent._getDepth()
+        else:
+            depth = []
+
+        depth.append(row)
+        return depth
+
+    def index(self):
+        model = self.model
+        index = Qt.QModelIndex()
+        if model is None:
+            return index
+        depth = self._getDepth()
+        for row in depth:
+            index = model.index(row, ModelColumns.NameColumn, index)
+        return index
+
     enabled = property(lambda self: self.__enabled)
 
     def setEnabled(self, enabled, update=True):
@@ -372,7 +410,7 @@ class Node(object):
 
     def appendChild(self, child):
         # TODO : add the node directly if there is no parent!
-        if self.parent() is None:
+        if self.model is None:
             self._appendChild(child)
         else:
             self.sigChildAdded.emit([self.childCount()], child)
@@ -571,6 +609,7 @@ class Node(object):
             self.__parent._childDisconnect(self)
 
         self.__parent = parent
+        self.setModel(parent.model)
 
         if parent is None:
             return

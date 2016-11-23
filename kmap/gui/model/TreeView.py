@@ -39,7 +39,7 @@ from .NodeEditor import EditorMixin
 
 class TreeView(Qt.QTreeView):
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, model=None):
         super(TreeView, self).__init__(parent)
         delegate = ItemDelegate(self)
         self.setItemDelegateForColumn(ModelColumns.NameColumn, delegate)
@@ -57,7 +57,11 @@ class TreeView(Qt.QTreeView):
         self.collapsed.connect(self.__collapsed)
         self.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
         self.__showUniqueGroup = False
+        self.__userRoot = False
         self.setSelectionBehavior(Qt.QAbstractItemView.SelectRows)
+
+        if model:
+            self.setModel(model)
 
     showUniqueGroup = property(lambda self: self.__showUniqueGroup)
 
@@ -107,13 +111,18 @@ class TreeView(Qt.QTreeView):
         self.__openPersistentEditors(Qt.QModelIndex(), openEditor=True)
 
     def __updateUniqueGroupVisibility(self):
+        if self.__userRoot:
+            return
         model = self.model()
         if model and model.rowCount() == 1 and not self.__showUniqueGroup:
             index = model.index(0, 0)
-            self.setRootIndex(index)
+            self.__setRootIndex(index)
             self.__setHiddenNodes(index)
         else:
-            self.setRootIndex(Qt.QModelIndex())
+            self.__setRootIndex(Qt.QModelIndex())
+
+    def __setRootIndex(self, index):
+        super(TreeView, self).setRootIndex(index)
 
     def rowsInserted(self, index, start, end):
         super(TreeView, self).rowsInserted(index, start, end)
@@ -160,6 +169,16 @@ class TreeView(Qt.QTreeView):
                 persistent = sibling.data(ModelRoles.PersistentEditorRole)
                 if persistent or not openEditor:
                     meth(sibling)
+
+    def setRootIndex(self, index):
+        self.__openPersistentEditors(self.rootIndex(), False)
+        if index.isValid():
+            self.__userRoot = True
+            super(TreeView, self).setRootIndex(index)
+        else:
+            self.__userRoot = False
+            self.__updateUniqueGroupVisibility()
+        self.__openPersistentEditors(self.rootIndex(), True)
 
     def setModel(self, model):
         if self.model():

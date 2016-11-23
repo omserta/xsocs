@@ -25,6 +25,8 @@
 
 from __future__ import absolute_import
 
+import os
+
 from silx.gui import qt as Qt
 
 from .widgets.Wizard import XsocsWizard
@@ -33,6 +35,7 @@ from .Widgets import (AcqParamsWidget,
 # from .Utils import (viewWidgetFromProjectEvent,
 #                     processWidgetFromViewEvent,
 #                     processDoneEvent)
+from .process.RecipSpaceWidget import RecipSpaceWidget
 from .view.IntensityView import IntensityView
 from .project.XsocsProject import XsocsProject
 from .model.TreeView import TreeView
@@ -40,6 +43,7 @@ from .model.Model import Model
 from .project.IntensityGroup import IntensityGroup, IntensityItem
 from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
 from .project.Hdf5Nodes import setH5NodeFactory, H5File
+from .Utils import nextFileName
 
 
 _COMPANY_NAME = 'ESRF'
@@ -98,18 +102,40 @@ class XsocsGui(Qt.QMainWindow):
 
         if isinstance(projectItem, (IntensityGroup, IntensityItem))\
                 and event['event'] == 'scatter':
-            self.__showIntensity(projectItem)
+            self.__showIntensity(node)
         else:
             ValueError('Unknwown event for item {0} : {1}.'
                        ''.format(projectItem, event))
 
-    def __showIntensity(self, item):
-        # intensity, positions = item.getScatterData()
+    def __showIntensity(self, node):
         view = self.__intensityView
         if not view:
-            self.__intensityView = view = IntensityView(item, self)
-        # view.setPlotData(positions.pos_0, positions.pos_1, intensity)
+            self.__intensityView = view = IntensityView(self,
+                                                        model=node.model,
+                                                        node=node)
+            view.sigProcessApplied.connect(self.__intensityRoiApplied)
         view.show()
+
+    def __intensityRoiApplied(self, event):
+        xsocsFile = os.path.basename(self.__project.xsocsFile)
+        xsocsPrefix = xsocsFile.rpartition('.')[0]
+        template = '{0}_qspace_{{0:>04}}.h5'.format(xsocsPrefix)
+        output_f = nextFileName(self.__project.workdir, template)
+        widget = RecipSpaceWidget(parent=self,
+                                  data_h5f=self.__project.xsocsFile,
+                                  output_f=output_f,
+                                  qspace_size=None,
+                                  image_binning=None,
+                                  rect_roi=event)
+        widget.exec_()
+        if widget.status == RecipSpaceWidget.StatusCompleted:
+            qspaceF = widget.qspaceH5
+        qspaceGroup = self.__project.qspaceGroup()
+        qspaceGroup.addQSpace(qspaceF)
+        self.model().refresh()
+
+    def model(self):
+        self.centralWidget().model()
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)
@@ -195,36 +221,36 @@ class XsocsGui(Qt.QMainWindow):
         menus['file'] = fileMenu
         menus['help'] = helpMenu
 
-        def __projectViewSlot(self, event):
-            # TODO : store the plot window in a dictionary + weakref w delete
-            #   callback when object is destroyed
-            mdi = self.centralWidget()
-            widget = viewWidgetFromProjectEvent(self.__project, event)
-            if widget is None:
-                print('UNKNOWN VIEW EVENT')
-                return
-            widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
-            try:
-                widget.sigProcessApplied.connect(self.__processApplied)
-            except AttributeError:
-                pass
-            mdi.addSubWindow(widget)
-            widget.show()
-
-        def __processApplied(self, event):
-            widget = processWidgetFromViewEvent(self.__project, event,
-                                                parent=self)
-            if widget is None:
-                print('UNKNOWN PROCESS EVENT')
-                return
-            widget.setWindowFlags(Qt.Qt.Dialog)
-            widget.setWindowModality(Qt.Qt.WindowModal)
-            widget.sigProcessDone.connect(self.__processDone)
-            widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
-            widget.show()
-
-        def __processDone(self, event):
-            processDoneEvent(self.__project, event)
+        # def __projectViewSlot(self, event):
+        #     # TODO : store the plot window in a dictionary + weakref w delete
+        #     #   callback when object is destroyed
+        #     mdi = self.centralWidget()
+        #     widget = viewWidgetFromProjectEvent(self.__project, event)
+        #     if widget is None:
+        #         print('UNKNOWN VIEW EVENT')
+        #         return
+        #     widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
+        #     try:
+        #         widget.sigProcessApplied.connect(self.__processApplied)
+        #     except AttributeError:
+        #         pass
+        #     mdi.addSubWindow(widget)
+        #     widget.show()
+        #
+        # def __processApplied(self, event):
+        #     widget = processWidgetFromViewEvent(self.__project, event,
+        #                                         parent=self)
+        #     if widget is None:
+        #         print('UNKNOWN PROCESS EVENT')
+        #         return
+        #     widget.setWindowFlags(Qt.Qt.Dialog)
+        #     widget.setWindowModality(Qt.Qt.WindowModal)
+        #     widget.sigProcessDone.connect(self.__processDone)
+        #     widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
+        #     widget.show()
+        #
+        # def __processDone(self, event):
+        #     processDoneEvent(self.__project, event)
 
     # def __createToolBars(self):
     #     self.__toolBars = toolBars = {}

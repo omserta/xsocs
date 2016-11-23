@@ -40,15 +40,11 @@ from ..model.ModelDef import ModelColumns, ModelRoles
 from ..project.XsocsH5Factory import h5NodeToProjectItem
 from ..project.XsocsH5Factory import XsocsH5Factory
 
-from .DataViewWidget import DataViewWidget, DataViewEvent
-
 try:
     from silx.gui.plot.ImageRois import ImageRoiManager
 except ImportError:
     # TODO remove this import once the ROIs are added to the silx release.
     from ..silx_imports.ImageRois import ImageRoiManager
-
-
 
 
 class RectRoiWidget(Qt.QWidget):
@@ -157,26 +153,15 @@ class RectRoiWidget(Qt.QWidget):
         self.__display(event['xdata'], event['ydata'])
 
 
-class IntensityViewEvent(DataViewEvent):
-    pass
-
-
 class IntensityTree(TreeView):
     sigCurrentChanged = Qt.Signal(object)
 
     def __init__(self, *args, **kwargs):
         super(IntensityTree, self).__init__(*args, **kwargs)
         self.disableDelegateForColumn(1, True)
-        model = Model(self)
-        model.startModel()
-        self.setModel(model)
         for col in range(ModelColumns.ColumnMax):
             if col != ModelColumns.NameColumn:
                 self.setColumnHidden(col, True)
-
-    def setIntensityItem(self, item):
-        rootNode = XsocsH5Factory(item.filename, item.path)
-        self.model().appendGroup(rootNode)
 
     def currentChanged(self, current, previous):
         node = current.data(ModelRoles.InternalDataRole)
@@ -187,10 +172,15 @@ class IntensityTree(TreeView):
 
 
 class IntensityView(Qt.QMainWindow):
+    sigProcessApplied = Qt.Signal(object)
 
     plot = property(lambda self: self.__plotWindow)
 
-    def __init__(self, intensityItem, parent=None, **kwargs):
+    def __init__(self,
+                 parent,
+                 model,
+                 node,
+                 **kwargs):
         super(IntensityView, self).__init__(parent=parent)
 
         self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True,
@@ -202,8 +192,9 @@ class IntensityView(Qt.QMainWindow):
         plotWindow.setActiveCurveHandling(False)
 
         dock = Qt.QDockWidget(self)
-        tree = IntensityTree(self)
-        tree.setIntensityItem(intensityItem)
+        tree = IntensityTree(self, model=model)
+        index = node.index()
+        tree.setRootIndex(index)
         tree.sigCurrentChanged.connect(self.__itemSelected)
         dock.setWidget(tree)
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, dock)
@@ -256,7 +247,7 @@ class IntensityView(Qt.QMainWindow):
                              ''.format(data.ndim))
 
     def __roiApplied(self, roi):
-        self._emitEvent(IntensityViewEvent(self, roi))
+        self.sigProcessApplied.emit(roi)
 
 
 if __name__ == '__main__':

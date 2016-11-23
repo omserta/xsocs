@@ -32,55 +32,55 @@ __date__ = "15/09/2016"
 import os
 import h5py
 
-from silx.gui.hdf5 import Hdf5TreeView
-
-from .model.ModelDef import ModelRoles
-from .project.ProjectDef import ProcessId
-from .project.HybridItem import HybridItem
-from .process.RecipSpaceWidget import (RecipSpaceWidget,
-                                       RecipSpaceWidgetEvent)
-from .view.RealSpaceViewWidget import (RealSpaceViewWidget,
-                                       RealSpaceViewWidgetEvent)
-from .view.QspaceViewWidget import (QSpaceViewWidget,
-                                    QSpaceViewWidgetEvent)
-from .project.QSpaceItem import QSpaceItem
-
-
-# TODO : something a bit more... flexible
-def viewWidgetFromProjectEvent(project, event):
-    index = event.index
-    processId = index.data(ModelRoles.XsocsProcessId)
-    eventData = event.data
-
-    widgetCls = None
-    xsocsType = index.data(ModelRoles.XsocsNodeType)
-    if xsocsType == h5py.ExternalLink:
-        widget = Hdf5TreeView()
-        widget.findHdf5TreeModel().appendFile(event.data)
-        return widget
-
-    if xsocsType == 'HybridItem':
-        if eventData.evtType == 'scatter':
-            plotData = HybridItem(project.filename,
-                                  eventData.path).getScatter()
-        elif eventData.evtType == 'image':
-            plotData = HybridItem(project.filename,
-                                  eventData.path).getImage()
-        else:
-            plotData = None
-
-    if processId == ProcessId.Input:
-        widgetCls = RealSpaceViewWidget
-    elif processId == ProcessId.QSpace:
-        widgetCls = QSpaceViewWidget
-
-    if widgetCls is not None and plotData is not None:
-        widget = widgetCls(index)
-        widget.setPlotData(*plotData)
-        return widget
-
-    print('Nothing to DO')
-    return None
+# from silx.gui.hdf5 import Hdf5TreeView
+#
+# from .model.ModelDef import ModelRoles
+# from .project.ProjectDef import ProcessId
+# # from .project.HybridItem import HybridItem
+# from .process.RecipSpaceWidget import (RecipSpaceWidget,
+#                                        RecipSpaceWidgetEvent)
+# from .view.RealSpaceViewWidget import (RealSpaceViewWidget,
+#                                        RealSpaceViewWidgetEvent)
+# from .view.QspaceViewWidget import (QSpaceViewWidget,
+#                                     QSpaceViewWidgetEvent)
+# from .project.QSpaceItem import QSpaceItem
+#
+#
+# # TODO : something a bit more... flexible
+# def viewWidgetFromProjectEvent(project, event):
+#     index = event.index
+#     processId = index.data(ModelRoles.XsocsProcessId)
+#     eventData = event.data
+#
+#     widgetCls = None
+#     xsocsType = index.data(ModelRoles.XsocsNodeType)
+#     if xsocsType == h5py.ExternalLink:
+#         widget = Hdf5TreeView()
+#         widget.findHdf5TreeModel().appendFile(event.data)
+#         return widget
+#
+#     if xsocsType == 'HybridItem':
+#         if eventData.evtType == 'scatter':
+#             plotData = HybridItem(project.filename,
+#                                   eventData.path).getScatter()
+#         elif eventData.evtType == 'image':
+#             plotData = HybridItem(project.filename,
+#                                   eventData.path).getImage()
+#         else:
+#             plotData = None
+#
+#     if processId == ProcessId.Input:
+#         widgetCls = RealSpaceViewWidget
+#     elif processId == ProcessId.QSpace:
+#         widgetCls = QSpaceViewWidget
+#
+#     if widgetCls is not None and plotData is not None:
+#         widget = widgetCls(index)
+#         widget.setPlotData(*plotData)
+#         return widget
+#
+#     print('Nothing to DO')
+#     return None
 
 
 # TODO : something better!
@@ -93,37 +93,37 @@ def nextFileName(root, template, cntMax=10000):
     else:
         raise ValueError('No available file names.')
 
-
-# TODO : cache the widget to reuse previous parameters?
-def processWidgetFromViewEvent(project, event, parent=None):
-    widget = None
-    index = event.index
-
-    if isinstance(event, RealSpaceViewWidgetEvent):
-        xsocsPrefix = os.path.basename(project.xsocsFile).rpartition('.')[0]
-        template = '{0}_qspace_{{0:>04}}.h5'.format(xsocsPrefix)
-        output_f = nextFileName(project.workdir, template)
-        widget = RecipSpaceWidget(parent=parent,
-                                  index=index,
-                                  data_h5f=project.xsocsFile,
-                                  output_f=output_f,
-                                  qspace_size=None,
-                                  image_binning=None,
-                                  rect_roi=event.data)
-    return widget
-
-
-# TODO : rework this
-def processDoneEvent(project, event):
-    eventData = event.data
-
-    if isinstance(event, RecipSpaceWidgetEvent):
-        qspaceH5 = eventData.qspaceH5
-        prefix = os.path.basename(qspaceH5).rpartition('.')[0]
-        processLevel = ProcessId.QSpace
-        itemPath = 'Qspace/' + prefix
-        item = QSpaceItem(project.filename,
-                          itemPath,
-                          processLevel=processLevel)
-        item.qspaceFile = qspaceH5
-        project.reload()
+#
+# # TODO : cache the widget to reuse previous parameters?
+# def processWidgetFromViewEvent(project, event, parent=None):
+#     widget = None
+#     index = event.index
+#
+#     if isinstance(event, RealSpaceViewWidgetEvent):
+#         xsocsPrefix = os.path.basename(project.xsocsFile).rpartition('.')[0]
+#         template = '{0}_qspace_{{0:>04}}.h5'.format(xsocsPrefix)
+#         output_f = nextFileName(project.workdir, template)
+#         widget = RecipSpaceWidget(parent=parent,
+#                                   index=index,
+#                                   data_h5f=project.xsocsFile,
+#                                   output_f=output_f,
+#                                   qspace_size=None,
+#                                   image_binning=None,
+#                                   rect_roi=event.data)
+#     return widget
+#
+#
+# # TODO : rework this
+# def processDoneEvent(project, event):
+#     eventData = event.data
+#
+#     if isinstance(event, RecipSpaceWidgetEvent):
+#         qspaceH5 = eventData.qspaceH5
+#         prefix = os.path.basename(qspaceH5).rpartition('.')[0]
+#         processLevel = ProcessId.QSpace
+#         itemPath = 'Qspace/' + prefix
+#         item = QSpaceItem(project.filename,
+#                           itemPath,
+#                           processLevel=processLevel)
+#         item.qspaceFile = qspaceH5
+#         project.reload()

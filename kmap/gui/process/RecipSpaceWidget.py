@@ -34,7 +34,7 @@ from collections import namedtuple
 
 from silx.gui import qt as Qt
 
-from .ProcessWidget import ProcessWidget, ProcessWidgetEvent
+# from .ProcessWidget import ProcessWidget, ProcessWidgetEvent
 from ..Widgets import (AcqParamsWidget,
                        AdjustedLineEdit,
                        AdjustedPushButton)
@@ -160,11 +160,17 @@ class ConversionParamsWidget(Qt.QWidget):
         self.__qsize_z_edit.setText(str(int(qspace_size[2])))
 
 
-class RecipSpaceWidgetEvent(ProcessWidgetEvent):
-    RecipSpaceEventData = namedtuple('RecipSpaceEventData', ['qspaceH5'])
+# class RecipSpaceWidgetEvent(ProcessWidgetEvent):
+#     RecipSpaceEventData = namedtuple('RecipSpaceEventData', ['qspaceH5'])
 
 
-class RecipSpaceWidget(ProcessWidget):
+# class RecipSpaceWidget(ProcessWidget):
+class RecipSpaceWidget(Qt.QDialog):
+    sigProcessDone = Qt.Signal(object)
+
+    (StatusUnknown, StatusInit,
+     StatusRunning, StatusCompleted,
+     StatusAborted, StatusCanceled) = StatusList = range(6)
 
     __sigConvertDone = Qt.Signal()
 
@@ -177,9 +183,10 @@ class RecipSpaceWidget(ProcessWidget):
                  **kwargs):
         super(RecipSpaceWidget, self).__init__(**kwargs)
 
-        self.__central = Qt.QWidget()
-        self.setCentralWidget(self.__central)
-        topLayout = Qt.QGridLayout(self.__central)
+        self.__status = RecipSpaceWidget.StatusInit
+        # self.__central = Qt.QWidget()
+        # self.setCentralWidget(self.__central)
+        topLayout = Qt.QGridLayout(self)
 
         self.__rectRoi = rect_roi
 
@@ -469,28 +476,38 @@ class RecipSpaceWidget(ProcessWidget):
         self.__converter = converter
         procDialog = _ConversionProcessDialog(converter, parent=self, **kwargs)
         procDialog.accepted.connect(partial(
-            self.__convertDone, status=ProcessWidget.StatusCompleted))
+            self.__convertDone, status=RecipSpaceWidget.StatusCompleted))
         procDialog.rejected.connect(partial(
-            self.__convertDone, status=ProcessWidget.StatusAborted))
-        self._setStatus(ProcessWidget.StatusRunning)
+            self.__convertDone, status=RecipSpaceWidget.StatusAborted))
+        self._setStatus(self.StatusRunning)
         procDialog.exec_()
 
     def __convertDone(self, status=None):
         self._setStatus(status)
-        if status == ProcessWidget.StatusCompleted:
+        if status == RecipSpaceWidget.StatusCompleted:
             self.__qspaceH5 = self.__widgets.output_file_edit.text()
             self.hide()
         else:
             self.__qspaceH5 = None
         processedData = self._processData()
-        evtData = RecipSpaceWidgetEvent.RecipSpaceEventData(
-            qspaceH5=processedData)
-        self._emitEvent(RecipSpaceWidgetEvent(self, evtData))
+        print 'DONE', processedData
+        self.sigProcessDone.emit(processedData)
+        # evtData = RecipSpaceWidgetEvent.RecipSpaceEventData(
+        #     qspaceH5=processedData)
+        # self._emitEvent(RecipSpaceWidgetEvent(self, evtData))
 
     qspaceH5 = property(lambda self: self.__qspaceH5)
 
     def _processData(self):
         return self.qspaceH5
+
+    status = property(lambda self: self.__status)
+
+    def _setStatus(self, status):
+        if status not in RecipSpaceWidget.StatusList:
+            raise ValueError('Unknown status value : {0}.'
+                             ''.format(status))
+        self.__status = status
 
     def __acqParamChkBnStateChanged(self, state):
         """
@@ -519,7 +536,7 @@ class RecipSpaceWidget(ProcessWidget):
 
         widgets.output_file_edit.setText('')
 
-        self._setStatus(ProcessWidget.StatusInit)
+        self._setStatus(RecipSpaceWidget.StatusInit)
 
     def __pickOutputFile(self, checked):
         """

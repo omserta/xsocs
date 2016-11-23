@@ -56,7 +56,7 @@ class ScatterPlotButton(EditorMixin, Qt.QWidget):
         button.clicked.connect(self.__clicked)
 
     def __clicked(self):
-        node = self.node
+        # node = self.node
         event = {'event': 'scatter'}
         self.notifyView(event)
 
@@ -75,5 +75,5 @@ class IntensityNode(H5DatasetNode):
     def _setupNode(self):
         with IntensityItem(self.h5File, self.h5Path, mode='r') as item:
             self.setData(ModelColumns.NameColumn,
-                         str(item.name),
+                         str(item.projectRoot().shortName(item.entry)),
                          Qt.Qt.DisplayRole)

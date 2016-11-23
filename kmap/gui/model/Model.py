@@ -53,7 +53,7 @@ class Model(Qt.QAbstractItemModel):
 
     def __init__(self, parent=None):
         super(Model, self).__init__(parent)
-        self.__root = RootNode(nodeName='__root__')
+        self.__root = RootNode(nodeName='__root__', model=self)
         self.__root.sigInternalDataChanged.connect(self.__internalDataChanged)
         self.__root.sigChildAdded.connect(self.__nodeAdded)
         self.__root.sigChildRemoved.connect(self.__nodeRemoved)
@@ -107,8 +107,9 @@ class Model(Qt.QAbstractItemModel):
         self.beginRemoveRows(modelIndex,
                              indices[0],
                              indices[0])
-        child = parent.child(indices[0])
-        parent._removeChild(child)
+        if parent:
+            child = parent.child(indices[0])
+            parent._removeChild(child)
         self.endRemoveRows()
         self.sigRowsRemoved.emit(modelIndex, indices[0], indices[0])
 
@@ -191,6 +192,18 @@ class Model(Qt.QAbstractItemModel):
         self.beginResetModel()
         self.__root.refresh()
         self.endResetModel()
+
+    def reset(self):
+        self.beginResetModel()
+        children = [self.__root.child(row)
+                    for row in range(self.__root.childCount())]
+        self.__root.clear()
+        self.endResetModel()
+
+        for child in children:
+            child.clear()
+            print 'adding', child
+            self.__root.appendChild(child)
 
     def rowCount(self, parent=Qt.QModelIndex(), **kwargs):
         if not parent.isValid():

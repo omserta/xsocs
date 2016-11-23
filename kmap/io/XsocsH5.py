@@ -155,7 +155,7 @@ class XsocsH5(XsocsH5Base):
 
         with self.image_dset_ctx(entry) as ctx:
             shape = ctx.shape
-            intensity = _np.ndarray(shape=(shape[0],), dtype=dtype)
+            intensity = _np.zeros(shape=(shape[0],), dtype=dtype)
             img_buffer = _np.array(ctx[0], dtype=dtype)
             for idx in range(1, shape[0]):
                 ctx.read_direct(img_buffer, idx)

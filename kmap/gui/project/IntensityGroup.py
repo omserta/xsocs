@@ -46,15 +46,54 @@ from ...io.XsocsH5 import XsocsH5
 
 from .ProjectItem import ProjectItem
 from .ProjectDef import ItemClassDef
-from .Hdf5Nodes import H5NodeClassDef
+
+
+@ItemClassDef('IntensityItem')
+class IntensityItem(ProjectItem):
+
+    @property
+    def entry(self):
+        return self.path.rpartition('/')[-1]
+
+    @property
+    def name(self):
+        entry = self.entry
+        angle = self.xsocsH5.scan_angle(entry)
+        if angle is not None:
+            return str(angle)
+        return entry
+
+    def getScatterData(self):
+        entry = self.entry
+        if entry == 'Total':
+            entry = self.xsocsH5.entries[0]
+        intensity = self._get_array_data(self.path)
+        scanPositions = self.xsocsH5.scan_positions(entry)
+        return intensity, scanPositions
 
 
 @ItemClassDef('IntensityGroup')
 class IntensityGroup(ProjectItem):
+    IntensityPathTpl = '{0}/{1}'
 
     def _createItem(self):
-        path_tpl = self.path + '/' + '{0}'
+        path_tpl = self.IntensityPathTpl.format(self.path, '{0}')
         getIntensity(self.filename, path_tpl, self.gui)
+
+        with self:
+            entries = self.xsocsH5.entries()
+            intensity = self._get_array_data(path_tpl.format(entries[0]))
+            for entry in entries[1:]:
+                intensity += self._get_array_data(path_tpl.format(entry))
+            itemPath = self.path + '/Total'
+            item = IntensityItem(self.filename, itemPath, mode=self.mode, data=intensity)
+
+    def getScatterData(self):
+        entry = self.xsocsH5.entries()[0]
+        entryPath = self.IntensityPathTpl.format(self.path, entry)
+        intensity = self._get_array_data(entryPath)
+        scanPositions = self.xsocsH5.scan_positions(entry)
+        return intensity, scanPositions
 
 
 def _getIntensity(entry, entry_f, projectLock, projectFile, pathTpl, queue):
@@ -68,10 +107,10 @@ def _getIntensity(entry, entry_f, projectLock, projectFile, pathTpl, queue):
         with XsocsH5(entry_f) as entryH5:
             cumul = entryH5.image_cumul(entry)
             angle = entryH5.scan_angle(entry)
-        dsetPath = pathTpl.format(str(angle))
+        dsetPath = pathTpl.format(str(entry))
 
         projectLock.acquire()
-        XsocsH5(projectFile, mode='r+')._set_array_data(dsetPath, cumul)
+        IntensityItem(projectFile, dsetPath, mode='r+', data=cumul)
         projectLock.release()
     except:
         state = 'error'
@@ -250,28 +289,7 @@ class ProgressNode(Node):
         return ModelDataList(text, None, Qt.Qt.DisplayRole)
 
 
-from ..model.NodeEditor import EditorMixin
-from .Hdf5Nodes import H5GroupNode
 
-
-class IntensityGroupEditor(EditorMixin, Qt.QWidget):
-    persistent = True
-
-    def __init__(self, parent, option, index):
-        super(IntensityGroupEditor, self).__init__(parent, option, index)
-        layout = Qt.QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        icon = icons.getQIcon('item-1dim')
-        button = Qt.QToolButton()
-        button.setIcon(icon)
-        layout.addWidget(button)
-        layout.addStretch(1)
-
-
-@H5NodeClassDef('IntensityNode',
-                attribute=('XsocsClass', 'IntensityGroup'))
-class IntensityNode(H5GroupNode):
-    editors = IntensityGroupEditor
 
         # node = index.data(ModelRoles.InternalDataRole)
         # item = HybridItem(node.projectFile, node.path)

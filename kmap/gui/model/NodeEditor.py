@@ -30,11 +30,14 @@ __license__ = "MIT"
 __date__ = "01/11/2016"
 
 
+import weakref
 from collections import namedtuple
 
 from silx.gui import qt as Qt
 
-from .ModelDef import ModelColumns, ModelRoles
+from .ModelDef import ModelRoles
+
+from silx.utils.weakref import WeakMethod
 
 
 EditorInfo = namedtuple('EditorInfo', ['klass', 'persistent'])
@@ -44,7 +47,7 @@ class EditorMixin(object):
     """
     To be used with a Qt.QWidget base.
     """
-    sigValueChanged = Qt.Signal()
+    # sigValueChanged = Qt.Signal()
     persistent = False
 
     node = property(lambda self: self.__node)
@@ -56,31 +59,42 @@ class EditorMixin(object):
         self.__node = index.data(ModelRoles.InternalDataRole)
         self.__column = index.column()
         self.setAutoFillBackground(True)
+        self.__modelCb = None
+        self.__viewCb = None
 
     @classmethod
     def paint(cls, painter, option, index):
         return False
 
-    def valueChanged(self, *args, **kwargs):
-        self.sigValueChanged.emit()
+    def notifyModel(self, *args, **kwargs):
+        if not self.__modelCb:
+            return
+        modelCb = self.__modelCb()
+        if modelCb:
+            modelCb(self, *args, **kwargs)
+
+    def notifyView(self, *args, **kwargs):
+        if not self.__viewCb:
+            return
+        viewCb = self.__viewCb()
+        if viewCb:
+            viewCb(self, *args, **kwargs)
+
+    def setViewCallback(self, callback):
+        self.__viewCb = WeakMethod(callback)
+
+    def setModelCallback(self, callback):
+        self.__modelCb = WeakMethod(callback)
 
     def sizeHint(self):
         return Qt.QSize(0, 0)
-
-    # def nodeChanged(self, node):
-    #     self.setEnabled(node.flags(ModelColumns.ValueColumn) &
-    #                     Qt.Qt.ItemIsEnabled)
-    #     return self.updateFromNode(node)
-    #
-    # def updateFromNode(self, node):
-    #     return False
 
     def setEditorData(self, index):
         node = index.data(ModelRoles.InternalDataRole)
 
         if node and not node.setEditorData(self, index.column()):
             value = index.data(Qt.Qt.EditRole)
-            return self.setValue(value)
+            return self.setModelValue(value)
 
         return True
 
@@ -89,14 +103,3 @@ class EditorMixin(object):
 
     def getEditorData(self):
         pass
-
-    # def widget(self):
-    #     return self.findChild(Qt.QWidget)
-
-    # def setWidget(self, widget):
-    #     if not isinstance(widget, Qt.QWidget):
-    #         raise ValueError('Expected a QWidget instance.')
-    #     self.layout().addWidget(widget, 0, 0, Qt.Qt.AlignLeft)
-
-    # def setupFromNode(self, node):
-    #     pass

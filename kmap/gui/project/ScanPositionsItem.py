@@ -62,7 +62,6 @@ class ScanPositionsItem(ProjectItem):
         pathTpl = self.path + '/' + '{0}'
         with self:
             itemPath = pathTpl.format('pos_0')
-            print itemPath
             pos_0 = self._get_array_data(itemPath)
             itemPath = pathTpl.format('pos_1')
             pos_1 = self._get_array_data(itemPath)
@@ -74,7 +73,6 @@ class ScanPositionsItem(ProjectItem):
             n_0 = self._get_scalar_data(itemPath)
             itemPath = pathTpl.format('n_1')
             n_1 = self._get_scalar_data(itemPath)
-        print n_0
         return ScanPositions(motor_0=motor_0,
                              pos_0=pos_0,
                              motor_1=motor_1,

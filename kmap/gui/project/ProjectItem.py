@@ -48,11 +48,16 @@ class ProjectItem(XsocsH5Base):
     gui = property(lambda self: self.__gui()
                                 if self.__gui is not None else None)
 
-    def __init__(self, h5File, nodePath='/', mode='r', processLevel=None, gui=None):
+    def __init__(self,
+                 h5File,
+                 nodePath='/',
+                 mode='r',
+                 processLevel=None,
+                 data=None,
+                 gui=None):
         # TODO : check if parent already has a child with the same name
         super(ProjectItem, self).__init__(h5File, mode=mode)
         self.__nodePath = nodePath
-        self.__processLevel = None
         self.__xsocsFile = None
 
         self.__gui = weakref.ref(gui) if gui is not None else None
@@ -61,14 +66,26 @@ class ProjectItem(XsocsH5Base):
             self._loadItem()
         else:
             with self._get_file() as h5f:
+                if data is not None:
+                    h5f[nodePath] = data
+                    item = h5f[nodePath]
+                else:
+                    item = h5f.require_group(nodePath)
                 if self.XsocsClass is not None:
-                    grp = h5f.require_group(self.path)
-                    grp.attrs['XsocsClass'] = np.string_(self.XsocsClass)
-                if self.__processLevel is not None:
-                    grp = h5f.require_group(self.path)
-                    grp.attrs['XsocsLevel'] = self.__processLevel
-                del grp
+                    item.attrs['XsocsClass'] = np.string_(self.XsocsClass)
+                if processLevel is not None:
+                    item.attrs['XsocsLevel'] = processLevel
+                del item
             self._createItem()
+
+    def cast(self):
+        className = self.xsocsClass
+        klass = getItemClass(className)
+        if klass:
+            return klass(self.filename, self.path, mode=self.mode)
+
+    def projectRoot(self):
+        return ProjectItem(self.filename, '/', mode=self.mode).cast()
 
     def setHidden(self, hidden, path=None):
         if path is None:
@@ -145,11 +162,11 @@ class ProjectItem(XsocsH5Base):
         """
         pass
 
-
     @property
     def processLevel(self):
-        if self.__processLevel is None:
-            with self._get_file() as h5f:
-                processLevel = h5f[self.__nodePath].attrs.get('XsocsLevel')
-                self.__processLevel = processLevel
-        return self.__processLevel
+        with self._get_file() as h5f:
+            return h5f[self.__nodePath].attrs.get('XsocsLevel')
+
+    @property
+    def xsocsClass(self):
+        return self.attribute(self.path, 'XsocsClass')

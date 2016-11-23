@@ -33,15 +33,26 @@ from .Widgets import (AcqParamsWidget,
 # from .Utils import (viewWidgetFromProjectEvent,
 #                     processWidgetFromViewEvent,
 #                     processDoneEvent)
+from .view.IntensityView import IntensityView
 from .project.XsocsProject import XsocsProject
 from .model.TreeView import TreeView
 from .model.Model import Model
-from .project.XsocsH5Factory import XsocsH5Factory
+from .project.IntensityGroup import IntensityGroup, IntensityItem
+from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
 from .project.Hdf5Nodes import setH5NodeFactory, H5File
 
 
 _COMPANY_NAME = 'ESRF'
 _APP_NAME = 'XSOCS'
+
+
+class ProjectTree(TreeView):
+    sigDelegateEvent = Qt.Signal(object, object)
+
+    def delegateEvent(self, column, node, *args, **kwargs):
+        # TODO : proper event
+        event = (args and args[0]) or None
+        self.sigDelegateEvent.emit(node, event)
 
 
 class XsocsGui(Qt.QMainWindow):
@@ -53,6 +64,9 @@ class XsocsGui(Qt.QMainWindow):
         super(XsocsGui, self).__init__(parent)
 
         setH5NodeFactory(XsocsH5Factory)
+
+        self.__intensityView = None
+        self.__qspaceView = None
 
         mdiArea = Qt.QMdiArea()
         self.setCentralWidget(mdiArea)
@@ -68,11 +82,34 @@ class XsocsGui(Qt.QMainWindow):
         self.__readSettings()
 
     def __createViews(self):
-        tree = TreeView()
+        tree = ProjectTree()
         tree.setShowUniqueGroup(False)
+        tree.sigDelegateEvent.connect(self.__viewEvent)
         model = Model(parent=tree)
+        model.startModel()
         tree.setModel(model)
         self.setCentralWidget(tree)
+
+    def __viewEvent(self, node, event):
+        projectItem = h5NodeToProjectItem(node)
+        if projectItem is None:
+            raise ValueError('Unknwown event for node {0} : {1}.'
+                             ''.format(node, event))
+
+        if isinstance(projectItem, (IntensityGroup, IntensityItem))\
+                and event['event'] == 'scatter':
+            self.__showIntensity(projectItem)
+        else:
+            ValueError('Unknwown event for item {0} : {1}.'
+                       ''.format(projectItem, event))
+
+    def __showIntensity(self, item):
+        # intensity, positions = item.getScatterData()
+        view = self.__intensityView
+        if not view:
+            self.__intensityView = view = IntensityView(item, self)
+        # view.setPlotData(positions.pos_0, positions.pos_1, intensity)
+        view.show()
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)
@@ -117,8 +154,6 @@ class XsocsGui(Qt.QMainWindow):
     def __setupProject(self, projectFile=None):
         mode = 'r+'
         project = XsocsProject(projectFile, mode=mode)
-        # self.__sessionDock.widget().setXsocsProject(wkSpace)
-        # self.__dataDock.widget().setXsocsProject(wkSpace)
         rootNode = H5File(h5File=projectFile)
         self.centralWidget().model().appendGroup(rootNode)
         self.__project = project
@@ -128,29 +163,6 @@ class XsocsGui(Qt.QMainWindow):
     def __createActions(self):
         style = Qt.QApplication.style()
         self.__actions = actions = {}
-
-        # # open an existing session
-        # icon = style.standardIcon(Qt.QStyle.SP_DialogOpenButton)
-        # openAct = Qt.QAction(icon, '&Open', self)
-        # openAct.setShortcuts(Qt.QKeySequence.Open)
-        # openAct.setStatusTip('Open session')
-        # openAct.triggered.connect(self.__loadProject)
-        # actions['open'] = openAct
-        #
-        # # new session
-        # icon = style.standardIcon(Qt.QStyle.SP_FileDialogNewFolder)
-        # newAct = Qt.QAction(icon, '&Load', self)
-        # newAct.setStatusTip('Load data')
-        # newAct.setShortcuts(Qt.QKeySequence.New)
-        # newAct.triggered.connect(self.__loadData)
-        # actions['new'] = newAct
-        #
-        # # import data from spec
-        # icon = style.standardIcon(Qt.QStyle.SP_DialogOkButton)
-        # importAct = Qt.QAction(icon, '&Import', self)
-        # importAct.setStatusTip('Import SPEC data')
-        # importAct.triggered.connect(self.__importData)
-        # actions['import'] = importAct
 
         # exit the application
         icon = style.standardIcon(Qt.QStyle.SP_DialogCancelButton)
@@ -165,14 +177,6 @@ class XsocsGui(Qt.QMainWindow):
         aboutAct.setStatusTip('Show the application\'s About box')
         actions['about'] = aboutAct
 
-        # # toggle session dockwidget visibility
-        # sessionAct = self.__sessionDock.toggleViewAction()
-        # actions['sessionDock'] = sessionAct
-        #
-        # # toggle data dockwidget visibility
-        # dataAct = self.__dataDock.toggleViewAction()
-        # actions['dataDock'] = dataAct
-
     def __createMenus(self):
 
         self.__menus = menus = {}
@@ -180,14 +184,8 @@ class XsocsGui(Qt.QMainWindow):
         menuBar = self.menuBar()
 
         fileMenu = menuBar.addMenu('&File')
-        # fileMenu.addAction(actions['open'])
-        # fileMenu.addAction(actions['new'])
         fileMenu.addSeparator()
         fileMenu.addAction(actions['quit'])
-
-        # viewMenu = menuBar.addMenu('&View')
-        # viewMenu.addAction(actions['sessionDock'])
-        # viewMenu.addAction(actions['dataDock'])
 
         menuBar.addSeparator()
 

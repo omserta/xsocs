@@ -51,10 +51,13 @@ def getNodeClass(nodeType, attrs=None):
     if attrs:
         for key, value in attrs.items():
             info = _registeredAttributes.get(key)
-            if info and info[0] == value:
-                return info[1]
+            if info:
+                klass = info.get(value)
+                if klass:
+                    break
     if not klass:
-        return _registeredNodes.get(nodeType)
+        klass = _registeredNodes.get(nodeType)
+    return klass
 
 
 def registerNodeClass(klass):
@@ -71,12 +74,16 @@ def registerNodeClass(klass):
     _registeredNodes[nodeType] = klass
 
     attribute = klass.attribute
+    # TODO : improve this...
     if attribute:
         if attribute[0] in _registeredAttributes:
-            raise AttributeError('Failed to register attribute {0}.'
-                                 'Already registered.'
-                                 ''.format(klass.__name__))
-        _registeredAttributes[attribute[0]] = (attribute[1], klass)
+            if attribute[1] in _registeredAttributes[attribute[0]]:
+                raise AttributeError('Failed to register attribute {0}.'
+                                     'Already registered.'
+                                     ''.format(klass.__name__))
+        else:
+            _registeredAttributes[attribute[0]] = {}
+        _registeredAttributes[attribute[0]][attribute[1]] = klass
 
 
 def H5NodeClassDef(nodeType,
@@ -124,7 +131,8 @@ def H5NodeFactory(h5File, h5Path):
     if klass is not None:
         return klass(h5File=h5File, h5Path=h5Path)
     else:
-        raise ValueError('Node creation failed.')
+        raise ValueError('Node creation failed. '
+                         '(was : {0}:{1})'.format(h5File, h5Path))
 
 
 _H5NodeFactory = H5NodeFactory
@@ -147,7 +155,7 @@ class H5Base(Node):
         self.__h5Path = (h5Path != '/' and h5Path.rstrip('/')) or h5Path
         self.className = os.path.basename(h5File).rpartition('.')[0]
 
-        super(H5Base, self).__init__(**kwargs)
+        super(H5Base, self).__init__(subject=self, **kwargs)
 
         self.setData(h5File, Qt.Qt.ToolTipRole)
         self.setData(ModelColumns.NameColumn, os.path.basename(self.h5Path))

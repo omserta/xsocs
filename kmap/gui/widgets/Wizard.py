@@ -98,7 +98,7 @@ class LoadXsocsDataPage(Qt.QWizardPage):
         xsocsFile = self.wizard().field('XsocsDataFile')
 
         try:
-            projectH5 = XsocsProject(projectFile, mode='a')
+            projectH5 = XsocsProject(projectFile, mode='a', gui=self)
         except Exception as ex:
             Qt.QMessageBox.critical(self,
                                     'Failed to open project file.',

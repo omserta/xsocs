@@ -29,10 +29,12 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "01/11/2016"
 
+from functools import partial
 
 from silx.gui import qt as Qt
 
 from .ModelDef import ModelColumns, ModelRoles
+from .NodeEditor import EditorMixin
 
 
 class TreeView(Qt.QTreeView):
@@ -41,8 +43,12 @@ class TreeView(Qt.QTreeView):
         super(TreeView, self).__init__(parent)
         delegate = ItemDelegate(self)
         self.setItemDelegateForColumn(ModelColumns.NameColumn, delegate)
+        delegate.sigDelegateEvent.connect(partial(self.__delegateEvent,
+                                                  ModelColumns.NameColumn))
         delegate = ItemDelegate(self)
         self.setItemDelegateForColumn(ModelColumns.ValueColumn, delegate)
+        delegate.sigDelegateEvent.connect(partial(self.__delegateEvent,
+                                                  ModelColumns.ValueColumn))
         # WARNING : had to set this as a queued connection, otherwise
         # there was a crash after the slot was called (conflict with
         # __setHiddenNodes probably)
@@ -54,6 +60,21 @@ class TreeView(Qt.QTreeView):
         self.setSelectionBehavior(Qt.QAbstractItemView.SelectRows)
 
     showUniqueGroup = property(lambda self: self.__showUniqueGroup)
+
+    def disableDelegateForColumn(self, column, disable):
+        self.__openPersistentEditors(Qt.QModelIndex(), openEditor=False)
+        if disable:
+            self.setItemDelegateForColumn(column, None)
+        else:
+            self.setItemDelegateForColumn(column, ItemDelegate(self))
+        self.__openPersistentEditors(Qt.QModelIndex(), openEditor=True)
+
+    def __delegateEvent(self, column, node, args, kwargs):
+        self.delegateEvent(column, node, *args, **kwargs)
+
+    def delegateEvent(self, column, node, *args, **kwargs):
+        # TODO : proper class event
+        pass
 
     def keyReleaseEvent(self, event):
         # TODO : better filtering
@@ -182,7 +203,7 @@ class TreeView(Qt.QTreeView):
 
 
 class ItemDelegate(Qt.QStyledItemDelegate):
-    sigDelegateEvent = Qt.Signal(object)
+    sigDelegateEvent = Qt.Signal(object, object, object)
 
     def __init__(self, parent=None):
         super(ItemDelegate, self).__init__(parent)
@@ -192,11 +213,17 @@ class ItemDelegate(Qt.QStyledItemDelegate):
         if node:
             editor = node.getEditor(parent, option, index)
             if editor:
+                if isinstance(editor, EditorMixin):
+                    editor.setViewCallback(self.__notifyView)
+                    editor.setModelCallback(self.__notifyModel)
                 return editor
         return super(ItemDelegate, self).createEditor(parent, option, index)
 
-    def _editorValueChanged(self, *args, **kwargs):
-        self.commitData.emit(self.sender())
+    def __notifyModel(self, editor, *args, **kwargs):
+        self.commitData.emit(editor)
+
+    def __notifyView(self, editor, *args, **kwargs):
+        self.sigDelegateEvent.emit(editor.node, args, kwargs)
 
     def updateEditorGeometry(self, editor, option, index):
         editor.setGeometry(option.rect)

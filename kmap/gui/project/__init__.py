@@ -28,3 +28,6 @@ from __future__ import absolute_import
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
+
+
+from . import ProjectNodes

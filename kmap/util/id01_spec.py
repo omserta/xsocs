@@ -1218,8 +1218,8 @@ def _add_edf_data(scan_id,
                             raise Exception('Merge of scan {0} aborted.'
                                             ''.format(scan_id))
 
-                    # data = edf_file.GetData(i)
-                    # image_dset[i, :, :] = data
+                    data = edf_file.GetData(i)
+                    image_dset[i, :, :] = data
                     # cumul_array[i] = data.sum()
             # entry_h5f.set_image_cumul(entry, cumul_array)
 

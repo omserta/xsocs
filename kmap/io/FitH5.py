@@ -32,7 +32,7 @@ __date__ = "15/09/2016"
 import weakref
 from contextlib import contextmanager
 
-import numpy as _np
+import numpy as np
 
 from .XsocsH5Base import XsocsH5Base
 
@@ -42,60 +42,79 @@ class FitH5(XsocsH5Base):
     q_fit_path = 'q{0}fit'
     status_path = 'success'
 
+    @property
     def scan_positions(self):
-        path_tpl = FitH5.scan_positions_path + '/{0}'
-        x = self._get_array_data(path_tpl.format('x'))
-        y = self._get_array_data(path_tpl.format('y'))
-        return x, y
+        with self:
+            return self.sample_x, self.sample_y
 
-    def x_fit(self):
-        return self.__get_fit('x')
+    sample_x = property(lambda self:
+                        self._get_array_data(FitH5.scan_positions_path + '/x'))
 
-    def y_fit(self):
-        return self.__get_fit('y')
+    sample_y = property(lambda self:
+                        self._get_array_data(FitH5.scan_positions_path + '/y'))
 
-    def z_fit(self):
-        return self.__get_fit('z')
+    x_fit = property(lambda self: self.__get_fit('x'))
+
+    y_fit = property(lambda self: self.__get_fit('y'))
+
+    z_fit = property(lambda self: self.__get_fit('z'))
+
+    x_height = property(lambda self: self.__get_data('x', 'height'))
+
+    y_height = property(lambda self: self.__get_data('y', 'height'))
+
+    z_height = property(lambda self: self.__get_data('z', 'height'))
+
+    x_center = property(lambda self: self.__get_data('x', 'center'))
+
+    y_center = property(lambda self: self.__get_data('y', 'center'))
+
+    z_center = property(lambda self: self.__get_data('z', 'center'))
+
+    x_width = property(lambda self: self.__get_data('x', 'width'))
+
+    y_width = property(lambda self: self.__get_data('y', 'width'))
+
+    z_width = property(lambda self: self.__get_data('z', 'width'))
+
+    status = property(lambda self: self._get_array_data(FitH5.status_path))
 
     def __get_fit(self, axis):
-        height = self.__get_data(axis, 'height')
-        center = self.__get_data(axis, 'center')
-        width = self.__get_data(axis, 'width')
+        with self:
+            height = self.__get_data(axis, 'height')
+            center = self.__get_data(axis, 'center')
+            width = self.__get_data(axis, 'width')
         return height, center, width
-
-    def x_height(self):
-        return self.__get_data('x', 'height')
-
-    def x_center(self):
-        return self.__get_data('x', 'center')
-
-    def x_width(self):
-        return self.__get_data('x', 'width')
-        
-    def y_height(self):
-        return self.__get_data('y', 'height')
-
-    def y_center(self):
-        return self.__get_data('y', 'center')
-
-    def y_width(self):
-        return self.__get_data('y', 'width')
-        
-    def z_height(self):
-        return self.__get_data('z', 'height')
-
-    def z_center(self):
-        return self.__get_data('z', 'center')
-
-    def z_width(self):
-        return self.__get_data('z', 'width')
 
     def __get_data(self, axis, data):
         data_path = FitH5.q_fit_path.format(axis) + '/{0}'.format(data)
         return self._get_array_data(data_path)
 
-    def set_status(self, status):
-        return self._get_array_data(FitH5.status_path)
+    def export_txt(self, filename):
+        with self:
+            with open(filename, 'w+') as res_f:
+                res_f.write('X Y '
+                            'height_x center_x width_x '
+                            'height_y center_y width_y '
+                            'height_z center_z width_z '
+                            '|q| status\n')
+                x_height, x_center, x_width = self.x_fit
+                y_height, y_center, y_width = self.y_fit
+                z_height, z_center, z_width = self.z_fit
+                q = np.sqrt(x_center ** 2 +
+                            y_center ** 2 +
+                            z_center ** 2)
+                status = self.status
+                x, y = self.scan_positions
+
+                for i, s in enumerate(status):
+                    r = [x[i], y[i],
+                         x_height[i], x_center[i], x_width[i],
+                         y_height[i], y_center[i], y_width[i],
+                         z_height[i], z_center[i], z_width[i],
+                         q[i], s]
+                    res_str = '{0}\n'.format(' '.join(str(e) for e in r))
+                    res_f.write(res_str)
 
 
 class FitH5Writer(FitH5):

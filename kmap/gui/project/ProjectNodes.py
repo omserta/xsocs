@@ -29,13 +29,15 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "01/11/2016"
 
-from silx.gui import qt as Qt, icons
+import os
 
+from silx.gui import qt as Qt, icons
 
 from ..model.ModelDef import ModelColumns
 from .IntensityGroup import IntensityGroup, IntensityItem
 from ..model.NodeEditor import EditorMixin
 from .Hdf5Nodes import H5GroupNode, H5NodeClassDef, H5DatasetNode
+from .XsocsH5Factory import h5NodeToProjectItem
 from ..model.Node import Node
 
 
@@ -121,15 +123,33 @@ class FitButton(EditorMixin, Qt.QWidget):
         icon = icons.getQIcon('item-1dim')
         button = Qt.QToolButton()
         button.setIcon(icon)
+        button.clicked.connect(self.__clicked)
+        layout.addWidget(button)
+
+        button = Qt.QToolButton()
+        style = Qt.QApplication.style()
+        icon = style.standardIcon(Qt.QStyle.SP_DialogSaveButton)
+        button.setIcon(icon)
+        button.clicked.connect(self.__export)
         layout.addWidget(button)
         layout.addStretch(1)
-
-        button.clicked.connect(self.__clicked)
 
     def __clicked(self):
         # node = self.node
         event = {'event': 'fit'}
         self.notifyView(event)
+
+    def __export(self):
+        fitItem = h5NodeToProjectItem(self.node)
+        workdir = fitItem.projectRoot().workdir
+        itemBasename = os.path.basename(fitItem.fitFile).rsplit('.')[0]
+        itemBasename += '.txt'
+        dialog = Qt.QFileDialog(self, 'Export fit results.')
+        dialog.setFileMode(Qt.QFileDialog.AnyFile)
+        dialog.selectFile(os.path.join(workdir, itemBasename))
+        if dialog.exec_():
+            csvPath = dialog.selectedFiles()[0]
+            fitItem.fitH5.export_txt(csvPath)
 
 
 class FitHeightNode(Node):
@@ -146,7 +166,7 @@ class FitWidthNode(Node):
 
 @H5NodeClassDef('FitItem',
                 attribute=('XsocsClass', 'FitItem'))
-class QSpaceItemNode(H5GroupNode):
+class FitItemNode(H5GroupNode):
     editors = FitButton
     groupClasses = [(None, FitHeightNode),
                     (None, FitCenterNode),

@@ -132,20 +132,20 @@ class FitView(Qt.QMainWindow):
         item = event['item']
 
         with item.fitH5 as fitH5:
-            sampleX, sampleY = fitH5.scan_positions()
+            sampleX, sampleY = fitH5.scan_positions
 
             if dtype == 'height':
-                xData = fitH5.x_height()
-                yData = fitH5.y_height()
-                zData = fitH5.z_height()
+                xData = fitH5.x_height
+                yData = fitH5.y_height
+                zData = fitH5.z_height
             elif dtype == 'center':
-                xData = fitH5.x_center()
-                yData = fitH5.y_center()
-                zData = fitH5.z_center()
+                xData = fitH5.x_center
+                yData = fitH5.y_center
+                zData = fitH5.z_center
             elif dtype == 'width':
-                xData = fitH5.x_width()
-                yData = fitH5.y_width()
-                zData = fitH5.z_width()
+                xData = fitH5.x_width
+                yData = fitH5.y_width
+                zData = fitH5.z_width
             else:
                 raise ValueError('Unknown event {0}.'.format(dtype))
 

@@ -197,6 +197,14 @@ class TreeView(Qt.QTreeView):
         except TypeError:
             pass
 
+    def rowsAboutToBeRemoved(self, index, start, end):
+        self.__openPersistentEditors(index, False)
+        super(TreeView, self).rowsAboutToBeRemoved(index, start, end)
+
+    def rowsRemoved(self, index, start, end):
+        super(TreeView, self).rowsRemoved(index, start, end)
+        self.__openPersistentEditors(index, True)
+
     def dataChanged(self, topLeft, bottomRight, roles=None):
         super(TreeView, self).dataChanged(topLeft, bottomRight)
         # TODO : only way i found to force the view to check the flags
@@ -209,6 +217,8 @@ class TreeView(Qt.QTreeView):
         if not self.isExpanded(index) and index != self.rootIndex():
             return
         model = self.model()
+        if not self.model():
+            return
         for row in range(model.rowCount(index)):
             childNode = index.child(row, 0).data(ModelRoles.InternalDataRole)
             if childNode and childNode.hidden:
@@ -240,7 +250,10 @@ class ItemDelegate(Qt.QStyledItemDelegate):
         return super(ItemDelegate, self).createEditor(parent, option, index)
 
     def __notifyModel(self, editor, *args, **kwargs):
-        self.commitData.emit(editor)
+        node = editor.node
+        if node:
+            node._openedEditorEvent(editor, editor.column, args, kwargs)
+        # self.commitData.emit(editor)
 
     def __notifyView(self, editor, *args, **kwargs):
         self.sigDelegateEvent.emit(editor.node, args, kwargs)

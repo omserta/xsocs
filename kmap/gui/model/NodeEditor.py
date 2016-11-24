@@ -47,7 +47,6 @@ class EditorMixin(object):
     """
     To be used with a Qt.QWidget base.
     """
-    # sigValueChanged = Qt.Signal()
     persistent = False
 
     node = property(lambda self: self.__node)

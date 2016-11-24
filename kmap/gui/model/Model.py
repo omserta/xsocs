@@ -48,15 +48,12 @@ class RootNode(Node):
 class Model(Qt.QAbstractItemModel):
     nameColumn, valueColumn = range(2)
 
-    sigEndRemove = Qt.Signal(object)
     sigRowsRemoved = Qt.Signal(object, int, int)
 
     def __init__(self, parent=None):
         super(Model, self).__init__(parent)
         self.__root = RootNode(nodeName='__root__', model=self)
         self.__root.sigInternalDataChanged.connect(self.__internalDataChanged)
-        self.__root.sigChildAdded.connect(self.__nodeAdded)
-        self.__root.sigChildRemoved.connect(self.__nodeRemoved)
 
     def startModel(self):
         self.__root.start()
@@ -73,45 +70,35 @@ class Model(Qt.QAbstractItemModel):
         self.__root.appendChild(group)
         self.endInsertRows()
 
-    def __nodeAdded(self, indices, child):
-        # TODO : refactor this piece of code,
-        # also used in __internalDataChanged
-        modelIndex = Qt.QModelIndex()
+    def _beginRowAdded(self, index, start, end):
+        self.beginInsertRows(index,
+                             start,
+                             end)
 
-        if len(indices) == 1:
-            # added to root node
-            parentNode = self.__root
-        else:
-            for index in reversed(indices[1:]):
-                modelIndex = self.index(index,
-                                        0,
-                                        modelIndex)
-            parentNode = modelIndex.data(ModelRoles.InternalDataRole)
-
-        self.beginInsertRows(modelIndex,
-                             indices[0],
-                             indices[0])
-        parentNode._appendChild(child)
-
+    def _endRowAdded(self):
         self.endInsertRows()
 
-    def __nodeRemoved(self, indices):
-        # TODO : refactor this piece of code,
-        # also used in __internalDataChanged
-        modelIndex = Qt.QModelIndex()
-        for index in reversed(indices[1:]):
-            modelIndex = self.index(index,
-                                    0,
-                                    modelIndex)
-        parent = modelIndex.data(ModelRoles.InternalDataRole)
-        self.beginRemoveRows(modelIndex,
-                             indices[0],
-                             indices[0])
-        if parent:
-            child = parent.child(indices[0])
-            parent._removeChild(child)
+    def removeRow(self, row, parent=Qt.QModelIndex()):
+        if not parent.isValid():
+            node = self.__root
+        else:
+            node = parent.data(ModelRoles.InternalDataRole)
+
+        if not node:
+            return False
+
+        child = node.child(row)
+        if not child:
+            return False
+
+        self.beginRemoveRows(parent,
+                             row,
+                             row)
+        node._removeChild(child)
         self.endRemoveRows()
-        self.sigRowsRemoved.emit(modelIndex, indices[0], indices[0])
+        self.sigRowsRemoved.emit(parent, row, row)
+
+        return True
 
     def __internalDataChanged(self, indices):
         modelIndex = Qt.QModelIndex()
@@ -189,9 +176,7 @@ class Model(Qt.QAbstractItemModel):
         return Qt.QModelIndex()
 
     def refresh(self):
-        self.beginResetModel()
         self.__root.refresh()
-        self.endResetModel()
 
     def reset(self):
         self.beginResetModel()

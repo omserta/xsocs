@@ -55,8 +55,6 @@ class _SignalHandler(Qt.QObject):
 
     node = property(lambda self: self.__node())
     sigInternalDataChanged = Qt.Signal(object)
-    sigChildAdded = Qt.Signal(object, object)
-    sigChildRemoved = Qt.Signal(object)
 
     def __init__(self, node):
         super(_SignalHandler, self).__init__()
@@ -72,32 +70,6 @@ class _SignalHandler(Qt.QObject):
         sender = self.sender().node
         if node:
             node._childInternalDataChanged(sender, data)
-
-    def childAdded(self, indices, child):
-
-        node = self.__node()
-        sender = self.sender().node
-        if indices is None:
-            indices = []
-        if node:
-            # TODO : more error checking
-            # check index validity
-            index = node.indexOfChild(sender)
-            indices.append(index)
-            self.sigChildAdded.emit(indices, child)
-
-    def childRemoved(self, data=None):
-
-        node = self.__node()
-        sender = self.sender().node
-        if data is None:
-            data = []
-        if node:
-            # TODO : more error checking
-            # check index validity
-            index = node.indexOfChild(sender)
-            data.append(index)
-            self.sigChildRemoved.emit(data)
 
 
 class ModelDataList(object):
@@ -126,10 +98,6 @@ class Node(object):
     # TODO pass weakref?
     sigInternalDataChanged = property(lambda self:
                                       self._sigHandler.sigInternalDataChanged)
-    sigChildAdded = property(lambda self:
-                             self._sigHandler.sigChildAdded)
-    sigChildRemoved = property(lambda self:
-                               self._sigHandler.sigChildRemoved)
 
     branchName = property(lambda self: self.__branchName)
 
@@ -151,6 +119,8 @@ class Node(object):
         self.__connected = False
         self.__model = None
         self.setModel(model)
+
+        self.__loaded = False
 
         editors = kwargs.get('editors', None)
         if editors is not None:
@@ -409,11 +379,13 @@ class Node(object):
             return -1
 
     def appendChild(self, child):
-        # TODO : add the node directly if there is no parent!
-        if self.model is None:
-            self._appendChild(child)
-        else:
-            self.sigChildAdded.emit([self.childCount()], child)
+        childCount = self.childCount()
+        model = self.model
+        if model:
+            model._beginRowAdded(self.index(), childCount, childCount)
+        self._appendChild(child)
+        if model:
+            model._endRowAdded()
 
     def _appendChild(self, child):
         self._children(append=child)
@@ -424,9 +396,12 @@ class Node(object):
             childIdx = children.index(child)
         except ValueError:
             return
-        self.sigChildRemoved.emit([childIdx])
+        model = self.model
+        if model:
+            model.removeRow(childIdx, self.index())
 
     def _removeChild(self, child):
+
         children = self._children(initialize=False)
         try:
             childIdx = children.index(child)
@@ -529,20 +504,11 @@ class Node(object):
     def _childConnect(self, child):
         child.sigInternalDataChanged.connect(
             self._sigHandler.internalDataChanged)
-        child.sigChildAdded.connect(
-            self._sigHandler.childAdded)
-        child.sigChildRemoved.connect(
-            self._sigHandler.childRemoved)
 
     def _childDisconnect(self, child):
         try:
             child.sigInternalDataChanged.disconnect(
                 self._sigHandler.internalDataChanged)
-        except TypeError:
-            pass
-        try:
-            child.sigChildAdded.disconnect(
-                self._sigHandler.childAdded)
         except TypeError:
             pass
 
@@ -552,6 +518,8 @@ class Node(object):
         self.__children = None
 
     def refresh(self):
+        if self.__loaded:
+            self._refreshNode()
         for column in self.activeColumns:
             self._getModelData(column, force=True)
         for child in self._children(initialize=False):
@@ -594,6 +562,7 @@ class Node(object):
                 self.__children = children = self._loadGroupClasses()
                 for child in children:
                     child._setParent(self)
+                self.__loaded = True
         else:
             children = self.__children
 
@@ -609,7 +578,9 @@ class Node(object):
             self.__parent._childDisconnect(self)
 
         self.__parent = parent
-        self.setModel(parent.model)
+
+        if parent is not None:
+            self.setModel(parent.model)
 
         if parent is None:
             return
@@ -725,9 +696,32 @@ class Node(object):
     def _setModelData(self, editor, column):
         """
         This is called by the View's delegate just before the editor is closed,
-        its allows this item to update itself with data from the editor.
+        it allows this item to update itself with data from the editor.
 
         :param editor:
         :return:
         """
         return False
+
+    def _openedEditorEvent(self, editor, column, args=None, kwargs=None):
+        """
+        This is called by custom editors while they're opened in the view.
+        See ItemDelegate.__notifyView. Defqult implementation calls
+        _setModelData on this node.
+
+        :param editor:
+        :param column:
+        :param args: event's args
+        :param kwargs: event's kwargs
+        :return:
+        """
+
+        return self._setModelData(editor, column)
+
+    def _refreshNode(self):
+        """
+        Called when Model.refresh is called, only if the node children
+        have been loaded at least once (e.g : node expanded in a view)
+        :return:
+        """
+        pass

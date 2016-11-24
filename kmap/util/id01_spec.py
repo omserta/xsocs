@@ -73,6 +73,7 @@ def parse_scan_command(command):
                              '(?P<motor_1_end>[^ ]*) '
                              '(?P<motor_1_steps>[^ ]*) '
                              '(?P<delay>[^ ]*)\s*'
+                             '.*'
                              '$')
     cmd_rgx = re.compile(_COMMAND_LINE_PATTERN)
     cmd_match = cmd_rgx.match(command)

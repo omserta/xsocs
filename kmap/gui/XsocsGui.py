@@ -144,7 +144,7 @@ class XsocsGui(Qt.QMainWindow):
             qspaceF = widget.qspaceH5
             qspaceGroup = self.__project.qspaceGroup()
             qspaceGroup.addQSpace(qspaceF)
-            self.model().reset()
+            self.model().refresh()
         widget.deleteLater()
 
     def __showQSpace(self, node):

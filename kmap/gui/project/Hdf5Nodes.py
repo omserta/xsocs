@@ -183,23 +183,34 @@ class H5Base(Node):
         self.__h5Count = None
         return newChildren
 
-    def childCount(self):
-        """
-        Reimplemented childCount, to return the count without actually loading the
-        childs.
-        :return:
-        """
-        if self.__h5Count is not None:
-            return self.__h5Count
-        return super(H5Base, self).childCount()
+    def _refreshNode(self):
+        diff = set()
+        with h5py.File(self.h5File) as h5f:
+            thisItem = h5f[self.h5Path]
+            try:
+                keys = set(thisItem.keys())
+            except AttributeError:
+                return
+            if not keys:
+                return
+            children = set()
+            for index in range(self.childCount()):
+                child = self.child(index)
+                if isinstance(child, H5Base):
+                    children.add(os.path.basename(child.h5Path.rstrip('/')))
+            diff = keys - children
+
+        for newItem in diff:
+            self.appendChild(_H5NodeFactory(self.h5File,
+                                            self.h5Path + '/' + newItem))
 
 
 @H5NodeClassDef(h5py.File, icons=Qt.QStyle.SP_FileIcon)
 class H5File(H5Base):
     className = 'H5Base'
 
-    def __init__(self, **kwargs):
-        super(H5File, self).__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super(H5File, self).__init__(*args, **kwargs)
 
         self.setData(ModelColumns.NameColumn,
                      os.path.basename(self.h5File).rpartition('.')[0],

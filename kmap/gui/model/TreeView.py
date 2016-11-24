@@ -231,6 +231,33 @@ class TreeView(Qt.QTreeView):
     def __collapsed(self, index):
         self.__openPersistentEditors(index, False)
 
+    def pathToIndex(self, itemPath):
+        model = self.model()
+        if not model:
+            return None
+
+        index = self.model().index(0, 0)
+
+        if not index.isValid():
+            return index
+
+        if itemPath == '/':
+            return index
+
+        pathSplit = [split for split in itemPath.split('/') if split]
+
+        for elem in pathSplit:
+            for row in range(model.rowCount(index)):
+                child = model.index(row, 0, index)
+                name = model.data(child, Qt.Qt.DisplayRole)
+                if name == elem:
+                    index = child
+                    break
+            else:
+                index = Qt.QModelIndex()
+                break
+        return index
+
 
 class ItemDelegate(Qt.QStyledItemDelegate):
     sigDelegateEvent = Qt.Signal(object, object, object)

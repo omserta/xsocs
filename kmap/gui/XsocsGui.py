@@ -49,6 +49,7 @@ from .project.FitGroup import FitItem
 from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
 from .project.Hdf5Nodes import setH5NodeFactory, H5File
 from .Utils import nextFileName
+from .model.ModelDef import ModelRoles
 
 
 _COMPANY_NAME = 'ESRF'
@@ -78,8 +79,6 @@ class XsocsGui(Qt.QMainWindow):
         self.__qspaceViews = {}
         self.__fitViews = {}
 
-        mdiArea = Qt.QMdiArea()
-        self.setCentralWidget(mdiArea)
         self.__createViews()
         self.__createActions()
         self.__createMenus()
@@ -143,9 +142,15 @@ class XsocsGui(Qt.QMainWindow):
         if widget.status == RecipSpaceWidget.StatusCompleted:
             qspaceF = widget.qspaceH5
             qspaceGroup = self.__project.qspaceGroup()
-            qspaceGroup.addQSpace(qspaceF)
+            qspaceItem = qspaceGroup.addQSpace(qspaceF)
             self.model().refresh()
+            index = self.tree.pathToIndex(qspaceItem.path)
+            if index.isValid():
+                self.tree.setCurrentIndex(index)
+                self.__showQSpace(index.data(ModelRoles.InternalDataRole))
         widget.deleteLater()
+
+    tree = property(lambda self: self.centralWidget())
 
     def __showQSpace(self, node):
         view = self.__qspaceViews.get(node)
@@ -166,8 +171,12 @@ class XsocsGui(Qt.QMainWindow):
         if fitWidget.status == FitWidget.StatusCompleted:
             fitFile = fitWidget.fitFile
             fitGroup = item.fitGroup()
-            fitGroup.addFitFile(fitFile)
-            self.model().reset()
+            fitItem = fitGroup.addFitFile(fitFile)
+            self.model().refresh()
+            index = self.tree.pathToIndex(fitItem.path)
+            if index.isValid():
+                self.tree.setCurrentIndex(index)
+                self.__showFit(index.data(ModelRoles.InternalDataRole))
         fitWidget.deleteLater()
 
     def __showFit(self, node):
@@ -178,7 +187,7 @@ class XsocsGui(Qt.QMainWindow):
         view.show()
 
     def model(self):
-        return self.centralWidget().model()
+        return self.tree.model()
 
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)
@@ -224,7 +233,7 @@ class XsocsGui(Qt.QMainWindow):
         mode = 'r+'
         project = XsocsProject(projectFile, mode=mode)
         rootNode = H5File(h5File=projectFile)
-        self.centralWidget().model().appendGroup(rootNode)
+        self.tree.model().appendGroup(rootNode)
         self.__project = project
 
         return True
@@ -263,209 +272,6 @@ class XsocsGui(Qt.QMainWindow):
 
         menus['file'] = fileMenu
         menus['help'] = helpMenu
-
-        # def __projectViewSlot(self, event):
-        #     # TODO : store the plot window in a dictionary + weakref w delete
-        #     #   callback when object is destroyed
-        #     mdi = self.centralWidget()
-        #     widget = viewWidgetFromProjectEvent(self.__project, event)
-        #     if widget is None:
-        #         print('UNKNOWN VIEW EVENT')
-        #         return
-        #     widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        #     try:
-        #         widget.sigProcessApplied.connect(self.__processApplied)
-        #     except AttributeError:
-        #         pass
-        #     mdi.addSubWindow(widget)
-        #     widget.show()
-        #
-        # def __processApplied(self, event):
-        #     widget = processWidgetFromViewEvent(self.__project, event,
-        #                                         parent=self)
-        #     if widget is None:
-        #         print('UNKNOWN PROCESS EVENT')
-        #         return
-        #     widget.setWindowFlags(Qt.Qt.Dialog)
-        #     widget.setWindowModality(Qt.Qt.WindowModal)
-        #     widget.sigProcessDone.connect(self.__processDone)
-        #     widget.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        #     widget.show()
-        #
-        # def __processDone(self, event):
-        #     processDoneEvent(self.__project, event)
-
-    # def __createToolBars(self):
-    #     self.__toolBars = toolBars = {}
-    #     # actions = self.__actions
-    #
-    #     # fileToolBar = self.addToolBar('File')
-    #     # fileToolBar.setObjectName('fileToolBar')
-    #     # fileToolBar.addAction(actions['open'])
-    #     # fileToolBar.addAction(actions['new'])
-    #     # fileToolBar.addAction(actions['import'])
-    #     # toolBars[fileToolBar.windowTitle()] = fileToolBar
-    #     #
-    #     # viewToolBar = self.addToolBar('View')
-    #     # viewToolBar.setObjectName('viewToolBar')
-    #     # viewToolBar.addAction(actions['sessionDock'])
-    #     # viewToolBar.addAction(actions['dataDock'])
-    #     # toolBars[viewToolBar.windowTitle()] = viewToolBar
-
-    # def __createDocks(self):
-    #     self.__sessionDock = sessionDock = Qt.QDockWidget('Infos')
-    #     sessionDock.setWidget(SessionWidget())
-    #     sessionDock.setObjectName('SessionDock')
-    #     self.addDockWidget(Qt.Qt.LeftDockWidgetArea, sessionDock)
-    #
-    #     self.__dataDock = plotDataDock = Qt.QDockWidget('Data')
-    #     plotDataDock.setWidget(PlotDataWidget())
-    #     plotDataDock.setObjectName('DataDock')
-    #     self.addDockWidget(Qt.Qt.LeftDockWidgetArea, plotDataDock)
-    #     plotDataDock.widget().sigViewEvent.connect(self.__projectViewSlot,
-    #                                                Qt.Qt.QueuedConnection)
-
-
-# ####################################################################
-# ####################################################################
-# ####################################################################
-
-#
-# class PlotDataWidget(Qt.QWidget):
-#     sigViewEvent = Qt.Signal(object)
-#
-#     def __init__(self, parent=None):
-#         super(PlotDataWidget, self).__init__(parent)
-#         layout = Qt.QGridLayout(self)
-#         self.__xsocsProject = None
-#
-#         self.__treeView = treeView = Qt.QTreeView()
-#         layout.addWidget(treeView, 0, 0)
-#
-#     def setXsocsProject(self, xsocsProject):
-#         self.__xsocsProject = xsocsProject
-#         self.__setupWidget()
-#
-#     def __setupWidget(self):
-#         # TODO : better
-#         if self.__xsocsProject is not None:
-#             if self.__treeView:
-#                 self.layout().takeAt(0)
-#                 self.__treeView.deleteLater()
-#                 self.__treeView = None
-#             view = self.__xsocsProject.view(parent=self)
-#             view.sigItemEvent.connect(self.sigViewEvent)
-#             self.layout().addWidget(view)
-#             self.__treeView = view
-#
-#
-# # ####################################################################
-# # ####################################################################
-# # ####################################################################
-#
-#
-# class SessionWidget(Qt.QWidget):
-#     def __init__(self, parent=None):
-#         super(SessionWidget, self).__init__(parent)
-#
-#         layout = Qt.QGridLayout(self)
-#         self.__xsocsH5 = None
-#         self.__xsocsProject = None
-#
-#         # #########
-#         # file name
-#         # #########
-#         gbox = Qt.QGroupBox('XSocs file')
-#         boxLayout = Qt.QVBoxLayout(gbox)
-#         self.__fileLabel = fileLabel = AdjustedLineEdit(read_only=True)
-#         fileLabel.setAlignment(Qt.Qt.AlignLeft)
-#         boxLayout.addWidget(fileLabel)
-#
-#         h_line = Qt.QFrame()
-#         h_line.setFrameShape(Qt.QFrame.HLine)
-#         h_line.setFrameShadow(Qt.QFrame.Sunken)
-#         boxLayout.addWidget(h_line)
-#
-#         # misc. info
-#         gridLayout = Qt.QGridLayout()
-#
-#         # number of angles
-#         rowIdx = 0
-#         self.__anglesText = anglesText = AdjustedLineEdit(3, read_only=True)
-#         gridLayout.addWidget(Qt.QLabel('# angles :'),
-#                              rowIdx, 0, alignment=Qt.Qt.AlignLeft)
-#         gridLayout.addWidget(anglesText,
-#                              rowIdx, 1, alignment=Qt.Qt.AlignLeft)
-#
-#         rowIdx += 1
-#         self.__nImgText = nImgText = AdjustedLineEdit(5, read_only=True)
-#         gridLayout.addWidget(Qt.QLabel('Images :'),
-#                              rowIdx, 0, alignment=Qt.Qt.AlignLeft)
-#         gridLayout.addWidget(nImgText, rowIdx, 1, alignment=Qt.Qt.AlignLeft)
-#         self.__imgSizeText = imgSizeText = AdjustedLineEdit(10, read_only=True)
-#         gridLayout.addWidget(Qt.QLabel('Size :'),
-#                              rowIdx, 2, alignment=Qt.Qt.AlignLeft)
-#         gridLayout.addWidget(imgSizeText, rowIdx, 3, alignment=Qt.Qt.AlignLeft)
-#
-#         gridLayout.setColumnStretch(gridLayout.columnCount(), 1)
-#         boxLayout.addLayout(gridLayout)
-#
-#         layout.addWidget(gbox, 0, 0,
-#                          alignment=Qt.Qt.AlignTop)
-#
-#         # ######################
-#         # acquisition parameters
-#         # ######################
-#         gbox = Qt.QGroupBox('Acquisition parameters')
-#         boxLayout = Qt.QVBoxLayout(gbox)
-#         self.__acqParamsWid = acqParamsWid = AcqParamsWidget(read_only=True)
-#         boxLayout.addWidget(acqParamsWid)
-#         layout.addWidget(gbox, 1, 0,
-#                          alignment=Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-#
-#         layout.setRowStretch(layout.rowCount(), 1)
-#
-#     def setXsocsProject(self, xsocsProject):
-#         self.__xsocsProject = xsocsProject
-#         self.__setupWidget()
-#
-#     def __setupWidget(self):
-#         acqParamsWid = self.__acqParamsWid
-#
-#         xsocsH5 = self.__xsocsProject.xsocsH5
-#
-#         acqParamsWid.clear()
-#         filename = ''
-#         n_entries = '0'
-#         n_images = '0'
-#         image_size = ''
-#
-#         # TODO : check if file is not empty, else display popup
-#         if xsocsH5 is not None:
-#             try:
-#                 entry = xsocsH5.get_entry_name(0)
-#                 acqParamsWid.beam_energy = xsocsH5.beam_energy(entry)
-#                 acqParamsWid.detector_orient = xsocsH5.detector_orient(entry)
-#                 (acqParamsWid.direct_beam_h,
-#                  acqParamsWid.direct_beam_v) = xsocsH5.direct_beam(entry)
-#                 (acqParamsWid.chperdeg_h,
-#                  acqParamsWid.chperdeg_v) = xsocsH5.chan_per_deg(entry)
-#                 (acqParamsWid.pixelsize_h,
-#                  acqParamsWid.pixelsize_v) = xsocsH5.pixel_size(entry)
-#                 filename = xsocsH5.filename
-#                 n_entries = '{0}'.format(len(xsocsH5.entries()))
-#                 n_images = '{0}'.format(xsocsH5.n_images(entry))
-#                 image_size = '{0}'.format(xsocsH5.image_size(entry))
-#             except XsocsH5.InvalidEntryError:
-#                 filename = xsocsH5.filename
-#                 n_entries = '0'
-#                 n_images = '0'
-#                 image_size = ''
-#
-#         self.__fileLabel.setText(filename)
-#         self.__anglesText.setText(n_entries)
-#         self.__nImgText.setText(n_images)
-#         self.__imgSizeText.setText(image_size)
 
 
 # ####################################################################

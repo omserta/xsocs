@@ -160,11 +160,6 @@ class ConversionParamsWidget(Qt.QWidget):
         self.__qsize_z_edit.setText(str(int(qspace_size[2])))
 
 
-# class RecipSpaceWidgetEvent(ProcessWidgetEvent):
-#     RecipSpaceEventData = namedtuple('RecipSpaceEventData', ['qspaceH5'])
-
-
-# class RecipSpaceWidget(ProcessWidget):
 class RecipSpaceWidget(Qt.QDialog):
     sigProcessDone = Qt.Signal(object)
 
@@ -490,11 +485,7 @@ class RecipSpaceWidget(Qt.QDialog):
         else:
             self.__qspaceH5 = None
         processedData = self._processData()
-        print 'DONE', processedData
         self.sigProcessDone.emit(processedData)
-        # evtData = RecipSpaceWidgetEvent.RecipSpaceEventData(
-        #     qspaceH5=processedData)
-        # self._emitEvent(RecipSpaceWidgetEvent(self, evtData))
 
     qspaceH5 = property(lambda self: self.__qspaceH5)
 

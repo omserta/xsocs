@@ -48,21 +48,6 @@ from ..project.XsocsH5Factory import h5NodeToProjectItem
 
 class QSpaceTree(TreeView):
     pass
-    # sigCurrentChanged = Qt.Signal(object)
-
-    # def __init__(self, *args, **kwargs):
-    #     super(IntensityTree, self).__init__(*args, **kwargs)
-    #     self.disableDelegateForColumn(1, True)
-    #     for col in range(ModelColumns.ColumnMax):
-    #         if col != ModelColumns.NameColumn:
-    #             self.setColumnHidden(col, True)
-    #
-    # def currentChanged(self, current, previous):
-    #     node = current.data(ModelRoles.InternalDataRole)
-    #     if not node:
-    #         return
-    #     projectItem = h5NodeToProjectItem(node)
-    #     self.sigCurrentChanged.emit(projectItem)
 
 
 class QSpaceView(Qt.QMainWindow):
@@ -103,7 +88,7 @@ class QSpaceView(Qt.QMainWindow):
         self.__isoPosition = None
 
         treeDock = Qt.QDockWidget(self)
-        tree = TreeView(self, model=model)
+        tree = QSpaceTree(self, model=model)
         index = node.index()
         tree.setRootIndex(index)
         # tree.sigCurrentChanged.connect(self.__itemSelected)

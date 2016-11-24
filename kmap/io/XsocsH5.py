@@ -243,7 +243,6 @@ class XsocsH5(XsocsH5Base):
 class XsocsH5Writer(XsocsH5):
 
     def __init__(self, h5_f, mode='a', **kwargs):
-        self.mode = mode
         super(XsocsH5Writer, self).__init__(h5_f, mode=mode, **kwargs)
 
     def __set_detector_params(self, entry, params):

@@ -36,13 +36,16 @@ from .Widgets import (AcqParamsWidget,
 #                     processWidgetFromViewEvent,
 #                     processDoneEvent)
 from .process.RecipSpaceWidget import RecipSpaceWidget
+from .process.FitWidget import FitWidget
 from .view.IntensityView import IntensityView
 from .view.QspaceView import QSpaceView
+from .view.FitView import FitView
 from .project.XsocsProject import XsocsProject
 from .model.TreeView import TreeView
 from .model.Model import Model
 from .project.IntensityGroup import IntensityGroup
 from .project.QSpaceGroup import QSpaceItem
+from .project.FitGroup import FitItem
 from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
 from .project.Hdf5Nodes import setH5NodeFactory, H5File
 from .Utils import nextFileName
@@ -73,6 +76,7 @@ class XsocsGui(Qt.QMainWindow):
 
         self.__intensityView = None
         self.__qspaceViews = {}
+        self.__fitViews = {}
 
         mdiArea = Qt.QMdiArea()
         self.setCentralWidget(mdiArea)
@@ -108,6 +112,9 @@ class XsocsGui(Qt.QMainWindow):
         elif isinstance(projectItem, QSpaceItem)\
                 and event['event'] == 'qspace':
             self.__showQSpace(node)
+        elif isinstance(projectItem, FitItem)\
+                and event['event'] == 'fit':
+            self.__showFit(node)
         else:
             ValueError('Unknwown event for item {0} : {1}.'
                        ''.format(projectItem, event))
@@ -138,6 +145,7 @@ class XsocsGui(Qt.QMainWindow):
             qspaceGroup = self.__project.qspaceGroup()
             qspaceGroup.addQSpace(qspaceF)
             self.model().reset()
+        widget.deleteLater()
 
     def __showQSpace(self, node):
         view = self.__qspaceViews.get(node)
@@ -145,12 +153,29 @@ class XsocsGui(Qt.QMainWindow):
             view = QSpaceView(self, model=node.model, node=node)
             self.__qspaceViews[node] = view
             view.sigProcessApplied.connect(self.__qspaceRoiApplied)
-            # view.sigProcessApplied.connect(self.__intensityRoiApplied)
         view.show()
 
     def __qspaceRoiApplied(self, node):
         item = h5NodeToProjectItem(node)
-        print item
+        xsocsFile = os.path.basename(self.__project.xsocsFile)
+        xsocsPrefix = xsocsFile.rpartition('.')[0]
+        template = '{0}_fit_{{0:>04}}.h5'.format(xsocsPrefix)
+        output_f = nextFileName(self.__project.workdir, template)
+        fitWidget = FitWidget(item.qspaceFile, output_f)
+        fitWidget.exec_()
+        if fitWidget.status == FitWidget.StatusCompleted:
+            fitFile = fitWidget.fitFile
+            fitGroup = item.fitGroup()
+            fitGroup.addFitFile(fitFile)
+            self.model().reset()
+        fitWidget.deleteLater()
+
+    def __showFit(self, node):
+        view = self.__fitViews.get(node)
+        if not view:
+            view = FitView(self, model=node.model, node=node)
+            self.__fitViews[node] = view
+        view.show()
 
     def model(self):
         return self.centralWidget().model()

@@ -108,9 +108,9 @@ class QSpaceH5Writer(QSpaceH5):
     position_dtype = _np.float32
     q_bins_dtype = _np.float64
 
-    def __init__(self, h5_f, mode='a'):
+    def __init__(self, h5_f, mode='a', **kwargs):
         self.mode = mode
-        super(QSpaceH5Writer, self).__init__(h5_f, mode=mode,)
+        super(QSpaceH5Writer, self).__init__(h5_f, mode=mode, **kwargs)
         self.__cube_init = False
 
     def init_file(self,

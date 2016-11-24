@@ -24,16 +24,19 @@
 #
 # ###########################################################################*/
 
+from __future__ import absolute_import
+
 __authors__ = ["D. Naudet"]
 __date__ = "01/06/2016"
 __license__ = "MIT"
 
+
 import time
 import ctypes
 import multiprocessing as mp
+from collections import namedtuple
 import multiprocessing.sharedctypes as mp_sharedctypes
 
-import h5py
 import numpy as np
 
 from scipy.optimize import leastsq
@@ -42,9 +45,17 @@ from ..io import QSpaceH5
 
 disp_times = False
 
+
 class FitTypes(object):
     ALLOWED = range(2)
     LEASTSQ, CENTROID = ALLOWED
+
+
+FitResult = namedtuple('FitResult', ['sample_x', 'sample_y',
+                                     'x_height', 'x_center', 'x_width',
+                                     'y_height', 'y_center', 'y_width',
+                                     'z_height', 'z_center', 'z_width',
+                                     'status'])
 
 
 _const_inv_2_pi_ = np.sqrt(2 * np.pi)
@@ -75,9 +86,9 @@ def _qspace_centroid(x, y, v0):
 
 
 def peak_fit(qspace_f,
-              fit_type=FitTypes.LEASTSQ,
-              indices=None,
-              n_proc=None):
+             fit_type=FitTypes.LEASTSQ,
+             indices=None,
+             n_proc=None):
     """
     :param qspace_f: path to the HDF5 file containing the qspace cubes
     :type data_h5f: `str`
@@ -98,7 +109,7 @@ def peak_fit(qspace_f,
     t_total = time.time()
 
     if fit_type not in FitTypes.ALLOWED:
-        raise ValueError('Unknown fit type : {0}')
+        raise ValueError('Unknown fit type : {0}'.format(fit_type))
 
     if fit_type == FitTypes.LEASTSQ:
         fit_fn = _qspace_gauss_fit
@@ -122,8 +133,8 @@ def peak_fit(qspace_f,
         shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
         # TODO : find something better
         shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
-        success = np.ndarray((n_indices,), dtype=np.bool)
-        success[:] = True
+        # success = np.ndarray((n_indices,), dtype=np.bool)
+        # success[:] = True
 
     # with h5py.File(qspace_f, 'r') as qspace_h5:
     #
@@ -152,9 +163,9 @@ def peak_fit(qspace_f,
     #     # able to open compressed datasets from other processes
     #     del qdata
 
-    results = np.ndarray((n_indices, 11), dtype=np.double)
-    results[:, 0] = x_pos
-    results[:, 1] = y_pos
+    # results = np.ndarray((n_indices, 11), dtype=np.double)
+    # results[:, 0] = x_pos
+    # results[:, 1] = y_pos
 
     manager = mp.Manager()
 
@@ -211,15 +222,17 @@ def peak_fit(qspace_f,
     pool.close()
     pool.join()
 
-    fit_x = np.ndarray((n_indices, 3), dtype=np.float64)
-    fit_y = np.ndarray((n_indices, 3), dtype=np.float64)
-    fit_z = np.ndarray((n_indices, 3), dtype=np.float64)
+    # fit_x = np.ndarray((n_indices, 3), dtype=np.float64)
+    # fit_y = np.ndarray((n_indices, 3), dtype=np.float64)
+    # fit_z = np.ndarray((n_indices, 3), dtype=np.float64)
     results_np = np.frombuffer(shared_res)
     results_np.shape = n_indices, 9
 
-    results[:, 2:5] = results_np[:, 0:3]
-    results[:, 5:8] = results_np[:, 3:6]
-    results[:, 8:11] = results_np[:, 6:9]
+    success = np.frombuffer(shared_success, dtype=bool)
+
+    # results[:, 2:5] = results_np[:, 0:3]
+    # results[:, 5:8] = results_np[:, 3:6]
+    # results[:, 8:11] = results_np[:, 6:9]
 
     t_total = time.time() - t_total
     if disp_times:
@@ -228,8 +241,25 @@ def peak_fit(qspace_f,
         print('Mask {0}'.format(res_times.t_mask))
         print('Fit {0}'.format(res_times.t_fit))
         print('Write {0}'.format(res_times.t_write))
-    return results, success
-        
+
+    status = np.zeros(x_pos.shape)
+    status[success] = 1
+
+    fit_results = FitResult(sample_x=x_pos,
+                            sample_y=y_pos,
+                            x_height=results_np[:, 0].ravel(),
+                            x_center=results_np[:, 1].ravel(),
+                            x_width=results_np[:, 2].ravel(),
+                            y_height=results_np[:, 3].ravel(),
+                            y_center=results_np[:, 4].ravel(),
+                            y_width=results_np[:, 5].ravel(),
+                            z_height=results_np[:, 6].ravel(),
+                            z_center=results_np[:, 7].ravel(),
+                            z_width=results_np[:, 8].ravel(),
+                            status=status)
+    return fit_results
+
+
 def _init_thread(shared_res_,
                  shared_success_,
                  fit_fn_,
@@ -254,6 +284,7 @@ def _init_thread(shared_res_,
         qspace_f = qspace_f_
         read_lock = read_lock_
 
+
 def _gauss_first_guess(x, y):
     i_max = y.argmax()
     y_max = y[i_max]
@@ -264,8 +295,8 @@ def _gauss_first_guess(x, y):
     p0 = y_max * np.sqrt(2*np.pi) * p2
     return [p0, p1, p2]
 
-def _fit_process(th_idx):
 
+def _fit_process(th_idx):
 
     print('Thread {0} started.'.format(th_idx))
     try:
@@ -367,7 +398,7 @@ def _fit_process(th_idx):
                 fit_y = fit_fn(q_y, y_sum, y_0)
                 y_0 = fit_y
             except Exception as ex:
-                print('Y Failed', ex)
+                print('Y Failed', ex, i_cube)
                 y_0 = None
                 success_y = False
 

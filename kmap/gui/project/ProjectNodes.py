@@ -36,6 +36,7 @@ from ..model.ModelDef import ModelColumns
 from .IntensityGroup import IntensityGroup, IntensityItem
 from ..model.NodeEditor import EditorMixin
 from .Hdf5Nodes import H5GroupNode, H5NodeClassDef, H5DatasetNode
+from ..model.Node import Node
 
 
 class ScatterPlotButton(EditorMixin, Qt.QWidget):
@@ -106,3 +107,47 @@ class IntensityNode(H5DatasetNode):
                 attribute=('XsocsClass', 'QSpaceItem'))
 class QSpaceItemNode(H5GroupNode):
     editors = QSpaceButton
+
+
+class FitButton(EditorMixin, Qt.QWidget):
+    persistent = True
+
+    sigValueChanged = Qt.Signal()
+
+    def __init__(self, parent, option, index):
+        super(FitButton, self).__init__(parent, option, index)
+        layout = Qt.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        icon = icons.getQIcon('item-1dim')
+        button = Qt.QToolButton()
+        button.setIcon(icon)
+        layout.addWidget(button)
+        layout.addStretch(1)
+
+        button.clicked.connect(self.__clicked)
+
+    def __clicked(self):
+        # node = self.node
+        event = {'event': 'fit'}
+        self.notifyView(event)
+
+
+class FitHeightNode(Node):
+    className = 'height'
+
+
+class FitCenterNode(Node):
+    className = 'center'
+
+
+class FitWidthNode(Node):
+    className = 'width'
+
+
+@H5NodeClassDef('FitItem',
+                attribute=('XsocsClass', 'FitItem'))
+class QSpaceItemNode(H5GroupNode):
+    editors = FitButton
+    groupClasses = [(None, FitHeightNode),
+                    (None, FitCenterNode),
+                    (None, FitWidthNode)]

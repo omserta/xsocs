@@ -34,9 +34,44 @@ import weakref
 import h5py
 import numpy as np
 
+
 from .ProjectDef import getItemClass
 from ...io.XsocsH5Base import XsocsH5Base
 from ...io.XsocsH5 import XsocsH5
+
+
+def _getIInfo(h5File, h5Path):
+    attrs = dict([(key, value) for key, value in h5File[h5Path].attrs.items()])
+    itemClass = h5File.get(h5Path, getclass=True)
+    itemLink = h5File.get(h5Path, getclass=True, getlink=True)
+    return itemClass, itemLink, attrs
+
+
+def setProjectItemFactory(factory):
+    global _projectItemFactory
+    if factory is None:
+        _projectItemFactory = projectItemFactory
+    else:
+        _projectItemFactory= factory
+
+
+def projectItemFactory(h5File, h5Path, mode=None):
+    klass = None
+    with h5py.File(h5File, mode='r') as h5f:
+        attrs = h5f[h5Path].attrs
+        # For some reason attrs.get sometimes fails,
+        # using "in" seems a bit more robust.
+        if 'XsocsClass' in attrs:
+            xsocsClass = attrs['XsocsClass']
+            klass = getItemClass(xsocsClass)
+        del attrs
+
+    if not klass:
+        klass = ProjectItem
+    return klass(h5File, h5Path, mode=mode)
+
+
+_projectItemFactory = projectItemFactory
 
 
 class ProjectItem(XsocsH5Base):
@@ -78,6 +113,10 @@ class ProjectItem(XsocsH5Base):
                                           processLevel)
             self._createItem()
 
+    @staticmethod
+    def factory(h5File, h5Path):
+        return _projectItemFactory(h5File, h5Path)
+
     def __setXsocsAttributes(self, xsocsClass, processLevel):
         if self.mode not in ('r',):
             with self._get_file() as h5f:
@@ -92,12 +131,26 @@ class ProjectItem(XsocsH5Base):
                     item.attrs['XsocsLevel'] = processLevel
                 del item
 
+    def children(self):
+        """
+        Returns this items direct children.
+        :return:
+        """
+        children = []
+        with self._get_file() as h5f:
+            try:
+                keys = h5f[self.path].keys()
+            except AttributeError:
+                return []
+        pathTpl = self.path.rstrip('/') + '/{0}'
+        for key in keys:
+            child = self.factory(self.filename,
+                                 pathTpl.format(key.lstrip('/')))
+            children.append(child)
+        return children
+
     def cast(self):
-        className = self.xsocsClass
-        klass = getItemClass(className)
-        if klass:
-            return klass(self.filename, self.path, mode=self.mode)
-        return self
+        return ProjectItem.factory(self.filename, self.path)
 
     def projectRoot(self):
         return ProjectItem(self.filename, '/', mode=self.mode).cast()
@@ -161,6 +214,15 @@ class ProjectItem(XsocsH5Base):
         instance = klass(h5File, groupPath)
         return instance
 
+    @property
+    def processLevel(self):
+        with self._get_file() as h5f:
+            return h5f[self.__nodePath].attrs.get('XsocsLevel')
+
+    @property
+    def xsocsClass(self):
+        return self.attribute(self.path, 'XsocsClass')
+
     def _createItem(self):
         """
         Called when the xsocsh5 file is succesfuly called. This should be used
@@ -176,12 +238,3 @@ class ProjectItem(XsocsH5Base):
         :return:
         """
         pass
-
-    @property
-    def processLevel(self):
-        with self._get_file() as h5f:
-            return h5f[self.__nodePath].attrs.get('XsocsLevel')
-
-    @property
-    def xsocsClass(self):
-        return self.attribute(self.path, 'XsocsClass')

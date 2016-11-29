@@ -34,7 +34,7 @@ from .Hdf5Nodes import H5Base, H5NodeFactory
 from .ProjectItem import ProjectItem
 
 
-def h5NodeToProjectItem(h5Node, mode='r+', cast=True):
+def h5NodeToProjectItem(h5Node, mode='r', cast=True):
     if not isinstance(h5Node, H5Base):
         return None
     item = ProjectItem(h5Node.h5File, nodePath=h5Node.h5Path, mode=mode)

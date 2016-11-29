@@ -30,7 +30,6 @@ __authors__ = ["D. Naudet"]
 __date__ = "01/06/2016"
 __license__ = "MIT"
 
-
 import time
 import ctypes
 import multiprocessing as mp
@@ -40,7 +39,7 @@ import multiprocessing.sharedctypes as mp_sharedctypes
 import numpy as np
 
 from scipy.optimize import leastsq
-#from silx.math import curve_fit
+# from silx.math import curve_fit
 from ..io import QSpaceH5
 
 disp_times = False
@@ -57,15 +56,15 @@ FitResult = namedtuple('FitResult', ['sample_x', 'sample_y',
                                      'z_height', 'z_center', 'z_width',
                                      'status'])
 
-
 _const_inv_2_pi_ = np.sqrt(2 * np.pi)
 
 # 1d Gaussian func
 _gauss_fn = lambda p, x: (p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
-                          np.exp(-0.5 * ((x - p[1])/p[2])**2))
+                          np.exp(-0.5 * ((x - p[1]) / p[2]) ** 2))
 # 1d Gaussian fit
 _gauss_fit_err = lambda p, x, y: (p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
-                                    np.exp(-0.5 * ((x - p[1])/p[2])**2) - y)
+                                  np.exp(-0.5 * ((x - p[1]) / p[2]) ** 2) - y)
+
 
 def _qspace_gauss_fit(x, y, v0):
     result = leastsq(_gauss_fit_err,
@@ -78,6 +77,7 @@ def _qspace_gauss_fit(x, y, v0):
 
     return result[0]
 
+
 def _qspace_centroid(x, y, v0):
     # TODO : throw exception if fit failed
     com = x.dot(y) / y.sum()
@@ -88,7 +88,8 @@ def _qspace_centroid(x, y, v0):
 def peak_fit(qspace_f,
              fit_type=FitTypes.LEASTSQ,
              indices=None,
-             n_proc=None):
+             n_proc=None,
+             roiIndices=None):
     """
     :param qspace_f: path to the HDF5 file containing the qspace cubes
     :type data_h5f: `str`
@@ -176,14 +177,14 @@ def peak_fit(qspace_f,
         n_proc = mp.cpu_count()
 
     pool = mp.Pool(n_proc,
-               initializer=_init_thread,
-               initargs=(shared_res,
-                         shared_success,
-                         fit_fn,
-                         (n_indices, 9),
-                         idx_queue,
-                         qspace_f,
-                         read_lock))
+                   initializer=_init_thread,
+                   initargs=(shared_res,
+                             shared_success,
+                             fit_fn,
+                             (n_indices, 9),
+                             idx_queue,
+                             qspace_f,
+                             read_lock))
 
     if disp_times:
         class myTimes(object):
@@ -199,6 +200,7 @@ def peak_fit(qspace_f,
                 self.t_mask += t_mask_
                 self.t_fit += t_fit_
                 self.t_write += t_write_
+
         res_times = myTimes()
         callback = res_times.update
     else:
@@ -207,7 +209,7 @@ def peak_fit(qspace_f,
     # creating the processes
     res_list = []
     for th_idx in range(n_proc):
-        arg_list = (th_idx,)
+        arg_list = (th_idx, roiIndices)
         res = pool.apply_async(_fit_process, args=arg_list, callback=callback)
         res_list.append(res)
 
@@ -267,22 +269,21 @@ def _init_thread(shared_res_,
                  idx_queue_,
                  qspace_f_,
                  read_lock_):
+    global shared_res, \
+        shared_success, \
+        fit_fn, \
+        result_shape, \
+        idx_queue, \
+        qspace_f, \
+        read_lock
 
-        global shared_res,\
-               shared_success,\
-               fit_fn,\
-               result_shape,\
-               idx_queue,\
-               qspace_f,\
-               read_lock
-
-        shared_res = shared_res_
-        shared_success = shared_success_
-        fit_fn = fit_fn_
-        result_shape = result_shape_
-        idx_queue = idx_queue_
-        qspace_f = qspace_f_
-        read_lock = read_lock_
+    shared_res = shared_res_
+    shared_success = shared_success_
+    fit_fn = fit_fn_
+    result_shape = result_shape_
+    idx_queue = idx_queue_
+    qspace_f = qspace_f_
+    read_lock = read_lock_
 
 
 def _gauss_first_guess(x, y):
@@ -290,27 +291,31 @@ def _gauss_first_guess(x, y):
     y_max = y[i_max]
     p1 = x[i_max]
     i_fwhm = np.where(y >= y_max / 2.)[0]
-    fwhm = (x[1]-x[0]) * len(i_fwhm)
-    p2 = fwhm/np.sqrt(2*np.log(2)) #2.35482
-    p0 = y_max * np.sqrt(2*np.pi) * p2
+    fwhm = (x[1] - x[0]) * len(i_fwhm)
+    p2 = fwhm / np.sqrt(2 * np.log(2))  # 2.35482
+    p0 = y_max * np.sqrt(2 * np.pi) * p2
     return [p0, p1, p2]
 
 
-def _fit_process(th_idx):
-
+def _fit_process(th_idx, roiIndices=None):
     print('Thread {0} started.'.format(th_idx))
     try:
         t_read = 0.
         t_fit = 0.
         t_mask = 0.
-        
+
         results = np.frombuffer(shared_res)
         results.shape = result_shape
         success = np.frombuffer(shared_success, dtype=bool)
         qspace_h5 = QSpaceH5.QSpaceH5(qspace_f)
 
-        #TODO : timeout to check if it has been canceled
-        #read_lock.acquire()
+        if roiIndices is not None:
+            xSlice = slice(roiIndices[0][0], roiIndices[0][1], 1)
+            ySlice = slice(roiIndices[1][0], roiIndices[1][1], 1)
+            zSlice = slice(roiIndices[2][0], roiIndices[2][1], 1)
+
+        # TODO : timeout to check if it has been canceled
+        # read_lock.acquire()
         # with h5py.File(qspace_f, 'r') as qspace_h5:
         #     q_x = qspace_h5['bins_edges/x'][:]
         #     q_y = qspace_h5['bins_edges/y'][:]
@@ -327,13 +332,20 @@ def _fit_process(th_idx):
                 q_shape = dset.shape
                 q_dtype = dset.dtype
             histo = qspace_h5.histo
+
+            if roiIndices:
+                q_x = q_x[xSlice]
+                q_y = q_y[ySlice]
+                q_z = q_z[zSlice]
+                histo = histo[xSlice, ySlice, zSlice]
+
             mask = np.where(histo > 0)
             weights = histo[mask]
 
-        #read_lock.release()
-        #print weights.max(), min(weights)
-        cube = np.ascontiguousarray(np.zeros(q_shape[1:]),
-                                    dtype=q_dtype)
+        # read_lock.release()
+        # print weights.max(), min(weights)
+        read_cube = np.ascontiguousarray(np.zeros(q_shape[1:]),
+                                         dtype=q_dtype)
 
         x_0 = None
         y_0 = None
@@ -347,7 +359,8 @@ def _fit_process(th_idx):
                 break
 
             if i_cube % 100 == 0:
-                print('Processing cube {0}/{1}.'.format(i_cube, result_shape[0]))
+                print(
+                'Processing cube {0}/{1}.'.format(i_cube, result_shape[0]))
 
             t0 = time.time()
             # with h5py.File(qspace_f, 'r') as qspace_h5:
@@ -355,13 +368,18 @@ def _fit_process(th_idx):
             #                                     source_sel=np.s_[i_cube],
             #                                     dest_sel=None)
             with qspace_h5.qspace_dset_ctx() as dset:
-                dset.read_direct(cube,
+                dset.read_direct(read_cube,
                                  source_sel=np.s_[i_cube],
                                  dest_sel=None)
             t_read += time.time() - t0
 
+            if roiIndices:
+                cube = read_cube[xSlice, ySlice, zSlice]
+            else:
+                cube = read_cube
+
             t0 = time.time()
-            cube[mask] = cube[mask]/weights
+            cube[mask] = cube[mask] / weights
             t_mask = time.time() - t0
 
             t0 = time.time()
@@ -372,9 +390,9 @@ def _fit_process(th_idx):
 
             z_sum = cube.sum(axis=0).sum(axis=0)
 
-            #if z_0 is None:
-                #z_0 = _gauss_first_guess(q_z, z_sum)
-            z_0 = [1.0, q_z.mean(), 1.0]  
+            # if z_0 is None:
+            # z_0 = _gauss_first_guess(q_z, z_sum)
+            z_0 = [1.0, q_z.mean(), 1.0]
 
             try:
                 fit_z = fit_fn(q_z, z_sum, z_0)
@@ -390,9 +408,9 @@ def _fit_process(th_idx):
 
             y_sum = cube_sum_z.sum(axis=0)
 
-            #if y_0 is None:
-                #y_0 = _gauss_first_guess(q_y, y_sum)
-            y_0 = [1.0, q_y.mean(), 1.0]  
+            # if y_0 is None:
+            # y_0 = _gauss_first_guess(q_y, y_sum)
+            y_0 = [1.0, q_y.mean(), 1.0]
 
             try:
                 fit_y = fit_fn(q_y, y_sum, y_0)
@@ -406,9 +424,9 @@ def _fit_process(th_idx):
 
             x_sum = cube_sum_z.sum(axis=1)
 
-            #if x_0 is None:
-                #x_0 = _gauss_first_guess(q_x, x_sum)
-            x_0 = [1.0, q_x.mean(), 1.0]  
+            # if x_0 is None:
+            # x_0 = _gauss_first_guess(q_x, x_sum)
+            x_0 = [1.0, q_x.mean(), 1.0]
 
             try:
                 fit_x = fit_fn(q_x, x_sum, x_0)

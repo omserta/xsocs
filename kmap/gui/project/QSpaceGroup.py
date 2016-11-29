@@ -33,8 +33,6 @@ import os
 
 import numpy as np
 
-# from .ProjectDef import ProcessId
-# from .HybridItem import HybridItem
 from ...io.QSpaceH5 import QSpaceH5
 from .ProjectItem import ProjectItem
 from .ProjectDef import ItemClassDef
@@ -49,6 +47,12 @@ class QSpaceGroup(ProjectItem):
         item = QSpaceItem(self.filename, itemPath, mode='a')
         item.qspaceFile = qspaceFile
         return item
+
+    def getQspaceItems(self):
+        children = [child for child in self.children()
+                    if isinstance(child, QSpaceItem)]
+        return children
+
 
 
 @ItemClassDef('QSpaceItem')

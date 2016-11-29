@@ -103,6 +103,7 @@ def _getIntensity(entry, entry_f, projectLock, projectFile, pathTpl, queue):
         dsetPath = pathTpl.format(str(entry))
 
         projectLock.acquire()
+        # WARNING, make sure the file isn't opened in write mode elsewhere!!!
         IntensityItem(projectFile, dsetPath, mode='r+', data=cumul)
         projectLock.release()
     except:

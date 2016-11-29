@@ -37,8 +37,12 @@ class StyledLineEdit(Qt.QLineEdit):
     Styled QLineEdit. Background color is set depending on the following
     states : read only, enabled.
     """
-    def __init__(self, parent=None):
+
+    _padding = 2
+
+    def __init__(self, parent=None, nChar=None):
         super(StyledLineEdit, self).__init__(parent)
+        self.__nChar = nChar
         self._updateStyleSheet()
 
     def setReadOnly(self, ro):
@@ -47,6 +51,15 @@ class StyledLineEdit(Qt.QLineEdit):
 
     def setEnabled(self, enabled):
         super(StyledLineEdit, self).setEnabled(enabled)
+        self._updateStyleSheet()
+
+    def setNChar(self, nChar):
+        """
+        Sets the number of characters to be displayed.
+        :param nChar: None to reset to default.
+        :return:
+        """
+        self.__nChar = nChar
         self._updateStyleSheet()
 
     def _updateStyleSheet(self):
@@ -70,5 +83,16 @@ class StyledLineEdit(Qt.QLineEdit):
                 color = 'lightGray'
             else:
                 color = 'white'
-            sheet = ('StyledLineEdit{{ background-color: {0}; }}'.format(color))
+            sheet = """StyledLineEdit{{ background-color: {0}; }}
+                    """.format(color)
+
+        if self.__nChar is not None:
+            # There are two stylesheet units "em" and "xm" that I tried,
+            # but the results were not satisfactory.
+            fm = self.fontMetrics()
+            text = 'M' * (self.__nChar + self._padding)
+            width = fm.width(text)
+            sheet += """StyledLineEdit{{ max-width: {0}px;
+                                         min-width: {0}px; }}
+                     """.format(width)
         self.setStyleSheet(sheet)

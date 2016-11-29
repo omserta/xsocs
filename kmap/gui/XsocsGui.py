@@ -74,6 +74,8 @@ class XsocsGui(Qt.QMainWindow):
         super(XsocsGui, self).__init__(parent)
 
         setH5NodeFactory(XsocsH5Factory)
+        self.move(0, 0)
+        self.resize(300, 600)
 
         self.__intensityView = None
         self.__qspaceViews = {}
@@ -124,15 +126,22 @@ class XsocsGui(Qt.QMainWindow):
             self.__intensityView = view = IntensityView(self,
                                                         model=node.model,
                                                         node=node)
+            screen = Qt.QApplication.desktop()
+            size = screen.availableGeometry(view).size()
+            size.scale(size.width() * 0.6,
+                       size.height() * 0.6,
+                       Qt.Qt.IgnoreAspectRatio)
+            view.resize(size)
             view.sigProcessApplied.connect(self.__intensityRoiApplied)
         view.show()
+        view.raise_()
 
     def __intensityRoiApplied(self, event):
         xsocsFile = os.path.basename(self.__project.xsocsFile)
         xsocsPrefix = xsocsFile.rpartition('.')[0]
         template = '{0}_qspace_{{0:>04}}.h5'.format(xsocsPrefix)
         output_f = nextFileName(self.__project.workdir, template)
-        widget = RecipSpaceWidget(parent=self,
+        widget = RecipSpaceWidget(parent=self.sender(),
                                   data_h5f=self.__project.xsocsFile,
                                   output_f=output_f,
                                   qspace_size=None,
@@ -157,16 +166,26 @@ class XsocsGui(Qt.QMainWindow):
         if not view:
             view = QSpaceView(self, model=node.model, node=node)
             self.__qspaceViews[node] = view
+            screen = Qt.QApplication.desktop()
+            size = screen.availableGeometry(view).size()
+            size.scale(size.width() * 0.6,
+                       size.height() * 0.6,
+                       Qt.Qt.IgnoreAspectRatio)
+            view.resize(size)
             view.sigProcessApplied.connect(self.__qspaceRoiApplied)
         view.show()
+        view.raise_()
 
-    def __qspaceRoiApplied(self, node):
+    def __qspaceRoiApplied(self, node, roi):
         item = h5NodeToProjectItem(node)
         xsocsFile = os.path.basename(self.__project.xsocsFile)
         xsocsPrefix = xsocsFile.rpartition('.')[0]
         template = '{0}_fit_{{0:>04}}.h5'.format(xsocsPrefix)
         output_f = nextFileName(self.__project.workdir, template)
-        fitWidget = FitWidget(item.qspaceFile, output_f)
+        fitWidget = FitWidget(item.qspaceFile,
+                              output_f,
+                              roi,
+                              parent=self.sender())
         fitWidget.exec_()
         if fitWidget.status == FitWidget.StatusCompleted:
             fitFile = fitWidget.fitFile

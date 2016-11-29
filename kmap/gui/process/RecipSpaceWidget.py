@@ -34,7 +34,7 @@ from collections import namedtuple
 
 from silx.gui import qt as Qt
 
-# from .ProcessWidget import ProcessWidget, ProcessWidgetEvent
+from ..widgets.Containers import GroupBox
 from ..Widgets import (AcqParamsWidget,
                        AdjustedLineEdit,
                        AdjustedPushButton)
@@ -193,7 +193,7 @@ class RecipSpaceWidget(Qt.QDialog):
         # input QGroupBox
         # ################
 
-        input_gbx = Qt.QGroupBox("Input")
+        input_gbx = GroupBox("Input")
         layout = Qt.QHBoxLayout(input_gbx)
         topLayout.addWidget(input_gbx,
                             0, 0,
@@ -219,7 +219,7 @@ class RecipSpaceWidget(Qt.QDialog):
         # ################
         # Scans
         # ################
-        scans_gbx = Qt.QGroupBox("Scans")
+        scans_gbx = GroupBox("Scans")
         topLayout.addWidget(scans_gbx, 1, 1, 2, 1)
         topLayout.setRowStretch(2, 1000)
 
@@ -265,7 +265,7 @@ class RecipSpaceWidget(Qt.QDialog):
         # ################
         # Acq. parameters
         # ################
-        params_gbx = Qt.QGroupBox("Acq. Parameters")
+        params_gbx = GroupBox("Acq. Parameters")
         grp_layout = Qt.QVBoxLayout(params_gbx)
         topLayout.addWidget(params_gbx,
                             1, 0, alignment=Qt.Qt.AlignTop)
@@ -294,7 +294,7 @@ class RecipSpaceWidget(Qt.QDialog):
         # conversion params
         # ################
 
-        conv_gbx = Qt.QGroupBox("Conversion parameters")
+        conv_gbx = GroupBox("Conversion parameters")
         grp_layout = Qt.QVBoxLayout(conv_gbx)
         topLayout.addWidget(conv_gbx, 2, 0, alignment=Qt.Qt.AlignTop)
 
@@ -305,7 +305,7 @@ class RecipSpaceWidget(Qt.QDialog):
         # output
         # ################
 
-        output_gbx = Qt.QGroupBox("Output")
+        output_gbx = GroupBox("Output")
         layout = Qt.QHBoxLayout(output_gbx)
         topLayout.addWidget(output_gbx, 3, 0, 1, 2)
         lab = Qt.QLabel('File :')

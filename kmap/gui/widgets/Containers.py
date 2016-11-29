@@ -29,14 +29,27 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-import os
+from silx.gui import qt as Qt
 
-# TODO : something better!
-def nextFileName(root, template, cntMax=10000):
-    template = os.path.join(root, template)
-    for fIdx in range(cntMax):
-        nextFile = template.format(fIdx)
-        if not os.path.exists(nextFile):
-            return nextFile
-    else:
-        raise ValueError('No available file names.')
+
+class GroupBox(Qt.QGroupBox):
+    def __init__(self, *args, **kwargs):
+        super(GroupBox, self).__init__(*args, **kwargs)
+        self.setStyleSheet(
+            """
+            QGroupBox {
+               border: 2px solid gray;
+                margin-top: 2ex;
+                border-radius: 5px
+            }
+
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 3px;
+                background-color:
+                    qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 lightgray, stop: 1 gray);
+                border-radius: 5px;
+            }
+            """)

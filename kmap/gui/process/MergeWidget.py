@@ -1,3 +1,34 @@
+# coding: utf-8
+# /*##########################################################################
+#
+# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# ###########################################################################*/
+
+from __future__ import absolute_import
+
+__authors__ = ["D. Naudet"]
+__license__ = "MIT"
+__date__ = "15/09/2016"
+
 import os
 import time
 import shutil
@@ -8,6 +39,7 @@ from collections import namedtuple
 from ...util.id01_spec import Id01DataMerger
 from ..Widgets import (AcqParamsWidget,
                        AdjustedPushButton)
+from ..widgets.Containers import GroupBox
 
 from silx.gui import qt as Qt
 
@@ -265,7 +297,7 @@ class _MergeProcessDialog(Qt.QDialog):
         label.setTextFormat(Qt.Qt.RichText)
         layout.addWidget(label, stretch=0, alignment=Qt.Qt.AlignHCenter)
 
-        grp_box = Qt.QGroupBox('Output directory :')
+        grp_box = GroupBox('Output directory :')
         grp_box.setLayout(Qt.QVBoxLayout())
         outdir_edit = Qt.QLineEdit(output_dir)
         fm = outdir_edit.fontMetrics()
@@ -273,7 +305,7 @@ class _MergeProcessDialog(Qt.QDialog):
         grp_box.layout().addWidget(outdir_edit)
 
         layout.addWidget(grp_box, stretch=0)
-        grp_box = Qt.QGroupBox('Files :')
+        grp_box = GroupBox('Files :')
         grp_box.setLayout(Qt.QVBoxLayout())
         tree_widget = Qt.QTreeWidget()
         tree_widget.setColumnCount(3)
@@ -419,7 +451,7 @@ class MergeWidget(Qt.QDialog):
         # input QGroupBox
         # ################
 
-        input_gbx = Qt.QGroupBox("Input")
+        input_gbx = GroupBox("Input")
         layout = Qt.QGridLayout(input_gbx)
         self.layout().addWidget(input_gbx,
                                 0, 0,
@@ -504,7 +536,7 @@ class MergeWidget(Qt.QDialog):
         # ################
         # scans + edf QGroupBox
         # ################
-        scans_gbx = Qt.QGroupBox("Spec + EDF")
+        scans_gbx = GroupBox("Spec + EDF")
         grp_layout = Qt.QHBoxLayout(scans_gbx)
         self.layout().addWidget(scans_gbx,
                                 1, 0,
@@ -610,7 +642,7 @@ class MergeWidget(Qt.QDialog):
         # ################
         # parameters
         # ################
-        params_gbx = Qt.QGroupBox("Acq. Parameters")
+        params_gbx = GroupBox("Acq. Parameters")
         grp_layout = Qt.QVBoxLayout(params_gbx)
 
         acq_params_wid = AcqParamsWidget(highlight_change=False)
@@ -623,7 +655,7 @@ class MergeWidget(Qt.QDialog):
         # output options
         # ################
 
-        output_gbx = Qt.QGroupBox("Output")
+        output_gbx = GroupBox("Output")
         layout = Qt.QGridLayout(output_gbx)
         self.layout().addWidget(output_gbx,
                                 3, 0,

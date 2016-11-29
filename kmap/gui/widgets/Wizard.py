@@ -38,6 +38,7 @@ from silx.gui import qt as Qt
 from ...io.XsocsH5 import XsocsH5
 from .. import icons as XsocsIcons
 from .FileChooser import FileChooser
+from ..widgets.Containers import GroupBox
 from ..process.MergeWidget import MergeWidget
 from ..project.XsocsProject import XsocsProject
 
@@ -82,7 +83,7 @@ class LoadXsocsDataPage(Qt.QWizardPage):
 
         layout = Qt.QVBoxLayout(self)
 
-        group = Qt.QGroupBox('Please select the XSOCS data file to load.')
+        group = GroupBox('Please select the XSOCS data file to load.')
         layout.addWidget(group)
         grpLayout = Qt.QHBoxLayout(group)
         filePicker = FileChooser(fileMode=Qt.QFileDialog.ExistingFile)
@@ -309,7 +310,7 @@ class ReviewProjectPage(Qt.QWizardPage):
         self.setPixmap(Qt.QWizard.LogoPixmap, icon)
 
         layout = Qt.QVBoxLayout(self)
-        group = Qt.QGroupBox('Project Summary')
+        group = GroupBox('Project Summary')
         layout.addWidget(group)
         grpLayout = Qt.QVBoxLayout(group)
         view = ProjectSummaryWidget()
@@ -395,7 +396,7 @@ class NewProjectPage(Qt.QWizardPage):
         self.__isComplete = False
         self.__selectedPath = None
 
-        group = Qt.QGroupBox('Create new project into...')
+        group = GroupBox('Create new project into...')
         layout.addWidget(group)
 
         grpLayout = Qt.QHBoxLayout(group)
@@ -465,7 +466,7 @@ class OpenProjectPage(Qt.QWizardPage):
         self.__isComplete = False
         self.__selectedPath = None
 
-        group = Qt.QGroupBox('Please select the project file to open.')
+        group = GroupBox('Please select the project file to open.')
         layout.addWidget(group)
 
         grpLayout = Qt.QHBoxLayout(group)
@@ -479,7 +480,7 @@ class OpenProjectPage(Qt.QWizardPage):
         fileDialog.setNameFilters(['Xsocs project files (*.prj)',
                                    'Any files (*)'])
 
-        group = Qt.QGroupBox('Project Summary')
+        group = GroupBox('Project Summary')
         layout.addWidget(group)
         grpLayout = Qt.QVBoxLayout(group)
         view = ProjectSummaryWidget()

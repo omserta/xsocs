@@ -167,6 +167,10 @@ class H5Base(Node):
                 count = 0
         self.__h5Count = count
 
+    @staticmethod
+    def factory(h5File, h5Path):
+        return _H5NodeFactory(h5File, h5Path)
+
     def _loadChildren(self):
         base = self.h5Path.rstrip('/')
         with h5py.File(self.__h5File, mode='r') as h5f:
@@ -177,7 +181,7 @@ class H5Base(Node):
                          for key in h5f[self.__h5Path].keys()]
             except AttributeError:
                 paths = []
-        newChildren = [_H5NodeFactory(self.__h5File, path)
+        newChildren = [H5Base.factory(self.__h5File, path)
                        for path in paths]
         newChildren = newChildren
         self.__h5Count = None

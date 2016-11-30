@@ -123,9 +123,15 @@ class XsocsGui(Qt.QMainWindow):
             ValueError('Unknwown event for item {0} : {1}.'
                        ''.format(projectItem, event))
 
-    def __showIntensity(self, node):
+    def __showIntensity(self, node=None):
         view = self.__intensityView
         if not view:
+            if node is None:
+                intensityGroup = self.__project.intensityGroup()
+                index = self.tree.pathToIndex(intensityGroup.path)
+                node = index.data(ModelRoles.InternalDataRole)
+
+            # TODO : log if node is None
             self.__intensityView = view = IntensityView(self,
                                                         model=node.model,
                                                         node=node)
@@ -219,6 +225,7 @@ class XsocsGui(Qt.QMainWindow):
                 self.__sigQueuedClose.emit()
                 return
             self.__widget_setup = True
+        self.__showIntensity()
 
     def closeEvent(self, event):
         self.__writeSettings()

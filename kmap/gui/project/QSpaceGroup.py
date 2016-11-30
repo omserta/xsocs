@@ -49,9 +49,7 @@ class QSpaceGroup(ProjectItem):
         return item
 
     def getQspaceItems(self):
-        children = [child for child in self.children()
-                    if isinstance(child, QSpaceItem)]
-        return children
+        return self.children(classinfo=QSpaceItem)
 
 
 

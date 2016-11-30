@@ -66,7 +66,7 @@ class ProjectTree(TreeView):
 
 
 class XsocsGui(Qt.QMainWindow):
-    __firstInitSig = Qt.Signal()
+    __sigQueuedClose = Qt.Signal()
 
     def __init__(self,
                  parent=None,
@@ -89,8 +89,11 @@ class XsocsGui(Qt.QMainWindow):
         self.__startupprojectH5File = projectH5File
         self.__widget_setup = False
 
-        self.__firstInitSig.connect(self.__showWizard, Qt.Qt.QueuedConnection)
+        self.__sigQueuedClose.connect(self.__close, Qt.Qt.QueuedConnection)
         self.__readSettings()
+
+    def __close(self):
+        self.deleteLater()
 
     def __createViews(self):
         tree = ProjectTree()
@@ -211,7 +214,10 @@ class XsocsGui(Qt.QMainWindow):
     def showEvent(self, event):
         super(XsocsGui, self).showEvent(event)
         if not self.__widget_setup:
-            self.__firstInitSig.emit()
+            # self.__firstInitSig.emit()
+            if not self.__showWizard():
+                self.__sigQueuedClose.emit()
+                return
             self.__widget_setup = True
 
     def closeEvent(self, event):
@@ -244,9 +250,10 @@ class XsocsGui(Qt.QMainWindow):
                 projectFile = wizard.projectFile
                 wizard.deleteLater()
             else:
-                self.close()
-                return
+                wizard.deleteLater()
+                return False
         self.__setupProject(projectFile=projectFile)
+        return True
 
     def __setupProject(self, projectFile=None):
         mode = 'r+'

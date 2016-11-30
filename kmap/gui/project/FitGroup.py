@@ -49,6 +49,9 @@ class FitGroup(ProjectItem):
         item.fitFile = fitFile
         return item
 
+    def getFitItems(self):
+        return self.children(classinfo=FitItem)
+
 
 @ItemClassDef('FitItem')
 class FitItem(ProjectItem):

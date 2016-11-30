@@ -156,6 +156,15 @@ class QSpaceView(Qt.QMainWindow):
         roiPlotWindow.setGraphTitle('ROI Intensity Map')
         roiPlotWindow.sigPlotSignal.connect(self.__plotSignal)
 
+        refreshAction = Qt.QAction(roiPlotWindow)
+        refreshAction.setIcon(getQIcon('view-refresh'))
+        refreshAction.setText('Update')
+        refreshAction.setToolTip('Compute the intensity map for the current ROI')
+        roiPlotWindow.toolBar().insertAction(
+            roiPlotWindow.toolBar().actions()[0],
+            refreshAction)
+        refreshAction.triggered.connect(self.__refreshROIPlotSlot)
+
         with item.qspaceH5 as qspaceH5:
             sampleX = qspaceH5.sample_x
             sampleY = qspaceH5.sample_y
@@ -249,8 +258,6 @@ class QSpaceView(Qt.QMainWindow):
     def __setPlotData(self, x, y, data):
         self.__plotWindow.setPlotData(x, y, data)
         self.__plotWindow.resetZoom()
-        self.__roiPlotWindow.setPlotData(x, y, data)
-        self.__roiPlotWindow.resetZoom()
 
     def __roiApplied(self):
         region = self.__view3d.getSelectedRegion()
@@ -350,7 +357,7 @@ class QSpaceView(Qt.QMainWindow):
         self.__xRoiWid.slider.setSliderValues(xLeft, xRight)
         self.__yRoiWid.slider.setSliderValues(yLeft, yRight)
         self.__zRoiWid.slider.setSliderValues(zLeft, zRight)
-        self.__setROIIntensityMap(region=None)
+        self.__roiPlotWindow.remove(kind='curve')
 
     def __roiChanged(self, event):
         sender = self.sender()
@@ -367,11 +374,13 @@ class QSpaceView(Qt.QMainWindow):
         else:
             zRoi = event.leftIndex, event.rightIndex + 1
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
-        self.__setROIIntensityMap(region)
+        self.__roiPlotWindow.remove(kind='curve')
 
-    def __setROIIntensityMap(self, region=None):
+    def __refreshROIPlotSlot(self, checked=False):
         # Update ROI Intensity map: This is slow...
+        region = self.__view3d.getSelectedRegion()
         item = h5NodeToProjectItem(self.__node)
+
         with item.qspaceH5 as qspaceH5:
             if region is None:
                 intensities = qspaceH5.qspace_sum
@@ -384,3 +393,4 @@ class QSpaceView(Qt.QMainWindow):
             sampleX = qspaceH5.sample_x
             sampleY = qspaceH5.sample_y
             self.__roiPlotWindow.setPlotData(sampleX, sampleY, intensities)
+            self.__roiPlotWindow.resetZoom()

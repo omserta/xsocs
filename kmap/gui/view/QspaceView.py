@@ -79,6 +79,60 @@ class RoiAxisWidget(Qt.QWidget):
         self.__rightEdit.setText('{0:6g}'.format(event.right))
 
 
+class PlotIntensityMap(PlotWindow):
+    """Plot intensities as a scatter plot
+
+    :param parent: QWidget's parent
+    """
+
+    def __init__(self, parent):
+        super(PlotIntensityMap, self).__init__(
+            parent=parent, backend=None,
+            resetzoom=True, autoScale=False,
+            logScale=False, grid=True,
+            curveStyle=False, colormap=False,
+            aspectRatio=True, yInverted=False,
+            copy=True, save=True, print_=True,
+            control=False, position=False,
+            roi=False, mask=False, fit=False)
+        self.setMinimumSize(150, 150)
+
+        self.setKeepDataAspectRatio(True)
+        self.setActiveCurveHandling(False)
+        self.setDataMargins(0.2, 0.2, 0.2, 0.2)
+
+    def setSelectedPosition(self, x, y):
+        """Set the selected position.
+
+        :param float x:
+        :param float y:
+        """
+        self.addXMarker(x, legend='Xselection')
+        self.addYMarker(y, legend='Yselection')
+
+    def sizeHint(self):
+        return Qt.QSize(200, 200)
+
+    def setPlotData(self, x, y, data):
+        """Set the scatter plot.
+
+        This is removing previous scatter plot
+
+        :param numpy.ndarray x: X coordinates of the points
+        :param numpy.ndarray y: Y coordinates of the points
+        :param numpy.ndarray data: Values associated to points
+        """
+        min_, max_ = data.min(), data.max()
+        colormap = cm.jet
+        colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
+        self.addCurve(x, y,
+                      legend='intensities',
+                      color=colors,
+                      symbol='s',
+                      linestyle='',
+                      resetzoom=False)
+
+
 class QSpaceView(Qt.QMainWindow):
     sigProcessApplied = Qt.Signal(object, object)
 
@@ -94,17 +148,13 @@ class QSpaceView(Qt.QMainWindow):
         item = h5NodeToProjectItem(node)
 
         # plot window displaying the intensity map
-        self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True,
-                                                    curveStyle=False,
-                                                    mask=False,
-                                                    roi=False,
-                                                    **kwargs)
-        plotWindow.sizeHint = lambda: Qt.QSize(200, 200)
-        plotWindow.setMinimumSize(150, 150)
-
+        self.__plotWindow = plotWindow = PlotIntensityMap(parent=self)
+        plotWindow.setGraphTitle('Intensity Map')
         plotWindow.sigPlotSignal.connect(self.__plotSignal)
-        plotWindow.setKeepDataAspectRatio(True)
-        plotWindow.setActiveCurveHandling(False)
+
+        self.__roiPlotWindow = roiPlotWindow = PlotIntensityMap(parent=self)
+        roiPlotWindow.setGraphTitle('ROI Intensity Map')
+        roiPlotWindow.sigPlotSignal.connect(self.__plotSignal)
 
         with item.qspaceH5 as qspaceH5:
             sampleX = qspaceH5.sample_x
@@ -181,25 +231,26 @@ class QSpaceView(Qt.QMainWindow):
         treeDock.setFeatures(features)
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, treeDock)
 
-        plotDock = Qt.QDockWidget(self)
+        roiPlotDock = Qt.QDockWidget('ROI Intensity', self)
+        roiPlotDock.setWidget(roiPlotWindow)
+        features = roiPlotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
+        roiPlotDock.setFeatures(features)
+        self.splitDockWidget(treeDock, roiPlotDock, Qt.Qt.Vertical)
+
+        plotDock = Qt.QDockWidget('Intensity', self)
         plotDock.setWidget(plotWindow)
         features = plotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         plotDock.setFeatures(features)
-        self.splitDockWidget(treeDock, plotDock, Qt.Qt.Vertical)
+        self.tabifyDockWidget(roiPlotDock, plotDock)
 
         self.__showIsoView(firstX, firstY)
 
     # TODO : refactor this in a common base with RealSpaceViewWidget
     def __setPlotData(self, x, y, data):
-        plot = self.__plotWindow
-        # scatter
-        min_, max_ = data.min(), data.max()
-        colormap = cm.jet
-        colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
-        plot.addCurve(x, y,
-                      color=colors,
-                      symbol='s',
-                      linestyle='')
+        self.__plotWindow.setPlotData(x, y, data)
+        self.__plotWindow.resetZoom()
+        self.__roiPlotWindow.setPlotData(x, y, data)
+        self.__roiPlotWindow.resetZoom()
 
     def __roiApplied(self):
         region = self.__view3d.getSelectedRegion()
@@ -223,7 +274,6 @@ class QSpaceView(Qt.QMainWindow):
 
     def __showIsoView(self, x, y):
         isoView = self.__view3d
-        plot = self.__plotWindow
         item = h5NodeToProjectItem(self.__node)
 
         with item.qspaceH5 as qspaceH5:
@@ -239,8 +289,8 @@ class QSpaceView(Qt.QMainWindow):
             x = sampleX[xIdx]
             y = sampleY[xIdx]
 
-            plot.addXMarker(x, legend='Xselection')
-            plot.addYMarker(y, legend='Yselection')
+            self.__plotWindow.setSelectedPosition(x, y)
+            self.__roiPlotWindow.setSelectedPosition(x, y)
 
             qspace = qspaceH5.qspace_slice(xIdx)
 
@@ -300,6 +350,7 @@ class QSpaceView(Qt.QMainWindow):
         self.__xRoiWid.slider.setSliderValues(xLeft, xRight)
         self.__yRoiWid.slider.setSliderValues(yLeft, yRight)
         self.__zRoiWid.slider.setSliderValues(zLeft, zRight)
+        self.__setROIIntensityMap(region=None)
 
     def __roiChanged(self, event):
         sender = self.sender()
@@ -316,3 +367,20 @@ class QSpaceView(Qt.QMainWindow):
         else:
             zRoi = event.leftIndex, event.rightIndex + 1
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
+        self.__setROIIntensityMap(region)
+
+    def __setROIIntensityMap(self, region=None):
+        # Update ROI Intensity map: This is slow...
+        item = h5NodeToProjectItem(self.__node)
+        with item.qspaceH5 as qspaceH5:
+            if region is None:
+                intensities = qspaceH5.qspace_sum
+            else:
+                with qspaceH5.item_context(qspaceH5.qspace_path) as dset:
+                    zslice, yslice, xslice = region.getArraySlices()
+                    roidset = dset[:, xslice, yslice, zslice]
+                    intensities = roidset.reshape(len(roidset), -1).sum(axis=1)
+
+            sampleX = qspaceH5.sample_x
+            sampleY = qspaceH5.sample_y
+            self.__roiPlotWindow.setPlotData(sampleX, sampleY, intensities)

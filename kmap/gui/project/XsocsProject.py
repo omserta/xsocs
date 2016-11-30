@@ -85,3 +85,9 @@ class XsocsProject(ProjectItem):
         return QSpaceGroup(self.filename,
                            self.QSpaceGroupPath,
                            mode=mode)
+
+    def intensityGroup(self, mode=None):
+        mode = mode or self.mode
+        return IntensityGroup(self.filename,
+                              self.IntensityGroupPath,
+                              mode=mode)

@@ -41,6 +41,7 @@ from .process.RecipSpaceWidget import RecipSpaceWidget
 
 def merge_window(*args, **kwargs):
     app = Qt.QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(True)
     mw = MergeWidget(*args, **kwargs)
     mw.show()
     app.exec_()
@@ -48,6 +49,7 @@ def merge_window(*args, **kwargs):
 
 def conversion_window(*args, **kwargs):
     app = Qt.QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(True)
     mw = RecipSpaceWidget(*args, **kwargs)
     mw.show()
     app.exec_()
@@ -55,6 +57,7 @@ def conversion_window(*args, **kwargs):
 
 def xsocs_main(*args, **kwargs):
     app = Qt.QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(True)
     mw = XsocsGui(*args, **kwargs)
     mw.show()
     app.exec_()

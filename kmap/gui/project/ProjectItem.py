@@ -131,9 +131,12 @@ class ProjectItem(XsocsH5Base):
                     item.attrs['XsocsLevel'] = processLevel
                 del item
 
-    def children(self):
+    def children(self, classinfo=None):
         """
         Returns this items direct children.
+        :param classinfo: Only returns children that are instances of this/those
+            class, if any.
+        :type classinfo: class or tuple of classes.
         :return:
         """
         children = []
@@ -146,7 +149,11 @@ class ProjectItem(XsocsH5Base):
         for key in keys:
             child = self.factory(self.filename,
                                  pathTpl.format(key.lstrip('/')))
-            children.append(child)
+            if classinfo:
+                if isinstance(child, classinfo):
+                    children.append(child)
+            else:
+                children.append(child)
         return children
 
     def cast(self):

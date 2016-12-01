@@ -41,6 +41,7 @@ class FitH5(XsocsH5Base):
     scan_positions_path = 'scan_positions'
     q_fit_path = 'q{0}fit'
     status_path = 'success'
+    axis_path = 'axis/{0}'
 
     @property
     def scan_positions(self):
@@ -79,6 +80,12 @@ class FitH5(XsocsH5Base):
 
     status = property(lambda self: self._get_array_data(FitH5.status_path))
 
+    x_axis = property(lambda self: self.__get_axis_values('x'))
+
+    y_axis = property(lambda self: self.__get_axis_values('y'))
+
+    z_axis = property(lambda self: self.__get_axis_values('z'))
+
     def __get_fit(self, axis):
         with self:
             height = self.__get_data(axis, 'height')
@@ -89,6 +96,9 @@ class FitH5(XsocsH5Base):
     def __get_data(self, axis, data):
         data_path = FitH5.q_fit_path.format(axis) + '/{0}'.format(data)
         return self._get_array_data(data_path)
+
+    def __get_axis_values(self, axis):
+        return self._get_array_data(FitH5.axis_path.format(axis))
 
     def export_txt(self, filename):
         with self:
@@ -144,3 +154,15 @@ class FitH5Writer(FitH5):
 
     def set_status(self, status):
         self._set_array_data(FitH5.status_path, status)
+
+    def __set_axis_values(self, axis, values):
+        self._set_array_data(FitH5.axis_path.format(axis), values)
+
+    def set_x_axis(self, values):
+        self.__set_axis_values('x', values)
+
+    def set_y_axis(self, values):
+        self.__set_axis_values('y', values)
+
+    def set_z_axis(self, values):
+        self.__set_axis_values('z', values)

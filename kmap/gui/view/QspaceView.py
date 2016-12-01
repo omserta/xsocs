@@ -168,8 +168,47 @@ class ROIPlotIntensityMap(PlotIntensityMap):
 
     def __updateClicked(self, checked=False):
         """Handle button clicked"""
+
+        # Reset plot
         self.__updateButton.setEnabled(False)
         self.remove(kind='curve')
+
+        if self.__roiSlices is None:
+            # No ROI, use sum for the whole QSpace
+            with self.__qspaceH5 as qspaceH5:
+                intensities = np.array(qspaceH5.qspace_sum, copy=True)
+
+        else:
+            # Compute sum for QSpace ROI
+            # This is performed as a co-routine using a QTimer
+
+            # Show dialog
+            dialog = Qt.QDialog(self)
+            dialog.setWindowTitle('ROI Intensity Map')
+            dialogLayout = Qt.QVBoxLayout(dialog)
+            progress = Qt.QProgressBar()
+            with self.__qspaceH5 as qspaceH5:
+                progress.setRange(0, qspaceH5.qspace_sum.size - 1)
+            dialogLayout.addWidget(progress)
+
+            timer = Qt.QTimer(self)
+            timer.timeout.connect(self.__stepComputeIntensities)
+            timer.intensities = []
+            timer.progressBar = progress
+            timer.dialog = dialog
+            timer.start()
+
+            dialog.exec_()
+
+            intensities = np.array(timer.intensities, copy=True)
+
+        # Update plot
+        with self.__qspaceH5 as qsp:
+            sampleX = qsp.sample_x
+            sampleY = qsp.sample_y
+            self.setPlotData(sampleX, sampleY, intensities)
+        self.resetZoom()
+
         if self.__roiQRange is None:
             self.setToolTip(self._DEFAULT_TOOLTIP)
         else:
@@ -177,25 +216,22 @@ class ROIPlotIntensityMap(PlotIntensityMap):
                       tuple(self.__roiQRange.ravel()))
             self.setToolTip(self._DEFAULT_TOOLTIP + ':\n' + roiStr)
 
-        intensities = self.__computeROIIntensities()
+    def __stepComputeIntensities(self):
+        """Step in ROI Intensity map computation
 
-        with self.__qspaceH5 as qsp:
-            sampleX = qsp.sample_x
-            sampleY = qsp.sample_y
-            self.setPlotData(sampleX, sampleY, intensities)
-        self.resetZoom()
+        This is intended to be called by a timer in __updateClicked
+        """
+        intensities = self.sender().intensities
 
-    def __computeROIIntensities(self):
-        """Compute Intensity map corresponding to ROI"""
-        with self.__qspaceH5 as qsp:
-            if self.__roiSlices is None:
-                intensities = np.array(qsp.qspace_sum, copy=True)
+        with self.__qspaceH5 as qspaceH5:
+            if len(intensities) >= qspaceH5.qspace_sum.size:
+                self.sender().stop()  # Stop timer
+                self.sender().dialog.accept()  # Closes dialog
             else:
-                with qsp.item_context(qsp.qspace_path) as dset:
-                    zslice, yslice, xslice = self.__roiSlices
-                    roiData = dset[:, xslice, yslice, zslice]
-                    intensities = roiData.reshape(len(roiData), -1).sum(axis=1)
-        return intensities
+                qspace = qspaceH5.qspace_slice(len(intensities))
+                zslice, yslice, xslice = self.__roiSlices
+                intensities.append(np.sum(qspace[xslice, yslice, zslice]))
+                self.sender().progressBar.setValue(len(intensities))
 
 
 class QSpaceView(Qt.QMainWindow):

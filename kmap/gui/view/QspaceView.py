@@ -136,7 +136,9 @@ class PlotIntensityMap(PlotWindow):
 class ROIPlotIntensityMap(PlotIntensityMap):
     """Plot ROI intensities with an update button to compute it in a thread"""
 
-    _DEFAULT_TOOLTIP = 'Intensity Map integrated on the Region of Interest'
+    _DEFAULT_TOOLTIP = 'Intensity Map: sum of the whole QSpace'
+    _ROI_TOOLTIP = ('ROI Intensity Map: sum of the Region of Interest:\n' +
+                    'qx = [%f, %f]\nqy = [%f, %f]\nqz = [%f, %f]')
 
     def __init__(self, parent, qspaceH5):
         self.__roiSlices = None  # qz, qy, qx ROI slices or None
@@ -212,9 +214,8 @@ class ROIPlotIntensityMap(PlotIntensityMap):
         if self.__roiQRange is None:
             self.setToolTip(self._DEFAULT_TOOLTIP)
         else:
-            roiStr = ('qx = [%f, %f]\nqy = [%f, %f]\nqz = [%f, %f]' %
-                      tuple(self.__roiQRange.ravel()))
-            self.setToolTip(self._DEFAULT_TOOLTIP + ':\n' + roiStr)
+            self.setToolTip(
+                self._ROI_TOOLTIP % tuple(self.__roiQRange.ravel()))
 
     def __stepComputeIntensities(self):
         """Step in ROI Intensity map computation

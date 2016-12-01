@@ -36,7 +36,6 @@ from matplotlib import cm
 from silx.gui import qt as Qt
 from silx.gui.plot import PlotWindow
 from silx.gui.icons import getQIcon
-from silx.gui.widgets.ThreadPoolPushButton import ThreadPoolPushButton
 from plot3d.ScalarFieldView import ScalarFieldView
 from plot3d.SFViewParamTree import TreeView as SFViewParamTree
 
@@ -86,7 +85,7 @@ class PlotIntensityMap(PlotWindow):
     :param parent: QWidget's parent
     """
 
-    def __init__(self, parent):
+    def __init__(self, parent=None):
         super(PlotIntensityMap, self).__init__(
             parent=parent, backend=None,
             resetzoom=True, autoScale=False,
@@ -134,6 +133,71 @@ class PlotIntensityMap(PlotWindow):
                       resetzoom=False)
 
 
+class ROIPlotIntensityMap(PlotIntensityMap):
+    """Plot ROI intensities with an update button to compute it in a thread"""
+
+    _DEFAULT_TOOLTIP = 'Intensity Map integrated on the Region of Interest'
+
+    def __init__(self, parent, qspaceH5):
+        self.__roiSlices = None  # qz, qy, qx ROI slices or None
+        self.__roiQRange = None  # qx, qy, qz ROI range in Q space or None
+        self.__qspaceH5 = qspaceH5
+        super(ROIPlotIntensityMap, self).__init__(parent)
+        self.setGraphTitle('ROI Intensity Map')
+        self.setToolTip(self._DEFAULT_TOOLTIP)
+
+        self.__updateButton = Qt.QPushButton(self)
+        self.__updateButton.setText('Update')
+        self.__updateButton.setIcon(getQIcon('view-refresh'))
+        self.__updateButton.setToolTip('Compute the intensity map for the current ROI')
+        self.__updateButton.clicked.connect(self.__updateClicked)
+
+        toolBar = Qt.QToolBar('ROI Intensity Update', parent=self)
+        toolBar.addWidget(self.__updateButton)
+        self.addToolBar(Qt.Qt.BottomToolBarArea, toolBar)
+
+    def roiChanged(self, selectedRegion):
+        """To call when ROI has changed"""
+        if selectedRegion is not None:
+            self.__roiSlices = selectedRegion.getArraySlices()
+            self.__roiQRange = selectedRegion.getDataRange()
+        else:
+            self.__roiSlices = None
+            self.__roiQRange = None
+        self.__updateButton.setEnabled(True)
+
+    def __updateClicked(self, checked=False):
+        """Handle button clicked"""
+        self.__updateButton.setEnabled(False)
+        self.remove(kind='curve')
+        if self.__roiQRange is None:
+            self.setToolTip(self._DEFAULT_TOOLTIP)
+        else:
+            roiStr = ('qx = [%f, %f]\nqy = [%f, %f]\nqz = [%f, %f]' %
+                      tuple(self.__roiQRange.ravel()))
+            self.setToolTip(self._DEFAULT_TOOLTIP + ':\n' + roiStr)
+
+        intensities = self.__computeROIIntensities()
+
+        with self.__qspaceH5 as qsp:
+            sampleX = qsp.sample_x
+            sampleY = qsp.sample_y
+            self.setPlotData(sampleX, sampleY, intensities)
+        self.resetZoom()
+
+    def __computeROIIntensities(self):
+        """Compute Intensity map corresponding to ROI"""
+        with self.__qspaceH5 as qsp:
+            if self.__roiSlices is None:
+                intensities = np.array(qsp.qspace_sum, copy=True)
+            else:
+                with qsp.item_context(qsp.qspace_path) as dset:
+                    zslice, yslice, xslice = self.__roiSlices
+                    roiData = dset[:, xslice, yslice, zslice]
+                    intensities = roiData.reshape(len(roiData), -1).sum(axis=1)
+        return intensities
+
+
 class QSpaceView(Qt.QMainWindow):
     sigProcessApplied = Qt.Signal(object, object)
 
@@ -151,24 +215,12 @@ class QSpaceView(Qt.QMainWindow):
         # plot window displaying the intensity map
         self.__plotWindow = plotWindow = PlotIntensityMap(parent=self)
         plotWindow.setGraphTitle('Intensity Map')
+        plotWindow.setToolTip('Intensity Map integrated on whole QSpaces')
         plotWindow.sigPlotSignal.connect(self.__plotSignal)
 
-        self.__roiPlotWindow = roiPlotWindow = PlotIntensityMap(parent=self)
-        roiPlotWindow.setGraphTitle('ROI Intensity Map')
-        roiPlotWindow.setToolTip('Intensity Map integrated on the Region of Interest')
+        self.__roiPlotWindow = roiPlotWindow = ROIPlotIntensityMap(
+            parent=self, qspaceH5=item.qspaceH5)
         roiPlotWindow.sigPlotSignal.connect(self.__plotSignal)
-
-        updateButton = ThreadPoolPushButton(
-            parent=roiPlotWindow,
-            text='Update',
-            icon=getQIcon('view-refresh'))
-        updateButton.setToolTip('Compute the intensity map for the current ROI')
-        updateButton.beforeExecuting.connect(self.__updateButtonBeforeExec)
-        updateButton.succeeded.connect(self.__updateROIPlotIntensity)
-        updateButton.failed.connect(self.__roiIntensityFailed)
-        toolBar = Qt.QToolBar('ROI Intensity Update', parent=roiPlotWindow)
-        toolBar.addWidget(updateButton)
-        roiPlotWindow.addToolBar(Qt.Qt.BottomToolBarArea, toolBar)
 
         with item.qspaceH5 as qspaceH5:
             sampleX = qspaceH5.sample_x
@@ -192,6 +244,9 @@ class QSpaceView(Qt.QMainWindow):
         self.setCentralWidget(view3d)
         sfTree = SFViewParamTree()
         sfTree.setSfView(view3d)
+
+        # Register ROIPlotIntensity
+        view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
 
         # the widget containing :
         # - the ROI sliders
@@ -362,7 +417,6 @@ class QSpaceView(Qt.QMainWindow):
         self.__xRoiWid.slider.setSliderValues(xLeft, xRight)
         self.__yRoiWid.slider.setSliderValues(yLeft, yRight)
         self.__zRoiWid.slider.setSliderValues(zLeft, zRight)
-        self.__roiPlotWindow.remove(kind='curve')
 
     def __roiChanged(self, event):
         sender = self.sender()
@@ -379,45 +433,3 @@ class QSpaceView(Qt.QMainWindow):
         else:
             zRoi = event.leftIndex, event.rightIndex + 1
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
-        self.__roiPlotWindow.remove(kind='curve')
-
-    def __updateButtonBeforeExec(self):
-        """Init threaded computation of ROI intensity map"""
-        region = self.__view3d.getSelectedRegion()
-        roiSlices = region.getArraySlices() if region is not None else None
-
-        item = h5NodeToProjectItem(self.__node)
-        self.sender().setCallable(self.__computeROIIntensities, item, roiSlices)
-
-    def __updateROIPlotIntensity(self, intensities):
-        """Update ROI plot with intensities"""
-        item = h5NodeToProjectItem(self.__node)
-
-        with item.qspaceH5 as qspaceH5:
-            sampleX = qspaceH5.sample_x
-            sampleY = qspaceH5.sample_y
-            self.__roiPlotWindow.setPlotData(sampleX, sampleY, intensities)
-            self.__roiPlotWindow.resetZoom()
-
-    def __computeROIIntensities(self, item, roiSlices):
-        """Compute Intensity map corresponding to ROI
-
-        :param item:
-        :param roiSlices: ROI slices for qz, qx, and qy
-        :type: 3-tuple of slice
-        """
-        with item.qspaceH5 as qspaceH5:
-            if roiSlices is None:
-                intensities = np.array(qspaceH5.qspace_sum, copy=True)
-            else:
-                with qspaceH5.item_context(qspaceH5.qspace_path) as dset:
-                    zslice, yslice, xslice = roiSlices
-                    roiData = dset[:, xslice, yslice, zslice]
-                    intensities = roiData.reshape(len(roiData), -1).sum(axis=1)
-        return intensities
-
-    def __roiIntensityFailed(self, exception):
-        Qt.QMessageBox.critical(
-            self,
-            'Error',
-            'An error occured while computing ROI intensities')

@@ -36,6 +36,7 @@ from matplotlib import cm
 from silx.gui import qt as Qt
 from silx.gui.plot import PlotWindow
 from silx.gui.icons import getQIcon
+from silx.gui.widgets.ThreadPoolPushButton import ThreadPoolPushButton
 from plot3d.ScalarFieldView import ScalarFieldView
 from plot3d.SFViewParamTree import TreeView as SFViewParamTree
 
@@ -154,16 +155,20 @@ class QSpaceView(Qt.QMainWindow):
 
         self.__roiPlotWindow = roiPlotWindow = PlotIntensityMap(parent=self)
         roiPlotWindow.setGraphTitle('ROI Intensity Map')
+        roiPlotWindow.setToolTip('Intensity Map integrated on the Region of Interest')
         roiPlotWindow.sigPlotSignal.connect(self.__plotSignal)
 
-        refreshAction = Qt.QAction(roiPlotWindow)
-        refreshAction.setIcon(getQIcon('view-refresh'))
-        refreshAction.setText('Update')
-        refreshAction.setToolTip('Compute the intensity map for the current ROI')
-        roiPlotWindow.toolBar().insertAction(
-            roiPlotWindow.toolBar().actions()[0],
-            refreshAction)
-        refreshAction.triggered.connect(self.__refreshROIPlotSlot)
+        updateButton = ThreadPoolPushButton(
+            parent=roiPlotWindow,
+            text='Update',
+            icon=getQIcon('view-refresh'))
+        updateButton.setToolTip('Compute the intensity map for the current ROI')
+        updateButton.beforeExecuting.connect(self.__updateButtonBeforeExec)
+        updateButton.succeeded.connect(self.__updateROIPlotIntensity)
+        updateButton.failed.connect(self.__roiIntensityFailed)
+        toolBar = Qt.QToolBar('ROI Intensity Update', parent=roiPlotWindow)
+        toolBar.addWidget(updateButton)
+        roiPlotWindow.addToolBar(Qt.Qt.BottomToolBarArea, toolBar)
 
         with item.qspaceH5 as qspaceH5:
             sampleX = qspaceH5.sample_x
@@ -376,21 +381,43 @@ class QSpaceView(Qt.QMainWindow):
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
         self.__roiPlotWindow.remove(kind='curve')
 
-    def __refreshROIPlotSlot(self, checked=False):
-        # Update ROI Intensity map: This is slow...
+    def __updateButtonBeforeExec(self):
+        """Init threaded computation of ROI intensity map"""
         region = self.__view3d.getSelectedRegion()
+        roiSlices = region.getArraySlices() if region is not None else None
+
+        item = h5NodeToProjectItem(self.__node)
+        self.sender().setCallable(self.__computeROIIntensities, item, roiSlices)
+
+    def __updateROIPlotIntensity(self, intensities):
+        """Update ROI plot with intensities"""
         item = h5NodeToProjectItem(self.__node)
 
         with item.qspaceH5 as qspaceH5:
-            if region is None:
-                intensities = qspaceH5.qspace_sum
-            else:
-                with qspaceH5.item_context(qspaceH5.qspace_path) as dset:
-                    zslice, yslice, xslice = region.getArraySlices()
-                    roidset = dset[:, xslice, yslice, zslice]
-                    intensities = roidset.reshape(len(roidset), -1).sum(axis=1)
-
             sampleX = qspaceH5.sample_x
             sampleY = qspaceH5.sample_y
             self.__roiPlotWindow.setPlotData(sampleX, sampleY, intensities)
             self.__roiPlotWindow.resetZoom()
+
+    def __computeROIIntensities(self, item, roiSlices):
+        """Compute Intensity map corresponding to ROI
+
+        :param item:
+        :param roiSlices: ROI slices for qz, qx, and qy
+        :type: 3-tuple of slice
+        """
+        with item.qspaceH5 as qspaceH5:
+            if roiSlices is None:
+                intensities = np.array(qspaceH5.qspace_sum, copy=True)
+            else:
+                with qspaceH5.item_context(qspaceH5.qspace_path) as dset:
+                    zslice, yslice, xslice = roiSlices
+                    roiData = dset[:, xslice, yslice, zslice]
+                    intensities = roiData.reshape(len(roiData), -1).sum(axis=1)
+        return intensities
+
+    def __roiIntensityFailed(self, exception):
+        Qt.QMessageBox.critical(
+            self,
+            'Error',
+            'An error occured while computing ROI intensities')

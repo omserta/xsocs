@@ -107,8 +107,8 @@ class PlotIntensityMap(PlotWindow):
         :param float x:
         :param float y:
         """
-        self.addXMarker(x, legend='Xselection')
-        self.addYMarker(y, legend='Yselection')
+        self.addXMarker(x, legend='Xselection', color='pink')
+        self.addYMarker(y, legend='Yselection', color='pink')
 
     def sizeHint(self):
         return Qt.QSize(200, 200)
@@ -385,11 +385,7 @@ class QSpaceView(Qt.QMainWindow):
             sampleX = qspaceH5.sample_x
             sampleY = qspaceH5.sample_y
 
-            # TODO : better
-            try:
-                xIdx = (np.abs(sampleX - x) + np.abs(sampleY - y)).argmin()
-            except:
-                xIdx = (np.abs(sampleX - x[0]) + np.abs(sampleY - y[0])).argmin()
+            xIdx = ((sampleX - x)**2 + (sampleY - y)**2).argmin()
 
             x = sampleX[xIdx]
             y = sampleY[xIdx]

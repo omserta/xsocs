@@ -209,7 +209,6 @@ class ROIPlotIntensityMap(PlotIntensityMap):
             sampleX = qsp.sample_x
             sampleY = qsp.sample_y
             self.setPlotData(sampleX, sampleY, intensities)
-        self.resetZoom()
 
         if self.__roiQRange is None:
             self.setToolTip(self._DEFAULT_TOOLTIP)
@@ -355,6 +354,8 @@ class QSpaceView(Qt.QMainWindow):
     def __setPlotData(self, x, y, data):
         self.__plotWindow.setPlotData(x, y, data)
         self.__plotWindow.resetZoom()
+        self.__roiPlotWindow.setPlotData(x, y, data)
+        self.__roiPlotWindow.resetZoom()
 
     def __roiApplied(self):
         region = self.__view3d.getSelectedRegion()

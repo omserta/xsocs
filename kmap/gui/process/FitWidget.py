@@ -193,6 +193,9 @@ class FitWidget(Qt.QDialog):
                             results.z_width)
             fitH5.set_scan_positions(results.sample_x, results.sample_y)
             fitH5.set_status(results.status)
+            fitH5.set_x_axis(results.q_x)
+            fitH5.set_y_axis(results.q_y)
+            fitH5.set_z_axis(results.q_z)
 
         self.__fitFile = self.__selectedFile
         self._setStatus(FitWidget.StatusCompleted)

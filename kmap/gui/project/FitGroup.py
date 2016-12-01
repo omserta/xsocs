@@ -97,5 +97,3 @@ class FitItem(ProjectItem):
         fitFile = self.fitFile
         if fitFile is None:
             return
-
-        # self.add_file_link(self.path + '/width')

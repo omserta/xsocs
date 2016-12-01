@@ -51,6 +51,7 @@ class FitTypes(object):
 
 
 FitResult = namedtuple('FitResult', ['sample_x', 'sample_y',
+                                     'q_x', 'q_y', 'q_z',
                                      'x_height', 'x_center', 'x_width',
                                      'y_height', 'y_center', 'y_width',
                                      'z_height', 'z_center', 'z_width',
@@ -247,8 +248,24 @@ def peak_fit(qspace_f,
     status = np.zeros(x_pos.shape)
     status[success] = 1
 
+    with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
+        q_x = qspace_h5.qx
+        q_y = qspace_h5.qy
+        q_z = qspace_h5.qz
+
+    if roiIndices is not None:
+        xSlice = slice(roiIndices[0][0], roiIndices[0][1], 1)
+        ySlice = slice(roiIndices[1][0], roiIndices[1][1], 1)
+        zSlice = slice(roiIndices[2][0], roiIndices[2][1], 1)
+        q_x = q_x[xSlice]
+        q_y = q_y[ySlice]
+        q_z = q_z[zSlice]
+
     fit_results = FitResult(sample_x=x_pos,
                             sample_y=y_pos,
+                            q_x=q_x,
+                            q_y=q_y,
+                            q_z=q_z,
                             x_height=results_np[:, 0].ravel(),
                             x_center=results_np[:, 1].ravel(),
                             x_width=results_np[:, 2].ravel(),
@@ -309,6 +326,7 @@ def _fit_process(th_idx, roiIndices=None):
         success = np.frombuffer(shared_success, dtype=bool)
         qspace_h5 = QSpaceH5.QSpaceH5(qspace_f)
 
+        # Put this in the main thread
         if roiIndices is not None:
             xSlice = slice(roiIndices[0][0], roiIndices[0][1], 1)
             ySlice = slice(roiIndices[1][0], roiIndices[1][1], 1)

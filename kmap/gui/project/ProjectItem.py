@@ -75,6 +75,7 @@ _projectItemFactory = projectItemFactory
 
 
 class ProjectItem(XsocsH5Base):
+    # TODO : some consistency check when loading a file? Make sure the right
 
     InputPath = '/_input'
     XsocsH5FilePath = '/_input/XsocsH5File'

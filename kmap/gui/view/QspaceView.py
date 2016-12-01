@@ -369,9 +369,9 @@ class QSpaceView(Qt.QMainWindow):
         self.sigProcessApplied.emit(self.__node, roi)
 
     def __plotSignal(self, event):
-        if event['event'] not in ('curveClicked',): # , 'mouseClicked'):
+        if event['event'] not in ('mouseClicked'):
             return
-        x, y = event['xdata'], event['ydata']
+        x, y = event['x'], event['y']
 
         self.__showIsoView(x, y)
 

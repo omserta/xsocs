@@ -55,7 +55,8 @@ FitResult = namedtuple('FitResult', ['sample_x', 'sample_y',
                                      'x_height', 'x_center', 'x_width',
                                      'y_height', 'y_center', 'y_width',
                                      'z_height', 'z_center', 'z_width',
-                                     'status'])
+                                     'status',
+                                     'fit_name'])
 
 _const_inv_2_pi_ = np.sqrt(2 * np.pi)
 
@@ -261,6 +262,11 @@ def peak_fit(qspace_f,
         q_y = q_y[ySlice]
         q_z = q_z[zSlice]
 
+    if fit_type == FitTypes.LEASTSQ:
+        fit_name = 'LeastSq'
+    else:
+        fit_name = 'Centroid'
+
     fit_results = FitResult(sample_x=x_pos,
                             sample_y=y_pos,
                             q_x=q_x,
@@ -275,7 +281,8 @@ def peak_fit(qspace_f,
                             z_height=results_np[:, 6].ravel(),
                             z_center=results_np[:, 7].ravel(),
                             z_width=results_np[:, 8].ravel(),
-                            status=status)
+                            status=status,
+                            fit_name=fit_name)
     return fit_results
 
 

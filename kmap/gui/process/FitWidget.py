@@ -182,20 +182,23 @@ class FitWidget(Qt.QDialog):
                            fit_type=self.__fitType,
                            roiIndices=self.__roiIndices)
         with FitH5Writer(self.__selectedFile, mode='w') as fitH5:
-            fitH5.set_x_fit(results.x_height,
-                            results.x_center,
-                            results.x_width)
-            fitH5.set_y_fit(results.y_height,
-                            results.y_center,
-                            results.y_width)
-            fitH5.set_z_fit(results.z_height,
-                            results.z_center,
-                            results.z_width)
-            fitH5.set_scan_positions(results.sample_x, results.sample_y)
-            fitH5.set_status(results.status)
-            fitH5.set_x_axis(results.q_x)
-            fitH5.set_y_axis(results.q_y)
-            fitH5.set_z_axis(results.q_z)
+            fitH5.create_entry(results.fit_name)
+            fitH5.create_process(results.fit_name)
+            fitH5.
+            # fitH5.set_x_fit(results.x_height,
+            #                 results.x_center,
+            #                 results.x_width)
+            # fitH5.set_y_fit(results.y_height,
+            #                 results.y_center,
+            #                 results.y_width)
+            # fitH5.set_z_fit(results.z_height,
+            #                 results.z_center,
+            #                 results.z_width)
+            # fitH5.set_scan_positions(results.sample_x, results.sample_y)
+            # fitH5.set_status(results.status)
+            # fitH5.set_x_axis(results.q_x)
+            # fitH5.set_y_axis(results.q_y)
+            # fitH5.set_z_axis(results.q_z)
 
         self.__fitFile = self.__selectedFile
         self._setStatus(FitWidget.StatusCompleted)

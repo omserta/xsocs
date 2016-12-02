@@ -333,7 +333,7 @@ class XsocsH5Writer(XsocsH5):
             grp['info'] = det_grp
             det_grp['data'] = _h5py.SoftLink(self.img_data_tpl.format(entry))
 
-        self._update_entries()
+            self._update_entries()
 
 
 class XsocsH5MasterWriter(XsocsH5Writer):

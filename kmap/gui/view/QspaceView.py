@@ -79,6 +79,161 @@ class RoiAxisWidget(Qt.QWidget):
         self.__rightEdit.setText('{0:6g}'.format(event.right))
 
 
+class PlotIntensityMap(PlotWindow):
+    """Plot intensities as a scatter plot
+
+    :param parent: QWidget's parent
+    """
+
+    def __init__(self, parent=None):
+        super(PlotIntensityMap, self).__init__(
+            parent=parent, backend=None,
+            resetzoom=True, autoScale=False,
+            logScale=False, grid=True,
+            curveStyle=False, colormap=False,
+            aspectRatio=True, yInverted=False,
+            copy=True, save=True, print_=True,
+            control=False, position=False,
+            roi=False, mask=False, fit=False)
+        self.setMinimumSize(150, 150)
+
+        self.setKeepDataAspectRatio(True)
+        self.setActiveCurveHandling(False)
+        self.setDataMargins(0.2, 0.2, 0.2, 0.2)
+
+    def setSelectedPosition(self, x, y):
+        """Set the selected position.
+
+        :param float x:
+        :param float y:
+        """
+        self.addXMarker(x, legend='Xselection', color='pink')
+        self.addYMarker(y, legend='Yselection', color='pink')
+
+    def sizeHint(self):
+        return Qt.QSize(200, 200)
+
+    def setPlotData(self, x, y, data):
+        """Set the scatter plot.
+
+        This is removing previous scatter plot
+
+        :param numpy.ndarray x: X coordinates of the points
+        :param numpy.ndarray y: Y coordinates of the points
+        :param numpy.ndarray data: Values associated to points
+        """
+        min_, max_ = data.min(), data.max()
+        colormap = cm.jet
+        colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
+        self.addCurve(x, y,
+                      legend='intensities',
+                      color=colors,
+                      symbol='s',
+                      linestyle='',
+                      resetzoom=False)
+
+
+class ROIPlotIntensityMap(PlotIntensityMap):
+    """Plot ROI intensities with an update button to compute it in a thread"""
+
+    _DEFAULT_TOOLTIP = 'Intensity Map: sum of the whole QSpace'
+    _ROI_TOOLTIP = ('ROI Intensity Map: sum of the Region of Interest:\n' +
+                    'qx = [%f, %f]\nqy = [%f, %f]\nqz = [%f, %f]')
+
+    def __init__(self, parent, qspaceH5):
+        self.__roiSlices = None  # qz, qy, qx ROI slices or None
+        self.__roiQRange = None  # qx, qy, qz ROI range in Q space or None
+        self.__qspaceH5 = qspaceH5
+        super(ROIPlotIntensityMap, self).__init__(parent)
+        self.setGraphTitle('ROI Intensity Map')
+        self.setToolTip(self._DEFAULT_TOOLTIP)
+
+        self.__updateButton = Qt.QPushButton(self)
+        self.__updateButton.setText('Update')
+        self.__updateButton.setIcon(getQIcon('view-refresh'))
+        self.__updateButton.setToolTip('Compute the intensity map for the current ROI')
+        self.__updateButton.clicked.connect(self.__updateClicked)
+
+        toolBar = Qt.QToolBar('ROI Intensity Update', parent=self)
+        toolBar.addWidget(self.__updateButton)
+        self.addToolBar(Qt.Qt.BottomToolBarArea, toolBar)
+
+    def roiChanged(self, selectedRegion):
+        """To call when ROI has changed"""
+        if selectedRegion is not None:
+            self.__roiSlices = selectedRegion.getArraySlices()
+            self.__roiQRange = selectedRegion.getDataRange()
+        else:
+            self.__roiSlices = None
+            self.__roiQRange = None
+        self.__updateButton.setEnabled(True)
+
+    def __updateClicked(self, checked=False):
+        """Handle button clicked"""
+
+        # Reset plot
+        self.__updateButton.setEnabled(False)
+        self.remove(kind='curve')
+
+        if self.__roiSlices is None:
+            # No ROI, use sum for the whole QSpace
+            with self.__qspaceH5 as qspaceH5:
+                intensities = np.array(qspaceH5.qspace_sum, copy=True)
+
+        else:
+            # Compute sum for QSpace ROI
+            # This is performed as a co-routine using a QTimer
+
+            # Show dialog
+            dialog = Qt.QDialog(self)
+            dialog.setWindowTitle('ROI Intensity Map')
+            dialogLayout = Qt.QVBoxLayout(dialog)
+            progress = Qt.QProgressBar()
+            with self.__qspaceH5 as qspaceH5:
+                progress.setRange(0, qspaceH5.qspace_sum.size - 1)
+            dialogLayout.addWidget(progress)
+
+            timer = Qt.QTimer(self)
+            timer.timeout.connect(self.__stepComputeIntensities)
+            timer.intensities = []
+            timer.progressBar = progress
+            timer.dialog = dialog
+            timer.start()
+
+            dialog.exec_()
+
+            intensities = np.array(timer.intensities, copy=True)
+
+        # Update plot
+        with self.__qspaceH5 as qsp:
+            sampleX = qsp.sample_x
+            sampleY = qsp.sample_y
+            self.setPlotData(sampleX, sampleY, intensities)
+
+        if self.__roiQRange is None:
+            self.setToolTip(self._DEFAULT_TOOLTIP)
+        else:
+            self.setToolTip(
+                self._ROI_TOOLTIP % tuple(self.__roiQRange.ravel()))
+
+    def __stepComputeIntensities(self):
+        """Step in ROI Intensity map computation
+
+        This is intended to be called by a timer in __updateClicked
+        """
+        intensities = self.sender().intensities
+
+        with self.__qspaceH5 as qspaceH5:
+            if len(intensities) >= qspaceH5.qspace_sum.size:
+                self.sender().stop()  # Stop timer
+                self.sender().dialog.accept()  # Closes dialog
+            else:
+                qspace = qspaceH5.qspace_slice(len(intensities))
+                zslice, yslice, xslice = self.__roiSlices
+                intensities.append(np.sum(qspace[xslice, yslice, zslice]))
+                self.sender().progressBar.setValue(len(intensities))
+
+
 class QSpaceView(Qt.QMainWindow):
     sigProcessApplied = Qt.Signal(object, object)
 
@@ -94,17 +249,14 @@ class QSpaceView(Qt.QMainWindow):
         item = h5NodeToProjectItem(node)
 
         # plot window displaying the intensity map
-        self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True,
-                                                    curveStyle=False,
-                                                    mask=False,
-                                                    roi=False,
-                                                    **kwargs)
-        plotWindow.sizeHint = lambda: Qt.QSize(200, 200)
-        plotWindow.setMinimumSize(150, 150)
-
+        self.__plotWindow = plotWindow = PlotIntensityMap(parent=self)
+        plotWindow.setGraphTitle('Intensity Map')
+        plotWindow.setToolTip('Intensity Map integrated on whole QSpaces')
         plotWindow.sigPlotSignal.connect(self.__plotSignal)
-        plotWindow.setKeepDataAspectRatio(True)
-        plotWindow.setActiveCurveHandling(False)
+
+        self.__roiPlotWindow = roiPlotWindow = ROIPlotIntensityMap(
+            parent=self, qspaceH5=item.qspaceH5)
+        roiPlotWindow.sigPlotSignal.connect(self.__plotSignal)
 
         with item.qspaceH5 as qspaceH5:
             sampleX = qspaceH5.sample_x
@@ -128,6 +280,9 @@ class QSpaceView(Qt.QMainWindow):
         self.setCentralWidget(view3d)
         sfTree = SFViewParamTree()
         sfTree.setSfView(view3d)
+
+        # Register ROIPlotIntensity
+        view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
 
         # the widget containing :
         # - the ROI sliders
@@ -181,25 +336,26 @@ class QSpaceView(Qt.QMainWindow):
         treeDock.setFeatures(features)
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, treeDock)
 
-        plotDock = Qt.QDockWidget(self)
+        roiPlotDock = Qt.QDockWidget('ROI Intensity', self)
+        roiPlotDock.setWidget(roiPlotWindow)
+        features = roiPlotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
+        roiPlotDock.setFeatures(features)
+        self.splitDockWidget(treeDock, roiPlotDock, Qt.Qt.Vertical)
+
+        plotDock = Qt.QDockWidget('Intensity', self)
         plotDock.setWidget(plotWindow)
         features = plotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         plotDock.setFeatures(features)
-        self.splitDockWidget(treeDock, plotDock, Qt.Qt.Vertical)
+        self.tabifyDockWidget(roiPlotDock, plotDock)
 
         self.__showIsoView(firstX, firstY)
 
     # TODO : refactor this in a common base with RealSpaceViewWidget
     def __setPlotData(self, x, y, data):
-        plot = self.__plotWindow
-        # scatter
-        min_, max_ = data.min(), data.max()
-        colormap = cm.jet
-        colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
-        plot.addCurve(x, y,
-                      color=colors,
-                      symbol='s',
-                      linestyle='')
+        self.__plotWindow.setPlotData(x, y, data)
+        self.__plotWindow.resetZoom()
+        self.__roiPlotWindow.setPlotData(x, y, data)
+        self.__roiPlotWindow.resetZoom()
 
     def __roiApplied(self):
         region = self.__view3d.getSelectedRegion()
@@ -215,32 +371,27 @@ class QSpaceView(Qt.QMainWindow):
         self.sigProcessApplied.emit(self.__node, roi)
 
     def __plotSignal(self, event):
-        if event['event'] not in ('curveClicked',): # , 'mouseClicked'):
+        if event['event'] not in ('mouseClicked'):
             return
-        x, y = event['xdata'], event['ydata']
+        x, y = event['x'], event['y']
 
         self.__showIsoView(x, y)
 
     def __showIsoView(self, x, y):
         isoView = self.__view3d
-        plot = self.__plotWindow
         item = h5NodeToProjectItem(self.__node)
 
         with item.qspaceH5 as qspaceH5:
             sampleX = qspaceH5.sample_x
             sampleY = qspaceH5.sample_y
 
-            # TODO : better
-            try:
-                xIdx = (np.abs(sampleX - x) + np.abs(sampleY - y)).argmin()
-            except:
-                xIdx = (np.abs(sampleX - x[0]) + np.abs(sampleY - y[0])).argmin()
+            xIdx = ((sampleX - x)**2 + (sampleY - y)**2).argmin()
 
             x = sampleX[xIdx]
             y = sampleY[xIdx]
 
-            plot.addXMarker(x, legend='Xselection')
-            plot.addYMarker(y, legend='Yselection')
+            self.__plotWindow.setSelectedPosition(x, y)
+            self.__roiPlotWindow.setSelectedPosition(x, y)
 
             qspace = qspaceH5.qspace_slice(xIdx)
 

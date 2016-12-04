@@ -29,74 +29,115 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
-import weakref
-from contextlib import contextmanager
+from collections import namedtuple
 
 import numpy as np
 
 from .XsocsH5Base import XsocsH5Base
 
+FitResult = namedtuple('FitResult', ['name', 'qx', 'qy', 'qz'])
 
-# class GaussianFitH5(FitH5):
 
 class FitH5(XsocsH5Base):
+    _axis_values = range(3)
+    qx_axis, qy_axis, qz_axis = _axis_values
+    _axis_names = ('qx', 'qy', 'qz')
+
     title_path = '{entry}/title'
     start_time_path = '{entry}/start_time'
     end_time_path = '{entry}/end_time'
     date_path = '{entry}/{process}/date'
-    axis_path = '{entry}/{process}/axis'
+    qspace_axis_path = '{entry}/qspace_axis/{axis}'
+    status_path = '{entry}/{process}/status'
     configuration_path = '{entry}/{process}/configuration'
-    results_path = '{entry}/{process}/results'
-    qx_results_path = '{entry}/{process}/results/qx/{0}'
-    qy_results_path = '{entry}/{process}/results/qy/{0}'
-    qz_results_path = '{entry}/{process}/results/qz/{0}'
-
-    def __init__(self, h5_f, mode='r'):
-        super(XsocsH5Base, self).__init__(h5_f, mode=mode)
-
-        self.__entries = None
+    result_grp_path = '{entry}/{process}/results'
+    result_path = '{entry}/{process}/results/{result}/{axis}'
+    scan_x_path = '{entry}/sample/x_pos'
+    scan_y_path = '{entry}/sample/y_pos'
 
     def title(self, entry):
         with self._get_file() as h5_file:
             path = entry + '/title'
             return h5_file[path][()]
 
-    def _update_entries(self):
+    def entries(self):
         with self._get_file() as h5_file:
             # TODO : this isnt pretty but for some reason the attrs.get() fails
             # when there is no attribute NX_class (should return the default
             # None)
-            self.__entries = sorted([key for key in h5_file
-                                     if ('NX_class' in h5_file[key].attrs and
-                                         h5_file[key].attrs['NX_class'] == 'NXentry')])  # noqa
-
-    def entries(self):
-        if self.__entries is None:
-            self._update_entries()
-        return self.__entries[:]
+            return sorted([key for key in h5_file
+                           if ('NX_class' in h5_file[key].attrs and
+                               h5_file[key].attrs[
+                                   'NX_class'] == 'NXentry')])
 
     def processes(self, entry):
         with self._get_file() as h5_file:
             entry_grp = h5_file[entry]
             processes = sorted([key for key in entry_grp
                                 if ('NX_class' in entry_grp[key].attrs and
-                                    h5_file[key].attrs[
+                                    entry_grp[key].attrs[
                                         'NX_class'] == 'NXprocess')])
         return processes
 
     def results(self, entry, process):
         with self._get_file() as h5_file:
-            results_path = FitH5.results_path.format(entry=entry,
-                                                     process=process)
-            result_grp = h5_file[results_path]
-            results = sorted([key for key in result_grp])
-            return results
+            result_grp = h5_file[FitH5.result_grp_path.format(entry=entry,
+                                                              process=process)]
+            return sorted(result_grp.keys())
+
+    def scan_x(self, entry):
+        dset_path = FitH5.scan_x_path.format(entry=entry)
+        return self._get_array_data(dset_path)
+
+    def scan_y(self, entry):
+        dset_path = FitH5.scan_y_path.format(entry=entry)
+        return self._get_array_data(dset_path)
+
+    def get_qx(self, entry):
+        self.__get_axis_values(entry, FitH5.qx_axis)
+
+    def get_qy(self, entry):
+        self.__get_axis_values(entry, FitH5.qy_axis)
+
+    def get_qz(self, entry):
+        self.__get_axis_values(entry, FitH5.qz_axis)
+
+    def __get_axis_values(self, entry, axis):
+        axis_name = FitH5._axis_names[axis]
+        self._get_array_data(FitH5.qspace_axis_path.format(entry=entry,
+                                                           axis=axis_name))
 
     def result(self, entry, process, result):
         result_path = FitH5.result_path.format(entry=entry,
                                                process=process,
                                                result=result)
         return self._get_array_data(result_path)
+
+    def __get_axis_result(self, entry, process, name, q_axis):
+        assert q_axis in FitH5._axis_values
+        axis_name = self._axis_names[q_axis]
+        result_path = FitH5.result_path.format(entry=entry,
+                                               process=process,
+                                               result=name,
+                                               axis=axis_name)
+        return self._get_array_data(result_path)
+
+    def get_qx_result(self, entry, process, result):
+        return self.__get_axis_result(entry, process, result, FitH5.qx_axis)
+
+    def get_qy_result(self, entry, process, result):
+        return self.__get_axis_result(entry, process, result, FitH5.qy_axis)
+
+    def get_qz_result(self, entry, process, result):
+        return self.__get_axis_result(entry, process, result, FitH5.qz_axis)
+
+    def get_result(self, entry, process, result):
+        with self:
+            results = {}
+            for axis in FitH5._axis_values:
+                results[FitH5._axis_names[axis]] = \
+                    self.__get_axis_result(entry, process, result, axis)
+            return FitResult(name=result, **results)
 
 
 class FitH5Writer(FitH5):
@@ -106,7 +147,6 @@ class FitH5Writer(FitH5):
             # TODO : check if it already exists
             entry_grp = h5_file.require_group(entry)
             entry_grp.attrs['NX_class'] = np.string_('NXentry')
-            self._update_entries()
 
     def create_process(self, entry, process):
         # TODO : check that there isn't already an existing process
@@ -116,19 +156,58 @@ class FitH5Writer(FitH5):
             entry_grp = h5_file[entry]
 
             # TODO : check if it exists
-            process_grp = entry_grp.require_group[process]
+            process_grp = entry_grp.require_group(process)
             process_grp.attrs['NX_class'] = np.string_('NXprocess')
             results_grp = process_grp.require_group('results')
             results_grp.attrs['NX_class'] = np.string_('NXcollection')
 
+    def set_scan_x(self, entry, x):
+        dset_path = FitH5.scan_x_path.format(entry=entry)
+        return self._set_array_data(dset_path, x)
+
+    def set_scan_y(self, entry, y):
+        dset_path = FitH5.scan_y_path.format(entry=entry)
+        return self._set_array_data(dset_path, y)
+
     def set_title(self, entry, title):
         self._set_scalar_data(FitH5.title_path.format(entry), title)
 
-    def set_result(self, entry, process, name, data):
+    def set_status(self, entry, process, data):
+        status_path = FitH5.status_path.format(entry=entry, process=process)
+        self._set_array_data(status_path, data)
+
+    def __set_axis_result(self, entry, process, name, q_axis, data):
+        assert q_axis in FitH5._axis_values
+        axis_name = self._axis_names[q_axis]
         result_path = FitH5.result_path.format(entry=entry,
                                                process=process,
-                                               result=name)
+                                               result=name,
+                                               axis=axis_name)
         self._set_array_data(result_path, data)
+
+    def set_qx_result(self, entry, process, name, data):
+        self.__set_axis_result(entry, process, name, FitH5.qx_axis, data)
+
+    def set_qy_result(self, entry, process, name, data):
+        self.__set_axis_result(entry, process, name, FitH5.qy_axis, data)
+
+    def set_qz_result(self, entry, process, name, data):
+        self.__set_axis_result(entry, process, name, FitH5.qz_axis, data)
+
+    def __set_axis_values(self, entry, axis, values):
+        axis_name = FitH5._axis_names[axis]
+        self._set_array_data(FitH5.qspace_axis_path.format(entry=entry,
+                                                           axis=axis_name),
+                             values)
+
+    def set_qx(self, entry, values):
+        self.__set_axis_values(entry, FitH5.qx_axis, values)
+
+    def set_qy(self, entry, values):
+        self.__set_axis_values(entry, FitH5.qy_axis, values)
+
+    def set_qz(self, entry, values):
+        self.__set_axis_values(entry, FitH5.qz_axis, values)
 
     #
     # def export_txt(self, filename):

@@ -151,6 +151,9 @@ class H5Base(Node):
     h5Path = property(lambda self: self.__h5Path)
 
     def __init__(self, h5File=None, h5Path='/', **kwargs):
+        # temporary until the API is frozen
+        if h5File is None:
+            raise ValueError('<h5File> argument is mandatory.')
         self.__h5File = h5File
         self.__h5Path = (h5Path != '/' and h5Path.rstrip('/')) or h5Path
         self.className = os.path.basename(h5File).rpartition('.')[0]
@@ -159,13 +162,6 @@ class H5Base(Node):
 
         self.setData(h5File, Qt.Qt.ToolTipRole)
         self.setData(ModelColumns.NameColumn, os.path.basename(self.h5Path))
-
-        with h5py.File(self.h5File, mode='r') as h5f:
-            try:
-                count = len(h5f[self.h5Path].keys())
-            except AttributeError:
-                count = 0
-        self.__h5Count = count
 
     @staticmethod
     def factory(h5File, h5Path):
@@ -184,7 +180,6 @@ class H5Base(Node):
         newChildren = [H5Base.factory(self.__h5File, path)
                        for path in paths]
         newChildren = newChildren
-        self.__h5Count = None
         return newChildren
 
     def _refreshNode(self):

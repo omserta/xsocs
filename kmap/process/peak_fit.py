@@ -52,9 +52,7 @@ class FitTypes(object):
 
 FitResult = namedtuple('FitResult', ['sample_x', 'sample_y',
                                      'q_x', 'q_y', 'q_z',
-                                     'x_height', 'x_center', 'x_width',
-                                     'y_height', 'y_center', 'y_width',
-                                     'z_height', 'z_center', 'z_width',
+                                     'q_x_results', 'q_y_results', 'q_z_results',
                                      'status',
                                      'fit_name'])
 
@@ -267,20 +265,24 @@ def peak_fit(qspace_f,
     else:
         fit_name = 'Centroid'
 
+    q_x_results = {'height':results_np[:, 0].ravel(),
+                   'position': results_np[:, 1].ravel(),
+                   'width': results_np[:, 2].ravel()}
+    q_y_results = {'height': results_np[:, 3].ravel(),
+                   'position': results_np[:, 4].ravel(),
+                   'width': results_np[:, 5].ravel()}
+    q_z_results = {'height': results_np[:, 6].ravel(),
+                   'position': results_np[:, 7].ravel(),
+                   'width': results_np[:, 8].ravel()}
+
     fit_results = FitResult(sample_x=x_pos,
                             sample_y=y_pos,
                             q_x=q_x,
                             q_y=q_y,
                             q_z=q_z,
-                            x_height=results_np[:, 0].ravel(),
-                            x_center=results_np[:, 1].ravel(),
-                            x_width=results_np[:, 2].ravel(),
-                            y_height=results_np[:, 3].ravel(),
-                            y_center=results_np[:, 4].ravel(),
-                            y_width=results_np[:, 5].ravel(),
-                            z_height=results_np[:, 6].ravel(),
-                            z_center=results_np[:, 7].ravel(),
-                            z_width=results_np[:, 8].ravel(),
+                            q_x_results=q_x_results,
+                            q_y_results=q_y_results,
+                            q_z_results=q_z_results,
                             status=status,
                             fit_name=fit_name)
     return fit_results

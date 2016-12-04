@@ -182,23 +182,33 @@ class FitWidget(Qt.QDialog):
                            fit_type=self.__fitType,
                            roiIndices=self.__roiIndices)
         with FitH5Writer(self.__selectedFile, mode='w') as fitH5:
-            fitH5.create_entry(results.fit_name)
-            fitH5.create_process(results.fit_name)
-            fitH5.
-            # fitH5.set_x_fit(results.x_height,
-            #                 results.x_center,
-            #                 results.x_width)
-            # fitH5.set_y_fit(results.y_height,
-            #                 results.y_center,
-            #                 results.y_width)
-            # fitH5.set_z_fit(results.z_height,
-            #                 results.z_center,
-            #                 results.z_width)
-            # fitH5.set_scan_positions(results.sample_x, results.sample_y)
-            # fitH5.set_status(results.status)
-            # fitH5.set_x_axis(results.q_x)
-            # fitH5.set_y_axis(results.q_y)
-            # fitH5.set_z_axis(results.q_z)
+            entry = results.fit_name
+            process = results.fit_name
+            fitH5.create_entry(entry)
+            fitH5.create_process(entry, process)
+
+            fitH5.set_scan_x(entry, results.sample_x)
+            fitH5.set_scan_y(entry, results.sample_y)
+            fitH5.set_status(entry, process, results.status)
+            fitH5.set_qx(entry, results.q_x)
+            fitH5.set_qy(entry, results.q_y)
+            fitH5.set_qz(entry, results.q_z)
+
+            for resName, data in results.q_x_results.items():
+                fitH5.set_qx_result(entry,
+                                    process,
+                                    resName,
+                                    data)
+            for resName, data in results.q_y_results.items():
+                fitH5.set_qy_result(entry,
+                                    process,
+                                    resName,
+                                    data)
+            for resName, data in results.q_z_results.items():
+                fitH5.set_qz_result(entry,
+                                    process,
+                                    resName,
+                                    data)
 
         self.__fitFile = self.__selectedFile
         self._setStatus(FitWidget.StatusCompleted)

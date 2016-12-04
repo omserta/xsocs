@@ -118,7 +118,9 @@ class Node(object):
         self.__started = False
         self.__connected = False
         self.__model = None
-        self.setModel(model)
+
+        columnCount = ModelColumns.ColumnMax
+        self.__data = []
 
         self.__loaded = False
 
@@ -143,8 +145,6 @@ class Node(object):
         self.__childCount = None
         self.__hidden = False
         # TODO : get max column from self.model()
-        columnCount = ModelColumns.ColumnMax
-        self.__data = [{} for _ in range(columnCount)]
         self.__nodeName = None
         self.__enabled = True
 
@@ -164,9 +164,42 @@ class Node(object):
 
         if not isinstance(self.icons, (list, tuple)):
             self.icons = [self.icons]
+
+        # TODO : simplify
+        if self.editableColumns is None:
+            self.editableColumns = False
+
+        self._setModel(model)
+
+        self.nodeName = nodeName
+
+        if subject is not None:
+            self.setSubject(subject)
+
+    hidden = property(lambda self: self.__hidden)
+
+    def _setModel(self, model):
+        if model:
+            self.__model = weakref.ref(model)
+            columnCount = model.columnCount()
+        else:
+            columnCount = ModelColumns.ColumnMax
+            self.__model = None
+
+        currentCount = len(self.__data)
+        diff = columnCount - currentCount
+        if diff > 0:
+            self.__data.extend([{ModelRoles.InternalDataRole: self}
+                                for _ in range(diff)])
+
+        # setting data for new columns
+        # setting icons
         if self.icons is not None:
             style = Qt.QApplication.style()
             for iconIdx, icon in enumerate(self.icons):
+                if iconIdx < currentCount:
+                    # nothing to add
+                    continue
                 if isinstance(icon, str):
                     icon = icons.getQIcon(icon)
                 elif isinstance(icon, Qt.QStyle.StandardPixmap):
@@ -175,19 +208,6 @@ class Node(object):
                     continue
                 self._setData(iconIdx, icon, Qt.Qt.DecorationRole)
 
-        self.nodeName = nodeName
-
-        self._setData(ModelColumns.NameColumn,
-                      self.nodeName,
-                      Qt.Qt.EditRole)
-        self._setData(ModelColumns.NameColumn,
-                      self.nodeName,
-                      Qt.Qt.DisplayRole)
-
-        # TODO : simplify
-        if self.editableColumns is None:
-            self.editableColumns = False
-
         if not isinstance(self.editableColumns, (list, tuple)):
             editableColumns = [False] * columnCount
             editableColumns[ModelColumns.ValueColumn] = editableColumns
@@ -195,7 +215,7 @@ class Node(object):
         elif len(self.editableColumns) < columnCount:
             diff = (columnCount - len(self.editableColumns))
             editableColumns = (tuple(self.editableColumns) +
-                               (False,) * ([False] * diff))
+                               ((False,) * diff))
             self.editableColumns = editableColumns
         else:
             # Copying it because it s modified later on, and we dont want to
@@ -214,10 +234,16 @@ class Node(object):
                 editors = [None] * columnCount
                 editors[ModelColumns.ValueColumn] = editor
 
+            editableColumns = list(self.editableColumns)
             for editorIdx, editor in enumerate(editors):
+                if editorIdx < currentCount:
+                    # nothing to do
+                    continue
+                if editorIdx >= columnCount:
+                    break
                 if editor:
                     # TODO : not true if it s just a "paint" editor
-                    self.editableColumns[editorIdx] = getattr(editor,
+                    editableColumns[editorIdx] = getattr(editor,
                                                               'editable',
                                                               True)
                     if editorIdx not in self.activeColumns:
@@ -233,23 +259,7 @@ class Node(object):
                               persistent,
                               ModelRoles.PersistentEditorRole)
                 self.editors = editors[:]
-
-        for colIdx in range(ModelColumns.ColumnMax):
-            self._setData(colIdx,
-                          # weakref.proxy(self),
-                          self,
-                          ModelRoles.InternalDataRole)
-
-        if subject is not None:
-            self.setSubject(subject)
-
-    hidden = property(lambda self: self.__hidden)
-
-    def setModel(self, model):
-        if model:
-            self.__model = weakref.ref(model)
-        else:
-            self.__model = None
+            self.editableColumns = tuple(editableColumns)
 
     @property
     def model(self):
@@ -361,6 +371,9 @@ class Node(object):
     @nodeName.setter
     def nodeName(self, nodeName):
         self.__nodeName = nodeName
+        self._setData(ModelColumns.NameColumn,
+                      self.__nodeName,
+                      Qt.Qt.EditRole)
         self.setData(ModelColumns.NameColumn,
                      self.__nodeName,
                      role=Qt.Qt.DisplayRole)
@@ -580,7 +593,7 @@ class Node(object):
         self.__parent = parent
 
         if parent is not None:
-            self.setModel(parent.model)
+            self._setModel(parent.model)
 
         if parent is None:
             return
@@ -725,3 +738,6 @@ class Node(object):
         :return:
         """
         pass
+
+    def sizeHint(self, column):
+        return Qt.QSize()

@@ -37,23 +37,30 @@ from .ModelDef import ModelColumns, ModelRoles
 
 
 class RootNode(Node):
+    ColumnNames = ModelColumns.ColumnNames
+
     def __init__(self, *args, **kwargs):
         super(RootNode, self).__init__(*args, **kwargs)
-        for colIdx in range(ModelColumns.ColumnMax):
+        for colIdx in range(len(self.ColumnNames)):
             self.setData(colIdx,
-                         ModelColumns.ColumnNames[colIdx],
+                         self.ColumnNames[colIdx],
                          Qt.Qt.DisplayRole)
 
 
 class Model(Qt.QAbstractItemModel):
-    nameColumn, valueColumn = range(2)
+    ColumnsWithDelegates = [0, 1]
+
+    RootNode = RootNode
 
     sigRowsRemoved = Qt.Signal(object, int, int)
 
     def __init__(self, parent=None):
         super(Model, self).__init__(parent)
-        self.__root = RootNode(nodeName='__root__', model=self)
+        self.__root = self.RootNode(nodeName='__root__', model=self)
         self.__root.sigInternalDataChanged.connect(self.__internalDataChanged)
+
+    def columnsWithDelegates(self):
+        return self.ColumnsWithDelegates
 
     def startModel(self):
         self.__root.start()
@@ -146,7 +153,7 @@ class Model(Qt.QAbstractItemModel):
         return node.flags(index.column())
 
     def columnCount(self, parent=Qt.QModelIndex(), **kwargs):
-        return ModelColumns.ColumnMax
+        return len(self.RootNode.ColumnNames)
 
     def headerData(self, section, orientation, role=Qt.Qt.DisplayRole):
         if role == Qt.Qt.DisplayRole and orientation == Qt.Qt.Horizontal:

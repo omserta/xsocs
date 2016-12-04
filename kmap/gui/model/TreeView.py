@@ -41,14 +41,6 @@ class TreeView(Qt.QTreeView):
 
     def __init__(self, parent=None, model=None):
         super(TreeView, self).__init__(parent)
-        delegate = ItemDelegate(self)
-        self.setItemDelegateForColumn(ModelColumns.NameColumn, delegate)
-        delegate.sigDelegateEvent.connect(partial(self.__delegateEvent,
-                                                  ModelColumns.NameColumn))
-        delegate = ItemDelegate(self)
-        self.setItemDelegateForColumn(ModelColumns.ValueColumn, delegate)
-        delegate.sigDelegateEvent.connect(partial(self.__delegateEvent,
-                                                  ModelColumns.ValueColumn))
         # WARNING : had to set this as a queued connection, otherwise
         # there was a crash after the slot was called (conflict with
         # __setHiddenNodes probably)
@@ -184,10 +176,27 @@ class TreeView(Qt.QTreeView):
     def setModel(self, model):
         if self.model():
             try:
-                self.model().sigRowsRemoved.disconnect(self.rowsRemoved)
+                self.__openPersistentEditors(self.rootIndex(), False)
+                self.setRootIndex(Qt.QModelIndex())
+                prevModel = self.model()
+                prevModel.sigRowsRemoved.disconnect(self.rowsRemoved)
+                for col in prevModel.columnCount():
+                    self.setItemDelegateForColumn(col, None)
             except TypeError:
                 pass
         super(TreeView, self).setModel(model)
+
+        if model:
+            for col in model.columnsWithDelegates():
+                delegate = ItemDelegate(self)
+                self.setItemDelegateForColumn(col, delegate)
+                delegate.sigDelegateEvent.connect(partial(self.__delegateEvent,
+                                                          col))
+                delegate = ItemDelegate(self)
+                self.setItemDelegateForColumn(col, delegate)
+                delegate.sigDelegateEvent.connect(partial(self.__delegateEvent,
+                                                          col))
+
         self.__updateUniqueGroupVisibility()
         self.__setHiddenNodes(model.index(0, 0))
         self.__openPersistentEditors(Qt.QModelIndex())
@@ -264,6 +273,12 @@ class ItemDelegate(Qt.QStyledItemDelegate):
 
     def __init__(self, parent=None):
         super(ItemDelegate, self).__init__(parent)
+
+    def sizeHint(self, option, index):
+        hint = index.data(ModelRoles.InternalDataRole).sizeHint(index.column())
+        if hint.isValid():
+            return hint
+        return super(ItemDelegate, self).sizeHint(option, index)
 
     def createEditor(self, parent, option, index):
         node = index.data(role=ModelRoles.InternalDataRole)

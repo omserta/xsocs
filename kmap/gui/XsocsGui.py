@@ -210,7 +210,8 @@ class XsocsGui(Qt.QMainWindow):
     def __showFit(self, node):
         view = self.__fitViews.get(node)
         if not view:
-            view = FitView(self, model=node.model, node=node)
+            # TODO : unmaintainable and FUGLY!!!!! node.parent().parent()
+            view = FitView(self, node.model, node, node.parent().parent())
             self.__fitViews[node] = view
         view.show()
 

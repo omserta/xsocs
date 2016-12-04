@@ -85,6 +85,10 @@ class FitH5(XsocsH5Base):
                                                               process=process)]
             return sorted(result_grp.keys())
 
+    def get_status(self, entry, process):
+        status_path = FitH5.status_path.format(entry=entry, process=process)
+        return self._get_array_data(status_path)
+
     def scan_x(self, entry):
         dset_path = FitH5.scan_x_path.format(entry=entry)
         return self._get_array_data(dset_path)
@@ -94,18 +98,18 @@ class FitH5(XsocsH5Base):
         return self._get_array_data(dset_path)
 
     def get_qx(self, entry):
-        self.__get_axis_values(entry, FitH5.qx_axis)
+        return self.__get_axis_values(entry, FitH5.qx_axis)
 
     def get_qy(self, entry):
-        self.__get_axis_values(entry, FitH5.qy_axis)
+        return self.__get_axis_values(entry, FitH5.qy_axis)
 
     def get_qz(self, entry):
-        self.__get_axis_values(entry, FitH5.qz_axis)
+        return self.__get_axis_values(entry, FitH5.qz_axis)
 
     def __get_axis_values(self, entry, axis):
         axis_name = FitH5._axis_names[axis]
-        self._get_array_data(FitH5.qspace_axis_path.format(entry=entry,
-                                                           axis=axis_name))
+        return self._get_array_data(FitH5.qspace_axis_path.format(
+            entry=entry, axis=axis_name))
 
     def result(self, entry, process, result):
         result_path = FitH5.result_path.format(entry=entry,
@@ -139,11 +143,63 @@ class FitH5(XsocsH5Base):
                     self.__get_axis_result(entry, process, result, axis)
             return FitResult(name=result, **results)
 
+    def export_txt(self, filename):
+        # TODO : change this when multiple entries/processes are supported
+        entry = self.entries()[0]
+        if not entry:
+            raise ValueError('No entries.')
+        process = self.processes(entry)[0]
+        if not process:
+            raise ValueError('No processed for entry {0}.'.format(entry))
+        with self:
+            with open(filename, 'w+') as res_f:
+                res_f.write('X Y '
+                            'height_x center_x width_x '
+                            'height_y center_y width_y '
+                            'height_z center_z width_z '
+                            '|q| status\n')
+
+                heights = self.get_result(entry, process, 'height')
+                positions = self.get_result(entry, process, 'position')
+                widths = self.get_result(entry, process, 'width')
+
+                x_height = heights.qx
+                x_center = positions.qx
+                x_width = widths.qx
+
+                y_height = heights.qy
+                y_center = positions.qy
+                y_width = widths.qy
+
+                z_height = heights.qz
+                z_center = positions.qz
+                z_width = widths.qz
+
+                q = np.sqrt(x_center ** 2 +
+                            y_center ** 2 +
+                            z_center ** 2)
+
+                status = self.get_status(entry, process)
+                x, y = self.scan_x(entry), self.scan_y(entry)
+
+                for i, s in enumerate(status):
+                    r = [x[i], y[i],
+                         x_height[i], x_center[i], x_width[i],
+                         y_height[i], y_center[i], y_width[i],
+                         z_height[i], z_center[i], z_width[i],
+                         q[i], s]
+                    res_str = '{0}\n'.format(' '.join(str(e) for e in r))
+                    res_f.write(res_str)
+
 
 class FitH5Writer(FitH5):
 
     def create_entry(self, entry):
         with self._get_file() as h5_file:
+            entries = self.entries()
+            if len(entries) > 0:
+                raise ValueError('FitH5 doesnt support multiple entries '
+                                 'yet.')
             # TODO : check if it already exists
             entry_grp = h5_file.require_group(entry)
             entry_grp.attrs['NX_class'] = np.string_('NXentry')
@@ -151,6 +207,12 @@ class FitH5Writer(FitH5):
     def create_process(self, entry, process):
         # TODO : check that there isn't already an existing process
         with self._get_file() as h5_file:
+
+            processes = self.processes(entry)
+            if len(processes) > 0:
+                raise ValueError('FitH5 doesnt support multiple processes '
+                                 'yet.')
+
             if entry not in h5_file:
                 self.create_entry(entry)
             entry_grp = h5_file[entry]
@@ -209,32 +271,7 @@ class FitH5Writer(FitH5):
     def set_qz(self, entry, values):
         self.__set_axis_values(entry, FitH5.qz_axis, values)
 
-    #
-    # def export_txt(self, filename):
-    #     with self:
-    #         with open(filename, 'w+') as res_f:
-    #             res_f.write('X Y '
-    #                         'height_x center_x width_x '
-    #                         'height_y center_y width_y '
-    #                         'height_z center_z width_z '
-    #                         '|q| status\n')
-    #             x_height, x_center, x_width = self.x_fit
-    #             y_height, y_center, y_width = self.y_fit
-    #             z_height, z_center, z_width = self.z_fit
-    #             q = np.sqrt(x_center ** 2 +
-    #                         y_center ** 2 +
-    #                         z_center ** 2)
-    #             status = self.status
-    #             x, y = self.scan_positions
-    #
-    #             for i, s in enumerate(status):
-    #                 r = [x[i], y[i],
-    #                      x_height[i], x_center[i], x_width[i],
-    #                      y_height[i], y_center[i], y_width[i],
-    #                      z_height[i], z_center[i], z_width[i],
-    #                      q[i], s]
-    #                 res_str = '{0}\n'.format(' '.join(str(e) for e in r))
-    #                 res_f.write(res_str)
+
 
 #
 # class FitH5Writer(FitH5):

@@ -361,9 +361,6 @@ class QSpaceView(Qt.QMainWindow):
         region = self.__view3d.getSelectedRegion()
         if region:
             zRoi, yRoi, xRoi = region.getArrayRange()
-            # xRoi = self.__qx[[xRoi[0], xRoi[1] - 1]]
-            # yRoi = self.__qy[[yRoi[0], yRoi[1] - 1]]
-            # zRoi = self.__qz[[zRoi[0], zRoi[1] - 1]]
             roi = [xRoi, yRoi, zRoi]
         else:
             roi = None

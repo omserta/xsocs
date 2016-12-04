@@ -39,6 +39,11 @@ class ModelColumns(object):
 
 
 class ModelRoles(object):
+    _RoleMin = Qt.Qt.UserRole
+    RoleMax = _RoleMin + 4
+
+    RolesList = range(_RoleMin, RoleMax)
     (InternalDataRole, EditorClassRole,
-     PersistentEditorRole, EnabledRole, RoleMax) = \
-        range(Qt.Qt.UserRole, Qt.Qt.UserRole + 5)
+     PersistentEditorRole, EnabledRole) = RolesList
+
+

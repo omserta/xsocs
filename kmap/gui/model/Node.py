@@ -88,6 +88,7 @@ class Node(object):
     activeColumns = [ModelColumns.ValueColumn]
     groupClasses = []
     deletable = False
+    dragEnabledColumns = [None, None]
 
     # TODO : count visible references to unload data that isn't
     # displayed anymore
@@ -119,7 +120,6 @@ class Node(object):
         self.__connected = False
         self.__model = None
 
-        columnCount = ModelColumns.ColumnMax
         self.__data = []
 
         self.__loaded = False
@@ -161,6 +161,18 @@ class Node(object):
         # share the ref amongst all instances
         # this is bad practice and has to be refactored
         self.activeColumns = activeColumns[:]
+
+        dragEnabledColumns = self.dragEnabledColumns
+        if dragEnabledColumns is None:
+            dragEnabledColumns = []
+        elif not isinstance(dragEnabledColumns, (list, tuple)):
+            dragEnabledColumns = [dragEnabledColumns]
+        elif len(self.dragEnabledColumns) == 0:
+            dragEnabledColumns = []
+        # Copying it because it s modified later on, and we dont want to
+        # share the ref amongst all instances
+        # this is bad practice and has to be refactored
+        self.dragEnabledColumns = dragEnabledColumns[:]
 
         if not isinstance(self.icons, (list, tuple)):
             self.icons = [self.icons]
@@ -222,6 +234,21 @@ class Node(object):
             # share the ref amongst all instances
             # this is bad practice and has to be refactored
             self.editableColumns = self.editableColumns[:]
+
+        if not isinstance(self.dragEnabledColumns, (list, tuple)):
+            dragEnabledColumns = [False] * columnCount
+            dragEnabledColumns[ModelColumns.ValueColumn] = dragEnabledColumns
+            self.dragEnabledColumns = tuple(dragEnabledColumns)
+        elif len(self.dragEnabledColumns) < columnCount:
+            diff = (columnCount - len(self.dragEnabledColumns))
+            dragEnabledColumns = (tuple(self.dragEnabledColumns) +
+                                  ((False,) * diff))
+            self.dragEnabledColumns = dragEnabledColumns
+        else:
+            # Copying it because it s modified later on, and we dont want to
+            # share the ref amongst all instances
+            # this is bad practice and has to be refactored
+            self.dragEnabledColumns = self.dragEnabledColumns[:]
 
         # TODO : simplify
         editors = self.editors
@@ -512,7 +539,9 @@ class Node(object):
                           and Qt.Qt.ItemIsEditable)
                          or Qt.Qt.NoItemFlags)
         enabled = (self.enabled and Qt.Qt.ItemIsEnabled) or Qt.Qt.NoItemFlags
-        return flags | enabled
+        draggable = (self.isColumnDragEnabled(column)
+                     and Qt.Qt.ItemIsDragEnabled) or Qt.Qt.NoItemFlags
+        return flags | enabled | draggable
 
     def _childConnect(self, child):
         child.sigInternalDataChanged.connect(
@@ -670,6 +699,9 @@ class Node(object):
 
     def isColumnEditable(self, column):
         return self.editableColumns[column]
+
+    def isColumnDragEnabled(self, column):
+        return self.dragEnabledColumns[column]
 
     def _loadChildren(self):
         return []

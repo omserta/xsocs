@@ -50,7 +50,7 @@ class TreeView(Qt.QTreeView):
         self.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
         self.__showUniqueGroup = False
         self.__userRoot = False
-        self.setSelectionBehavior(Qt.QAbstractItemView.SelectRows)
+        # self.setSelectionBehavior(Qt.QAbstractItemView.SelectRows)
 
         if model:
             self.setModel(model)
@@ -122,7 +122,10 @@ class TreeView(Qt.QTreeView):
         self.__setHiddenNodes(index)
         self.__openPersistentEditors(index, True)
 
-    def __openPersistentEditors(self, parent, openEditor=True):
+    def __openPersistentEditors(self,
+                                parent,
+                                openEditor=True,
+                                onCollapse=False):
         model = self.model()
 
         if not model:
@@ -139,12 +142,11 @@ class TreeView(Qt.QTreeView):
             parent = self.rootIndex()
 
         children = []
-        if self.isExpanded(parent)\
+        if onCollapse or self.isExpanded(parent)\
                 or parent == self.rootIndex()\
                 or not parent.isValid():
             children = [model.index(row, 0, parent)
                         for row in range(model.rowCount(parent))]
-
         while len(children) > 0:
             curParent = children.pop(-1)
 
@@ -238,7 +240,7 @@ class TreeView(Qt.QTreeView):
         self.__openPersistentEditors(index, True)
 
     def __collapsed(self, index):
-        self.__openPersistentEditors(index, False)
+        self.__openPersistentEditors(index, False, onCollapse=True)
 
     def pathToIndex(self, itemPath):
         model = self.model()

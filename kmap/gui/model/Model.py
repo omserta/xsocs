@@ -49,6 +49,8 @@ class RootNode(Node):
 
 class Model(Qt.QAbstractItemModel):
     ColumnsWithDelegates = [0, 1]
+    ModelRoles = ModelRoles
+    ModelColumns = ModelColumns
 
     RootNode = RootNode
 

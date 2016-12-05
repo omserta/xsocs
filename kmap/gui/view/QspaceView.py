@@ -324,6 +324,7 @@ class QSpaceView(Qt.QMainWindow):
         view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
 
         view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
+        view3d.getCutPlanes()[0].sigDataChanged.connect(self.__cutPlaneChanged)
 
         # the widget containing :
         # - the ROI sliders
@@ -518,9 +519,11 @@ class QSpaceView(Qt.QMainWindow):
         cutPlane = self.__view3d.getCutPlanes()[0]
         if visible:
             cutPlane.sigPlaneChanged.connect(self.__cutPlaneChanged)
+            cutPlane.sigDataChanged.connect(self.__cutPlaneChanged)
             self.__cutPlaneChanged()  # To sync
         else:
             cutPlane.sigPlaneChanged.disconnect(self.__cutPlaneChanged)
+            cutPlane.sigDataChanged.disconnect(self.__cutPlaneChanged)
 
     def __cutPlaneChanged(self):
         plane = self.__view3d.getCutPlanes()[0]

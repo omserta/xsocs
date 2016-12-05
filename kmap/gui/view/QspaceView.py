@@ -235,7 +235,7 @@ class ROIPlotIntensityMap(PlotIntensityMap):
 
 
 class CutPlanePlotWindow(PlotWidget):
-    """Plot intensities as a scatter plot
+    """Plot cut plane as an image
 
     :param parent: QWidget's parent
     """
@@ -248,16 +248,21 @@ class CutPlanePlotWindow(PlotWidget):
         toolbar = Qt.QToolBar('Cut Plane Plot', self)
         self.addToolBar(toolbar)
 
-        toolbar.addAction(PlotActions.ResetZoomAction(parent=self, plot=self))
-        toolbar.addAction(PlotActions.ColormapAction(parent=self, plot=self))
+        self.__resetZoomAction = PlotActions.ResetZoomAction(parent=self, plot=self)
+        toolbar.addAction(self.__resetZoomAction)
+        self.__colormapAction = PlotActions.ColormapAction(parent=self, plot=self)
+        toolbar.addAction(self.__colormapAction)
         toolbar.addWidget(PlotToolButtons.AspectToolButton(
             parent=self, plot=self))
         toolbar.addWidget(PlotToolButtons.YAxisOriginToolButton(
             parent=self, plot=self))
         toolbar.addSeparator()
-        toolbar.addAction(PlotActions.CopyAction(parent=self, plot=self))
-        toolbar.addAction(PlotActions.SaveAction(parent=self, plot=self))
-        toolbar.addAction(PlotActions.PrintAction(parent=self, plot=self))
+        self.__copyAction = PlotActions.CopyAction(parent=self, plot=self)
+        toolbar.addAction(self.__copyAction)
+        self.__saveAction = PlotActions.SaveAction(parent=self, plot=self)
+        toolbar.addAction(self.__saveAction)
+        self.__printAction = PlotActions.PrintAction(parent=self, plot=self)
+        toolbar.addAction(self.__printAction)
 
         self.setKeepDataAspectRatio(True)
         self.setActiveCurveHandling(False)

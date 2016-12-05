@@ -34,7 +34,7 @@ from matplotlib import cm
 
 
 from silx.gui import qt as Qt
-from silx.gui.plot import Plot2D, PlotWindow
+from silx.gui.plot import PlotActions, PlotToolButtons, PlotWidget, PlotWindow
 from silx.gui.icons import getQIcon
 from plot3d.ScalarFieldView import ScalarFieldView
 from plot3d.SFViewParamTree import TreeView as SFViewParamTree
@@ -234,7 +234,7 @@ class ROIPlotIntensityMap(PlotIntensityMap):
                 self.sender().progressBar.setValue(len(intensities))
 
 
-class CutPlanePlotWindow(Plot2D):
+class CutPlanePlotWindow(PlotWidget):
     """Plot intensities as a scatter plot
 
     :param parent: QWidget's parent
@@ -243,6 +243,21 @@ class CutPlanePlotWindow(Plot2D):
     def __init__(self, parent=None):
         super(CutPlanePlotWindow, self).__init__(parent=parent)
         self.setMinimumSize(150, 150)
+
+        # Create toolbar
+        toolbar = Qt.QToolBar('Cut Plane Plot', self)
+        self.addToolBar(toolbar)
+
+        toolbar.addAction(PlotActions.ResetZoomAction(parent=self, plot=self))
+        toolbar.addAction(PlotActions.ColormapAction(parent=self, plot=self))
+        toolbar.addWidget(PlotToolButtons.AspectToolButton(
+            parent=self, plot=self))
+        toolbar.addWidget(PlotToolButtons.YAxisOriginToolButton(
+            parent=self, plot=self))
+        toolbar.addSeparator()
+        toolbar.addAction(PlotActions.CopyAction(parent=self, plot=self))
+        toolbar.addAction(PlotActions.SaveAction(parent=self, plot=self))
+        toolbar.addAction(PlotActions.PrintAction(parent=self, plot=self))
 
         self.setKeepDataAspectRatio(True)
         self.setActiveCurveHandling(False)

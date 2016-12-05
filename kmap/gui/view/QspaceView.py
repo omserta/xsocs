@@ -171,10 +171,6 @@ class ROIPlotIntensityMap(PlotIntensityMap):
     def __updateClicked(self, checked=False):
         """Handle button clicked"""
 
-        # Reset plot
-        self.__updateButton.setEnabled(False)
-        self.remove(kind='curve')
-
         if self.__roiSlices is None:
             # No ROI, use sum for the whole QSpace
             with self.__qspaceH5 as qspaceH5:
@@ -187,11 +183,16 @@ class ROIPlotIntensityMap(PlotIntensityMap):
             # Show dialog
             dialog = Qt.QDialog(self)
             dialog.setWindowTitle('ROI Intensity Map')
-            dialogLayout = Qt.QVBoxLayout(dialog)
+            layout = Qt.QVBoxLayout(dialog)
             progress = Qt.QProgressBar()
             with self.__qspaceH5 as qspaceH5:
                 progress.setRange(0, qspaceH5.qspace_sum.size - 1)
-            dialogLayout.addWidget(progress)
+            layout.addWidget(progress)
+
+            self.__aborted = False
+            btnBox = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Abort)
+            btnBox.rejected.connect(self.__abortComputeIntensities)
+            layout.addWidget(btnBox)
 
             timer = Qt.QTimer(self)
             timer.timeout.connect(self.__stepComputeIntensities)
@@ -200,9 +201,14 @@ class ROIPlotIntensityMap(PlotIntensityMap):
             timer.dialog = dialog
             timer.start()
 
-            dialog.exec_()
+            if dialog.exec_() == Qt.QDialog.Rejected:
+                return  # Aborted, stop here
 
             intensities = np.array(timer.intensities, copy=True)
+
+        # Reset plot
+        self.__updateButton.setEnabled(False)
+        self.remove(kind='curve')
 
         # Update plot
         with self.__qspaceH5 as qsp:
@@ -216,11 +222,21 @@ class ROIPlotIntensityMap(PlotIntensityMap):
             self.setToolTip(
                 self._ROI_TOOLTIP % tuple(self.__roiQRange.ravel()))
 
+    def __abortComputeIntensities(self):
+        """Abort computation of ROI intensities
+        """
+        self.__aborted = True
+
     def __stepComputeIntensities(self):
         """Step in ROI Intensity map computation
 
         This is intended to be called by a timer in __updateClicked
         """
+        if self.__aborted:
+            self.sender().stop()  # Stop timer
+            self.sender().dialog.reject()  # Abort dialog
+            return
+
         intensities = self.sender().intensities
 
         with self.__qspaceH5 as qspaceH5:

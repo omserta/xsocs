@@ -122,27 +122,6 @@ class FitResultNode(FitProcessNode):
         return [FitThumbnailNode(self.h5File, self.h5Path)]
 
 
-# class FitResultThumbnail(Qt.QWidget):
-#
-#     def __init__(self, parent=None):
-#         super(FitResultThumbnail, self).__init__(parent)
-#
-#         layout = Qt.QHBoxLayout(self)
-#         layout.setContentsMargins(0, 0, 0, 0)
-#         plot = self.__plot = PlotWidget()
-#         plot.layout().setContentsMargins(0, 0, 0, 0)
-#         plot.setDataMargins(0, 0, 0, 0)
-#         plot._backend._enableAxis('left', False)
-#         plot._backend._enableAxis('right', False)
-#         plot._backend.ax.get_xaxis().set_visible(False)
-#         plot._backend.ax.set_xmargin(0)
-#         plot._backend.ax.set_ymargin(0)
-#         plot.sizeHint = lambda: Qt.QSize(100, 100)
-#         plot.minimumSizeHint = plot.sizeHint
-#         plot.setMaximumSize = plot.sizeHint
-#         layout.addWidget(plot)
-
-
 class FitResultEditor(EditorMixin, PlotWidget):
     persistent = True
 
@@ -522,6 +501,9 @@ class FitView(Qt.QMainWindow):
                 mask = np.where(histo > 0)
                 weights = histo[mask]
                 cube[mask] /= weights
+                qx_cube = qspaceH5.qx
+                qy_cube = qspaceH5.qy
+                qz_cube = qspaceH5.qz
             z_sum = cube.sum(axis=0).sum(axis=0)
             cube_sum_z = cube.sum(axis=2)
             y_sum = cube_sum_z.sum(axis=0)
@@ -542,21 +524,21 @@ class FitView(Qt.QMainWindow):
                 w_x = widths.qx[xIdx]
                 self.__plotLeastSq(self.__fitPlots[0],
                                    h_x, p_x, w_x,
-                                   xData, x_sum)
+                                   xData, qx_cube, x_sum)
 
                 h_y = heights.qy[xIdx]
                 p_y = positions.qy[xIdx]
                 w_y = widths.qy[xIdx]
                 self.__plotLeastSq(self.__fitPlots[1],
                                    h_y, p_y, w_y,
-                                   yData, y_sum)
+                                   yData, qy_cube, y_sum)
 
                 h_z = heights.qz[xIdx]
                 p_z = positions.qz[xIdx]
                 w_z = widths.qz[xIdx]
                 self.__plotLeastSq(self.__fitPlots[2],
                                    h_z, p_z, w_z,
-                                   zData, z_sum)
+                                   zData, qz_cube, z_sum)
 
             elif process == 'Centroid':
                 pass
@@ -568,7 +550,7 @@ class FitView(Qt.QMainWindow):
 
     def __plotLeastSq(self, plot,
                       height, position,
-                      width, xData, acqData):
+                      width, xData, acqX, acqData):
         # put all this in a toolbox
         _const_inv_2_pi_ = np.sqrt(2 * np.pi)
         _gauss_fn = lambda p, pos: (
@@ -578,7 +560,7 @@ class FitView(Qt.QMainWindow):
         params = [height, position, width]
         fitted = _gauss_fn(params, xData)
         plot.addCurve(xData, fitted, legend='fit')
-        plot.addCurve(xData, acqData, legend='measured')
+        plot.addCurve(acqX, acqData, legend='measured')
 
     def __setSelectedPosition(self, x, y):
         """Set the selected position.

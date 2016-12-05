@@ -451,7 +451,7 @@ class QSpaceView(Qt.QMainWindow):
             isoView.setScale((qxMax - qxMin) / qxLen,
                              (qyMax - qyMin) / qyLen,
                              (qzMax - qzMin) / qzLen)
-            isoView.setOffset(qxMin, qyMin, qzMin)
+            isoView.setTranslation(qxMin, qyMin, qzMin)
 
             isoView.setData(qspace.swapaxes(0, 2))
 
@@ -533,34 +533,34 @@ class QSpaceView(Qt.QMainWindow):
 
                 labels = self.__view3d.getAxesLabels()
                 scale = self.__view3d.getScale()
-                offset = self.__view3d.getOffset()
+                translation = self.__view3d.getTranslation()
 
                 if np.all(np.equal(normal, (1., 0., 0.))):
                     index = max(0, min(point[0], data.shape[2] - 1))
                     slice_ = data[:, :, index]
                     xlabel, ylabel = labels.getYLabel(), labels.getZLabel()
                     imageScale = scale[1], scale[2]
-                    imageOffset = offset[1], offset[2]
+                    imageTranslation = translation[1], translation[2]
                     title = labels.getXLabel() + ' = %f' % \
-                        (index * scale[0] + offset[0])
+                        (index * scale[0] + translation[0])
 
                 elif np.all(np.equal(normal, (0., 1., 0.))):
                     index = max(0, min(point[1], data.shape[1] - 1))
                     slice_ = data[:, index, :]
                     xlabel, ylabel = labels.getXLabel(), labels.getZLabel()
                     imageScale = scale[0], scale[2]
-                    imageOffset = offset[0], offset[2]
+                    imageTranslation = translation[0], translation[2]
                     title = labels.getYLabel() + ' = %f' % \
-                        (index * scale[1] + offset[1])
+                        (index * scale[1] + translation[1])
 
                 elif np.all(np.equal(normal, (0., 0., 1.))):
                     index = max(0, min(point[2], data.shape[0] - 1))
                     slice_ = data[index, :, :]
                     xlabel, ylabel = labels.getXLabel(), labels.getYLabel()
                     imageScale = scale[0], scale[1]
-                    imageOffset = offset[0], offset[1]
+                    imageTranslation = translation[0], translation[1]
                     title = labels.getZLabel() + ' = %f' % \
-                        (index * scale[2] + offset[2])
+                        (index * scale[2] + translation[2])
 
             slice_ = np.array(slice_, copy=True)
             self.__planePlotWindow.setGraphXLabel(xlabel)
@@ -569,6 +569,6 @@ class QSpaceView(Qt.QMainWindow):
             self.__planePlotWindow.addImage(
                 slice_,
                 legend='cutting plane',
-                origin=imageOffset,
+                origin=imageTranslation,
                 scale=imageScale,
                 resetzoom=True)

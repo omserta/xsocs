@@ -381,6 +381,7 @@ class QSpaceView(Qt.QMainWindow):
         planePlotDock.setWidget(planePlotWindow)
         features = planePlotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         planePlotDock.setFeatures(features)
+        planePlotDock.visibilityChanged.connect(self.__planePlotDockVisibilityChanged)
         self.splitDockWidget(treeDock, planePlotDock, Qt.Qt.Vertical)
 
         roiPlotDock = Qt.QDockWidget('ROI Intensity', self)
@@ -513,10 +514,17 @@ class QSpaceView(Qt.QMainWindow):
             zRoi = event.leftIndex, event.rightIndex + 1
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
 
+    def __planePlotDockVisibilityChanged(self, visible):
+        cutPlane = self.__view3d.getCutPlanes()[0]
+        if visible:
+            cutPlane.sigPlaneChanged.connect(self.__cutPlaneChanged)
+            self.__cutPlaneChanged()  # To sync
+        else:
+            cutPlane.sigPlaneChanged.disconnect(self.__cutPlaneChanged)
+
     def __cutPlaneChanged(self):
         plane = self.__view3d.getCutPlanes()[0]
 
-        slice_ = None
         if plane.isVisible() and plane.isValid():
             data = self.__view3d.getData(copy=False)
             if data is not None:
@@ -554,9 +562,6 @@ class QSpaceView(Qt.QMainWindow):
                     title = labels.getZLabel() + ' = %f' % \
                         (index * scale[2] + offset[2])
 
-        if slice_ is None:
-            self.__planePlotWindow.clear()
-        else:
             slice_ = np.array(slice_, copy=True)
             self.__planePlotWindow.setGraphXLabel(xlabel)
             self.__planePlotWindow.setGraphYLabel(ylabel)

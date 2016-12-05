@@ -197,7 +197,7 @@ class FitThumbnailNode(FitResultNode):
                 data = fitH5.get_qz_result(self.entry,
                                            self.process,
                                            self.result)
-
+        data = np.log(data)
         min_, max_ = data.min(), data.max()
         colormap = cm.jet
         colors = colormap(
@@ -340,6 +340,7 @@ class DropPlotWidget(PlotWindow):
             data = getMeth(entry, process, result)
             scan_x = h5f.scan_x(entry)
             scan_y = h5f.scan_y(entry)
+            data = np.log(data)
         min_, max_ = data.min(), data.max()
         colormap = cm.jet
         colors = colormap(

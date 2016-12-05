@@ -323,7 +323,7 @@ class QSpaceView(Qt.QMainWindow):
         # Register ROIPlotIntensity
         view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
 
-        view3d.sigPlaneChanged.connect(self.__cutPlaneChanged)
+        view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
 
         # the widget containing :
         # - the ROI sliders
@@ -513,20 +513,22 @@ class QSpaceView(Qt.QMainWindow):
             zRoi = event.leftIndex, event.rightIndex + 1
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
 
-    def __cutPlaneChanged(self, plane):
+    def __cutPlaneChanged(self):
+        plane = self.__view3d.getCutPlanes()[0]
+
         slice_ = None
-        if plane.isPlane:
+        if plane.isVisible() and plane.isValid():
             data = self.__view3d.getData(copy=False)
             if data is not None:
-                normal = plane.normal
-                point = np.array(plane.point, dtype=np.int)
+                normal = plane.getNormal()
+                point = np.array(plane.getPoint(), dtype=np.int)
 
                 labels = self.__view3d.getAxesLabels()
                 scale = self.__view3d.getScale()
                 offset = self.__view3d.getOffset()
 
                 if np.all(np.equal(normal, (1., 0., 0.))):
-                    index = max(0, min(int(plane.point[0]), data.shape[2] - 1))
+                    index = max(0, min(point[0], data.shape[2] - 1))
                     slice_ = data[:, :, index]
                     xlabel, ylabel = labels.getYLabel(), labels.getZLabel()
                     imageScale = scale[1], scale[2]
@@ -535,7 +537,7 @@ class QSpaceView(Qt.QMainWindow):
                         (index * scale[0] + offset[0])
 
                 elif np.all(np.equal(normal, (0., 1., 0.))):
-                    index = max(0, min(int(plane.point[1]), data.shape[1] - 1))
+                    index = max(0, min(point[1], data.shape[1] - 1))
                     slice_ = data[:, index, :]
                     xlabel, ylabel = labels.getXLabel(), labels.getZLabel()
                     imageScale = scale[0], scale[2]
@@ -544,7 +546,7 @@ class QSpaceView(Qt.QMainWindow):
                         (index * scale[1] + offset[1])
 
                 elif np.all(np.equal(normal, (0., 0., 1.))):
-                    index = max(0, min(int(plane.point[2]), data.shape[0] - 1))
+                    index = max(0, min(point[2], data.shape[0] - 1))
                     slice_ = data[index, :, :]
                     xlabel, ylabel = labels.getXLabel(), labels.getYLabel()
                     imageScale = scale[0], scale[1]

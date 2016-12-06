@@ -34,7 +34,7 @@ from matplotlib import cm
 
 
 from silx.gui import qt as Qt
-from silx.gui.plot import PlotWindow
+from silx.gui.plot import PlotActions, PlotToolButtons, PlotWidget, PlotWindow
 from silx.gui.icons import getQIcon
 from plot3d.ScalarFieldView import ScalarFieldView
 from plot3d.SFViewParamTree import TreeView as SFViewParamTree
@@ -250,6 +250,43 @@ class ROIPlotIntensityMap(PlotIntensityMap):
                 self.sender().progressBar.setValue(len(intensities))
 
 
+class CutPlanePlotWindow(PlotWidget):
+    """Plot cut plane as an image
+
+    :param parent: QWidget's parent
+    """
+
+    def __init__(self, parent=None):
+        super(CutPlanePlotWindow, self).__init__(parent=parent)
+        self.setMinimumSize(150, 150)
+
+        # Create toolbar
+        toolbar = Qt.QToolBar('Cut Plane Plot', self)
+        self.addToolBar(toolbar)
+
+        self.__resetZoomAction = PlotActions.ResetZoomAction(parent=self, plot=self)
+        toolbar.addAction(self.__resetZoomAction)
+        self.__colormapAction = PlotActions.ColormapAction(parent=self, plot=self)
+        toolbar.addAction(self.__colormapAction)
+        toolbar.addWidget(PlotToolButtons.AspectToolButton(
+            parent=self, plot=self))
+        toolbar.addWidget(PlotToolButtons.YAxisOriginToolButton(
+            parent=self, plot=self))
+        toolbar.addSeparator()
+        self.__copyAction = PlotActions.CopyAction(parent=self, plot=self)
+        toolbar.addAction(self.__copyAction)
+        self.__saveAction = PlotActions.SaveAction(parent=self, plot=self)
+        toolbar.addAction(self.__saveAction)
+        self.__printAction = PlotActions.PrintAction(parent=self, plot=self)
+        toolbar.addAction(self.__printAction)
+
+        self.setKeepDataAspectRatio(True)
+        self.setActiveCurveHandling(False)
+
+    def sizeHint(self):
+        return Qt.QSize(200, 200)
+
+
 class QSpaceView(Qt.QMainWindow):
     sigProcessApplied = Qt.Signal(object, object)
 
@@ -273,6 +310,8 @@ class QSpaceView(Qt.QMainWindow):
         self.__roiPlotWindow = roiPlotWindow = ROIPlotIntensityMap(
             parent=self, qspaceH5=item.qspaceH5)
         roiPlotWindow.sigPlotSignal.connect(self.__plotSignal)
+
+        self.__planePlotWindow = planePlotWindow = CutPlanePlotWindow(self)
 
         with item.qspaceH5 as qspaceH5:
             sampleX = qspaceH5.sample_x
@@ -299,6 +338,9 @@ class QSpaceView(Qt.QMainWindow):
 
         # Register ROIPlotIntensity
         view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
+
+        view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
+        view3d.getCutPlanes()[0].sigDataChanged.connect(self.__cutPlaneChanged)
 
         # the widget containing :
         # - the ROI sliders
@@ -352,11 +394,19 @@ class QSpaceView(Qt.QMainWindow):
         treeDock.setFeatures(features)
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, treeDock)
 
+        planePlotDock = Qt.QDockWidget('Cut Plane', self)
+        planePlotDock.setWidget(planePlotWindow)
+        features = planePlotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
+        planePlotDock.setFeatures(features)
+        planePlotDock.visibilityChanged.connect(self.__planePlotDockVisibilityChanged)
+        self.splitDockWidget(treeDock, planePlotDock, Qt.Qt.Vertical)
+
         roiPlotDock = Qt.QDockWidget('ROI Intensity', self)
         roiPlotDock.setWidget(roiPlotWindow)
         features = roiPlotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         roiPlotDock.setFeatures(features)
         self.splitDockWidget(treeDock, roiPlotDock, Qt.Qt.Vertical)
+        self.tabifyDockWidget(planePlotDock, roiPlotDock)
 
         plotDock = Qt.QDockWidget('Intensity', self)
         plotDock.setWidget(plotWindow)
@@ -418,7 +468,7 @@ class QSpaceView(Qt.QMainWindow):
             isoView.setScale((qxMax - qxMin) / qxLen,
                              (qyMax - qyMin) / qyLen,
                              (qzMax - qzMin) / qzLen)
-            isoView.setOffset(qxMin, qyMin, qzMin)
+            isoView.setTranslation(qxMin, qyMin, qzMin)
 
             isoView.setData(qspace.swapaxes(0, 2))
 
@@ -480,3 +530,64 @@ class QSpaceView(Qt.QMainWindow):
         else:
             zRoi = event.leftIndex, event.rightIndex + 1
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
+
+    def __planePlotDockVisibilityChanged(self, visible):
+        cutPlane = self.__view3d.getCutPlanes()[0]
+        if visible:
+            cutPlane.sigPlaneChanged.connect(self.__cutPlaneChanged)
+            cutPlane.sigDataChanged.connect(self.__cutPlaneChanged)
+            self.__cutPlaneChanged()  # To sync
+        else:
+            cutPlane.sigPlaneChanged.disconnect(self.__cutPlaneChanged)
+            cutPlane.sigDataChanged.disconnect(self.__cutPlaneChanged)
+
+    def __cutPlaneChanged(self):
+        plane = self.__view3d.getCutPlanes()[0]
+
+        if plane.isVisible() and plane.isValid():
+            data = self.__view3d.getData(copy=False)
+            if data is not None:
+                normal = plane.getNormal()
+                point = np.array(plane.getPoint(), dtype=np.int)
+
+                labels = self.__view3d.getAxesLabels()
+                scale = self.__view3d.getScale()
+                translation = self.__view3d.getTranslation()
+
+                if np.all(np.equal(normal, (1., 0., 0.))):
+                    index = max(0, min(point[0], data.shape[2] - 1))
+                    slice_ = data[:, :, index]
+                    xlabel, ylabel = labels.getYLabel(), labels.getZLabel()
+                    imageScale = scale[1], scale[2]
+                    imageTranslation = translation[1], translation[2]
+                    title = labels.getXLabel() + ' = %f' % \
+                        (index * scale[0] + translation[0])
+
+                elif np.all(np.equal(normal, (0., 1., 0.))):
+                    index = max(0, min(point[1], data.shape[1] - 1))
+                    slice_ = data[:, index, :]
+                    xlabel, ylabel = labels.getXLabel(), labels.getZLabel()
+                    imageScale = scale[0], scale[2]
+                    imageTranslation = translation[0], translation[2]
+                    title = labels.getYLabel() + ' = %f' % \
+                        (index * scale[1] + translation[1])
+
+                elif np.all(np.equal(normal, (0., 0., 1.))):
+                    index = max(0, min(point[2], data.shape[0] - 1))
+                    slice_ = data[index, :, :]
+                    xlabel, ylabel = labels.getXLabel(), labels.getYLabel()
+                    imageScale = scale[0], scale[1]
+                    imageTranslation = translation[0], translation[1]
+                    title = labels.getZLabel() + ' = %f' % \
+                        (index * scale[2] + translation[2])
+
+            slice_ = np.array(slice_, copy=True)
+            self.__planePlotWindow.setGraphXLabel(xlabel)
+            self.__planePlotWindow.setGraphYLabel(ylabel)
+            self.__planePlotWindow.setGraphTitle(title)
+            self.__planePlotWindow.addImage(
+                slice_,
+                legend='cutting plane',
+                origin=imageTranslation,
+                scale=imageScale,
+                resetzoom=True)

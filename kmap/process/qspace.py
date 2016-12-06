@@ -681,9 +681,12 @@ def _img_2_qspace(data_h5f,
 
     # TODO : make this editable?
     nx, ny, nz = qspace_size
-    qconv = xu.experiment.QConversion(['y-'],
-                                      ['z+', 'y-'],
+    qconv = xu.experiment.QConversion(['y-', 'z-'],
+                                      ['z-', 'y-'],
                                       [1, 0, 0])
+    # qconv = xu.experiment.QConversion(['y-'],
+    #                                   ['z+', 'y-'],
+    #                                   [1, 0, 0])
 
     # convention for coordinate system:
     # x downstream
@@ -731,11 +734,12 @@ def _img_2_qspace(data_h5f,
                                                           entry_file))
             entry_files.append(entry_file)
 
+            phi = np.float64(master_h5.positioner(entry, 'phi'))
             eta = np.float64(master_h5.positioner(entry, 'eta'))
             nu = np.float64(master_h5.positioner(entry, 'nu'))
             delta = np.float64(master_h5.positioner(entry, 'del'))
 
-            qx, qy, qz = hxrd.Ang2Q.area(eta, nu, delta)
+            qx, qy, qz = hxrd.Ang2Q.area(phi, eta, nu, delta)
             q_ar[entry_idx, :, 0] = qx.reshape(-1)
             q_ar[entry_idx, :, 1] = qy.reshape(-1)
             q_ar[entry_idx, :, 2] = qz.reshape(-1)

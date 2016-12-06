@@ -545,49 +545,16 @@ class QSpaceView(Qt.QMainWindow):
         plane = self.__view3d.getCutPlanes()[0]
 
         if plane.isVisible() and plane.isValid():
-            data = self.__view3d.getData(copy=False)
-            if data is not None:
-                normal = plane.getNormal()
-                point = np.array(plane.getPoint(), dtype=np.int)
-
-                labels = self.__view3d.getAxesLabels()
-                scale = self.__view3d.getScale()
-                translation = self.__view3d.getTranslation()
-
-                if np.all(np.equal(normal, (1., 0., 0.))):
-                    index = max(0, min(point[0], data.shape[2] - 1))
-                    slice_ = data[:, :, index]
-                    xlabel, ylabel = labels.getYLabel(), labels.getZLabel()
-                    imageScale = scale[1], scale[2]
-                    imageTranslation = translation[1], translation[2]
-                    title = labels.getXLabel() + ' = %f' % \
-                        (index * scale[0] + translation[0])
-
-                elif np.all(np.equal(normal, (0., 1., 0.))):
-                    index = max(0, min(point[1], data.shape[1] - 1))
-                    slice_ = data[:, index, :]
-                    xlabel, ylabel = labels.getXLabel(), labels.getZLabel()
-                    imageScale = scale[0], scale[2]
-                    imageTranslation = translation[0], translation[2]
-                    title = labels.getYLabel() + ' = %f' % \
-                        (index * scale[1] + translation[1])
-
-                elif np.all(np.equal(normal, (0., 0., 1.))):
-                    index = max(0, min(point[2], data.shape[0] - 1))
-                    slice_ = data[index, :, :]
-                    xlabel, ylabel = labels.getXLabel(), labels.getYLabel()
-                    imageScale = scale[0], scale[1]
-                    imageTranslation = translation[0], translation[1]
-                    title = labels.getZLabel() + ' = %f' % \
-                        (index * scale[2] + translation[2])
-
-            slice_ = np.array(slice_, copy=True)
-            self.__planePlotWindow.setGraphXLabel(xlabel)
-            self.__planePlotWindow.setGraphYLabel(ylabel)
-            self.__planePlotWindow.setGraphTitle(title)
-            self.__planePlotWindow.addImage(
-                slice_,
-                legend='cutting plane',
-                origin=imageTranslation,
-                scale=imageScale,
-                resetzoom=True)
+            planeImage = plane.getImageData()
+            if planeImage.isValid():
+                self.__planePlotWindow.setGraphXLabel(planeImage.getXLabel())
+                self.__planePlotWindow.setGraphYLabel(planeImage.getYLabel())
+                title = (planeImage.getNormalLabel() +
+                         ' = %f' % planeImage.getPosition())
+                self.__planePlotWindow.setGraphTitle(title)
+                self.__planePlotWindow.addImage(
+                    planeImage.getData(copy=False),
+                    legend='cutting plane',
+                    origin=planeImage.getTranslation(),
+                    scale=planeImage.getScale(),
+                    resetzoom=True)

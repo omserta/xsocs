@@ -339,6 +339,8 @@ class QSpaceView(Qt.QMainWindow):
         # Register ROIPlotIntensity
         view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
 
+        # Store the cut plane signals connection state
+        self.__connectedToCutPlane = False
         view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
         view3d.getCutPlanes()[0].sigDataChanged.connect(self.__cutPlaneChanged)
 
@@ -534,12 +536,16 @@ class QSpaceView(Qt.QMainWindow):
     def __planePlotDockVisibilityChanged(self, visible):
         cutPlane = self.__view3d.getCutPlanes()[0]
         if visible:
-            cutPlane.sigPlaneChanged.connect(self.__cutPlaneChanged)
-            cutPlane.sigDataChanged.connect(self.__cutPlaneChanged)
-            self.__cutPlaneChanged()  # To sync
+            if not self.__connectedToCutPlane:  # Prevent multiple connect
+                self.__connectedToCutPlane = True
+                cutPlane.sigPlaneChanged.connect(self.__cutPlaneChanged)
+                cutPlane.sigDataChanged.connect(self.__cutPlaneChanged)
+                self.__cutPlaneChanged()  # To sync
         else:
-            cutPlane.sigPlaneChanged.disconnect(self.__cutPlaneChanged)
-            cutPlane.sigDataChanged.disconnect(self.__cutPlaneChanged)
+            if self.__connectedToCutPlane:  # Prevent multiple disconnect
+                self.__connectedToCutPlane = False
+                cutPlane.sigPlaneChanged.disconnect(self.__cutPlaneChanged)
+                cutPlane.sigDataChanged.disconnect(self.__cutPlaneChanged)
 
     def __cutPlaneChanged(self):
         plane = self.__view3d.getCutPlanes()[0]

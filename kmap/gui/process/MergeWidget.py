@@ -43,11 +43,6 @@ from ..widgets.Containers import GroupBox
 
 from silx.gui import qt as Qt
 
-_MAX_BEAM_ENERGY_EV = 10**7
-
-_MU_LOWER = u'\u03BC'
-_PHI_LOWER = u'\u03C6'
-
 _HELP_WIDGET_STYLE = """
             QLabel {
                 border-radius: 10px;
@@ -509,18 +504,11 @@ class MergeWidget(Qt.QDialog):
         version_cbx.addItem('0')
         version_cbx.addItem('1')
         version_cbx.setCurrentIndex(1)
-        version_help_bn = Qt.QLabel('?')
-        # TODO : use icon instead?
-        version_help_bn.setStyleSheet(_HELP_WIDGET_STYLE)
-        version_help_bn.setToolTip('Todo')
         layout.addWidget(lab,
                          version_row, label_col,
                          Qt.Qt.AlignLeft)
         layout.addWidget(version_cbx,
                          version_row, line_edit_col,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(version_help_bn,
-                         version_row, vers_help_col,
                          Qt.Qt.AlignLeft)
         layout.addItem(Qt.QSpacerItem(0, 0,
                                       Qt.QSizePolicy.Expanding,
@@ -734,7 +722,6 @@ class MergeWidget(Qt.QDialog):
                                   'img_dir_edit',
                                   'img_dir_bn',
                                   'version_cbx',
-                                  'version_help_bn',
                                   'parse_bn',
                                   'total_scans_edit',
                                   'selected_scans_edit',
@@ -757,7 +744,6 @@ class MergeWidget(Qt.QDialog):
                                      img_dir_edit=img_dir_edit,
                                      img_dir_bn=img_dir_bn,
                                      version_cbx=version_cbx,
-                                     version_help_bn=version_help_bn,
                                      parse_bn=parse_bn,
                                      total_scans_edit=total_scans_edit,
                                      selected_scans_edit=selected_scans_edit,
@@ -895,15 +881,6 @@ class MergeWidget(Qt.QDialog):
             chpdeg_h = assert_non_none(acq_params_wid.chperdeg_h)
             chpdeg_v = assert_non_none(acq_params_wid.chperdeg_v)
             merger.chan_per_deg = [chpdeg_h, chpdeg_v]
-
-            name = 'Pixel size'
-            pixelsize_h = assert_non_none(acq_params_wid.pixelsize_h)
-            pixelsize_v = assert_non_none(acq_params_wid.pixelsize_v)
-            merger.pixelsize = [pixelsize_h, pixelsize_v]
-
-            name = 'Detector orientation'
-            detector_orient = assert_non_none(acq_params_wid.detector_orient)
-            merger.detector_orient = detector_orient
 
             name = 'Prefix'
             master = str(widgets.master_edit.text())

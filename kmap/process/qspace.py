@@ -290,8 +290,6 @@ class RecipSpaceConverter(object):
         check_values(params, 'beam_energy', 'Beam energy', errors)
         check_values(params, 'chan_per_deg', 'Chan. per deg.', errors)
         check_values(params, 'center_chan', 'Center channel', errors)
-        check_values(params, 'pixelsize', 'Pixel size', errors)
-        check_values(params, 'detector_orient', 'Detector orientation', errors)
 
         n_images = params[params.keys()[0]]['n_images']
         n_positions = params[params.keys()[0]]['n_positions']
@@ -445,7 +443,7 @@ def _get_all_params(data_h5f):
     Read the whole data and returns the parameters for each entry.
     Returns a dictionary will the scans as keys and the following fields :
     n_images, n_positions, img_size, beam_energy, chan_per_deg,
-    center_chan, pixelsize, det_orient.
+    center_chan
     Each of those fields are N elements arrays, where N is the number of
     scans found in the file.
     """
@@ -454,9 +452,7 @@ def _get_all_params(data_h5f):
     img_sizes = []
     beam_energies = []
     center_chans = []
-    pixel_sizes = []
     chan_per_degs = []
-    det_orients = []
     angles = []
 
     with XsocsH5.XsocsH5(data_h5f, mode='r') as master_h5:
@@ -472,8 +468,6 @@ def _get_all_params(data_h5f):
             beam_energy = master_h5.beam_energy(entry=entry)
             chan_per_deg = master_h5.chan_per_deg(entry=entry)
             center_chan = master_h5.direct_beam(entry=entry)
-            pixel_size = master_h5.pixel_size(entry=entry)
-            det_orient = master_h5.detector_orient(entry=entry)
 
             angle = master_h5.positioner(entry, 'eta')
 
@@ -483,22 +477,17 @@ def _get_all_params(data_h5f):
             beam_energies.append(beam_energy)
             chan_per_degs.append(chan_per_deg)
             center_chans.append(center_chan)
-            pixel_sizes.append(pixel_size)
-            det_orients.append(det_orient)
             angles.append(angle)
 
-    result = {scan: dict(scans=entries[idx],
-                         n_images=n_images[idx],
-                         n_positions=n_positions[idx],
-                         img_size=img_sizes[idx],
-                         beam_energy=beam_energies[idx],
-                         chan_per_deg=chan_per_degs[idx],
-                         center_chan=center_chans[idx],
-                         pixelsize=pixel_sizes[idx],
-                         detector_orient=det_orients[idx],
-                         angle=angles[idx])
-
-              for idx, scan in enumerate(entries)}
+    result = dict([(scan, dict(scans=entries[idx],
+                               n_images=n_images[idx],
+                               n_positions=n_positions[idx],
+                               img_size=img_sizes[idx],
+                               beam_energy=beam_energies[idx],
+                               chan_per_deg=chan_per_degs[idx],
+                               center_chan=center_chans[idx],
+                               angle=angles[idx]))
+                   for idx, scan in enumerate(entries)])
     return result
 
 
@@ -585,8 +574,6 @@ def _img_2_qspace(data_h5f,
                   beam_energy=None,
                   chan_per_deg=None,
                   center_chan=None,
-                  detector_orient=None,
-                  pixelsize=None,  # unused at the moment
                   image_binning=(1, 1),
                   pos_indices=None,
                   roi_shape=(-1, -1),
@@ -598,7 +585,6 @@ def _img_2_qspace(data_h5f,
 
     """
     TODO : put this in _ConvertThread::run
-    TODO : detector_orient is NOT supported YET.
     This function does NOT :
     - check input file consistency
         (see RecipSpaceConverter.check_consistency)
@@ -648,12 +634,6 @@ def _img_2_qspace(data_h5f,
     if beam_energy is None or len(center_chan) != 2:
         raise ValueError('Invalid/missing center_chan value : {0}.'
                          ''.format(center_chan))
-
-    if detector_orient is None:
-        detector_orient = first_param['detector_orient']
-    if detector_orient is None:
-        raise ValueError('Invalid/missing detector_orient value : {0}'
-                         ''.format(detector_orient))
 
     n_images = first_param['n_images']
     if n_images is None or n_images == 0:

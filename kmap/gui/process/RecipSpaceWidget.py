@@ -446,14 +446,9 @@ class RecipSpaceWidget(Qt.QDialog):
             direct_beam_v = widgets.acq_params_rw.direct_beam_v
             chperdeg_h = widgets.acq_params_rw.chperdeg_h
             chperdeg_v = widgets.acq_params_rw.chperdeg_v
-            pixelsize_h = widgets.acq_params_rw.pixelsize_h
-            pixelsize_v = widgets.acq_params_rw.pixelsize_v
-            detector_orient = widgets.acq_params_rw.detector_orient
             kwargs = dict(beam_energy=beam_energy,
                           chan_per_deg=[chperdeg_h, chperdeg_v],
-                          center_chan=[direct_beam_h, direct_beam_v],
-                          detector_orient=detector_orient,
-                          pixelsize=[pixelsize_h, pixelsize_v])
+                          center_chan=[direct_beam_h, direct_beam_v])
         else:
             kwargs = {}
 
@@ -612,17 +607,13 @@ class RecipSpaceWidget(Qt.QDialog):
 
         direct_beam = params['center_chan']
         chperdeg = params['chan_per_deg']
-        pixelsize = params['pixelsize']
 
         for wid in [ro_wid, rw_wid]:
             wid.beam_energy = params['beam_energy']
-            wid.detector_orient = params['detector_orient']
             wid.direct_beam_h = direct_beam[0]
             wid.direct_beam_v = direct_beam[1]
             wid.chperdeg_h = chperdeg[0]
             wid.chperdeg_v = chperdeg[1]
-            wid.pixelsize_h = pixelsize[0]
-            wid.pixelsize_v = pixelsize[1]
 
     def __fillScansInfos(self):
         """

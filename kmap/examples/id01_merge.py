@@ -52,7 +52,7 @@ beam_energy = 8000.
 # of scan numbers (i.e : the #S xxx lines in the scan headers)
 # for example, if we only want scans 48.1, 54.1 and 68.1 we would write :
 # scan_ids = ['48.1', '54.1', '68.1']
-scan_id = None
+scan_ids = None
 
 # this (temporary?) keyword is used to tell the function about the format
 # of the spec file. So far there is only two supported values :
@@ -73,13 +73,6 @@ chan_per_deg = [318., 318.]
 # direct beam position in the detector coordinates
 center_chan = [140, 322]
 
-# the pixel size of the detector
-pixelsize = [-1, -1]
-
-# detector orientation
-# (not used at the moment though, still a work in progres)
-detector_orient = 'phi'
-
 # the merge will actually create one file per scan, then a "master" file
 # (in the output directory) that will contain links to those files. You can
 # give the master file the name you want (if None, a name will be generated
@@ -96,9 +89,7 @@ merge_scan_data(output_dir,
                     spec_f,
                     beam_energy=beam_energy,
                     chan_per_deg=chan_per_deg,
-                    pixelsize=pixelsize,
                     center_chan=center_chan,
-                    detector_orient=detector_orient,
                     scan_ids=scan_ids,
                     master_f=master_f,
                     img_dir=img_base,

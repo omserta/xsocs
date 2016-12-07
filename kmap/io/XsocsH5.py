@@ -115,16 +115,9 @@ class XsocsH5(XsocsH5Base):
         return self.__detector_params(entry, ['center_chan_dim0',
                                               'center_chan_dim1'])
 
-    def pixel_size(self, entry):
-        return self.__detector_params(entry, ['pixelsize_dim0',
-                                              'pixelsize_dim1'])
-
     def chan_per_deg(self, entry):
         return self.__detector_params(entry, ['chan_per_deg_dim0',
                                               'chan_per_deg_dim1'])
-
-    def detector_orient(self, entry):
-        return self.__detector_params(entry, 'detector_orient')
 
     def n_images(self, entry):
         # TODO : make sure that data.ndims = 3
@@ -181,16 +174,12 @@ class XsocsH5(XsocsH5Base):
     def acquisition_params(self, entry):
         beam_energy = self.beam_energy(entry)
         direct_beam = self.direct_beam(entry)
-        pixel_size = self.pixel_size(entry)
         chan_per_deg = self.chan_per_deg(entry)
-        detector_orient = self.detector_orient(entry)
 
         result = OrderedDict()
         result['beam_energy'] = beam_energy
         result['direct_beam'] = direct_beam
-        result['pixel_size'] = pixel_size
         result['chan_per_deg'] = chan_per_deg
-        result['detector_orient'] = detector_orient
 
         return result
 
@@ -204,8 +193,7 @@ class XsocsH5(XsocsH5Base):
             path = self.scan_params_tpl.format(entry) + '/{0}'
             if isinstance(param_names, (list, set, tuple)):
                 return OrderedDict([(param, h5_file.get(path.format(param),
-                                                        _np.array(None))[
-                    ()])
+                                                        _np.array(None))[()])
                                     for param in param_names])
 
     def positioner(self, entry, positioner):
@@ -259,18 +247,9 @@ class XsocsH5Writer(XsocsH5):
                  'center_chan_dim1': direct_beam[1]}
         return self.__set_detector_params(entry, value)
 
-    def set_pixel_size(self, pixel_size, entry):
-        value = {'pixelsize_dim0': pixel_size[0],
-                 'pixelsize_dim1': pixel_size[1]}
-        return self.__set_detector_params(entry, value)
-
     def set_chan_per_deg(self, chan_per_deg, entry):
         value = {'chan_per_deg_dim0': chan_per_deg[0],
                  'chan_per_deg_dim1': chan_per_deg[1]}
-        return self.__set_detector_params(entry, value)
-
-    def set_detector_orient(self, detector_orient, entry):
-        value = {'detector_orient': _np.string_(detector_orient)}
         return self.__set_detector_params(entry, value)
 
     def set_scan_params(self,

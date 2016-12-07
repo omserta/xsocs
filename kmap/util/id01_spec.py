@@ -146,8 +146,6 @@ class Id01DataMerger(object):
         self.__beam_energy = None
         self.__center_chan = None
         self.__chan_per_deg = None
-        self.__pixelsize = None
-        self.__detector_orient = None
 
         self.__set_parse_results(reset=True)
 
@@ -297,9 +295,7 @@ class Id01DataMerger(object):
                                            scans_infos,
                                            self.__beam_energy,
                                            self.__chan_per_deg,
-                                           self.__pixelsize,
                                            self.__center_chan,
-                                           self.__detector_orient,
                                            master_f=master_f,
                                            overwrite=overwrite,
                                            n_proc=self.__n_proc,
@@ -433,10 +429,6 @@ class Id01DataMerger(object):
             errors.append('invalid "Center channel"')
         if self.__chan_per_deg is None:
             errors.append('invalid "Channel per degree"')
-        if self.__pixelsize is None:
-            errors.append('invalid "Pixel size"')
-        if self.__detector_orient is None:
-            errors.append('invalid "Detector orientation"')
         return errors
 
     def get_imagefile_info(self, scan_id, key=None):
@@ -544,14 +536,6 @@ class Id01DataMerger(object):
     def beam_energy(self, beam_energy):
         self.__beam_energy = float(beam_energy)
 
-    pixelsize = property(lambda self: self.__pixelsize)
-
-    @pixelsize.setter
-    def pixelsize(self, pixelsize):
-        if len(pixelsize) != 2:
-            raise ValueError('pixelsize must be a two elements array.')
-        self.__pixelsize = [float(pixelsize[0]), float(pixelsize[1])]
-
     chan_per_deg = property(lambda self: self.__chan_per_deg)
 
     @chan_per_deg.setter
@@ -567,14 +551,6 @@ class Id01DataMerger(object):
         if len(center_chan) != 2:
             raise ValueError('center_chan must be a two elements array.')
         self.__center_chan = [float(center_chan[0]), float(center_chan[1])]
-
-    detector_orient = property(lambda self: self.__detector_orient)
-
-    @detector_orient.setter
-    def detector_orient(self, detector_orient):
-        if not isinstance(detector_orient, str):
-            raise ValueError('detector_orient must be a string.')
-        self.__detector_orient = detector_orient
 
     compression = property(lambda self: self.__compression)
 
@@ -616,9 +592,7 @@ def merge_scan_data(output_dir,
                     spec_fname,
                     beam_energy=None,
                     chan_per_deg=None,
-                    pixelsize=None,
                     center_chan=None,
-                    detector_orient='',
                     scan_ids=None,
                     master_f=None,
                     img_dir=None,
@@ -645,16 +619,12 @@ def merge_scan_data(output_dir,
     :type beam_energy: numeric
 
     :param chan_per_deg: 2 elements array containing the number of channels
-        per degree (as defined by xrayutilitied, used when converting to
+        per degree (v, h) (as defined by xrayutilitied, used when converting to
         reciprocal space coordinates).
     :type chan_per_deg: array_like
 
-    :param pixelsize: 2 elements array containing the pixel size of the,
-        detector, in TBD.
-    :type pixelsize: *optional* array_like
-
-    :param center_chan: 2 elements array containing the coordinates of the
-        direct beam position in the detector coordinates.
+    :param center_chan: 2 elements array containing the coordinates (v, h) of
+        the direct beam position in the detector coordinates.
     :type center_chan: *optional* array_like
 
     :param scan_ids: array of scan numbers to add to the merged file. If
@@ -700,8 +670,6 @@ def merge_scan_data(output_dir,
     id01_merger.beam_energy = beam_energy
     id01_merger.center_chan = center_chan
     id01_merger.chan_per_deg = chan_per_deg
-    id01_merger.pixelsize = pixelsize
-    id01_merger.detector_orient = detector_orient
     id01_merger.n_proc = n_proc
     id01_merger.compression = compression
 
@@ -928,9 +896,7 @@ class _MergeThread(Thread):
                  scans,
                  beam_energy,
                  chan_per_deg,
-                 pixelsize,
                  center_chan,
-                 detector_orient,
                  master_f,
                  overwrite=True,
                  n_proc=None,
@@ -943,9 +909,7 @@ class _MergeThread(Thread):
         self.__output_dir = output_dir
         self.__beam_energy = beam_energy
         self.__chan_per_deg = chan_per_deg
-        self.__pixelsize = pixelsize
         self.__center_chan = center_chan
-        self.__detector_orient = detector_orient
         self.__n_proc = n_proc
         self.__compression = compression
         self.__master_f = master_f
@@ -1006,9 +970,9 @@ class _MergeThread(Thread):
                     self.__spec_h5_fname,
                     self.__output_dir,
                     infos['output'], infos['image'],
-                    self.__beam_energy, self.__chan_per_deg,
-                    self.__pixelsize, self.__center_chan,
-                    self.__detector_orient,
+                    self.__beam_energy,
+                    self.__chan_per_deg,
+                    self.__center_chan,
                     self.__compression, master_f,
                     mode)
             results[scan_id] = pool.apply_async(_add_edf_data,
@@ -1119,9 +1083,7 @@ def _add_edf_data(scan_id,
                   img_f,
                   beam_energy,
                   chan_per_deg,
-                  pixelsize,
                   center_chan,
-                  detector_orient,
                   compression,
                   master_f,
                   mode):
@@ -1138,9 +1100,6 @@ def _add_edf_data(scan_id,
 
     entry = output_f.rpartition('.')[0]
     entry_fn = os.path.join(output_dir, output_f)
-
-    if pixelsize is None:
-        pixelsize = [-1., -1.]
 
     progress = np.frombuffer(g_shared_progress, dtype='int32')  # noqa
     progress[proc_idx] = 0
@@ -1162,11 +1121,6 @@ def _add_edf_data(scan_id,
 
             entry_h5f.set_scan_params(entry, **command_params)
 
-            if pixelsize is not None:
-                entry_h5f.set_pixel_size([float(pixelsize[0]),
-                                            float(pixelsize[1])],
-                                         entry=entry)
-
             if beam_energy is not None:
                 entry_h5f.set_beam_energy(float(beam_energy), entry)
 
@@ -1179,10 +1133,6 @@ def _add_edf_data(scan_id,
                 entry_h5f.set_direct_beam([float(center_chan[0]),
                                            float(center_chan[1])],
                                           entry=entry)
-
-            if detector_orient is not None:
-                entry_h5f.set_detector_orient(detector_orient,
-                                              entry=entry)
 
             progress[proc_idx] = 2
             edf_file = EdfFile.EdfFile(img_f, access='r', fastedf=True)

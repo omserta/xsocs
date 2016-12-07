@@ -23,9 +23,6 @@ class AcqParamsWidget(Qt.QWidget):
         self.__dir_beam_v = None
         self.__chpdeg_h = None
         self.__chpdeg_v = None
-        self.__pixelsize_h = None
-        self.__pixelsize_v = None
-        self.__detector_orient = None
 
         class DblValidator(Qt.QDoubleValidator):
             def validate(self, text, pos):
@@ -114,52 +111,6 @@ class AcqParamsWidget(Qt.QWidget):
         layout.addWidget(h_line, row, 0, 1, 3)
 
         # ===========
-        # pixelsize
-        # ===========
-
-        row += 1
-        h_layout = Qt.QHBoxLayout()
-        layout.addLayout(h_layout, row, 1,
-                         alignment=Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-        pixelsize_h_edit = dblLineEditWidget(6)
-        h_layout.addWidget(Qt.QLabel('v='))
-        h_layout.addWidget(pixelsize_h_edit)
-        pixelsize_v_edit = dblLineEditWidget(6)
-        h_layout.addWidget(Qt.QLabel(' h='))
-        h_layout.addWidget(pixelsize_v_edit)
-        h_layout.addWidget(Qt.QLabel(u'<b>\u03BCm</b>'))
-        layout.addWidget(Qt.QLabel('Pixel size. :'), row, 0)
-
-        # ===
-
-        row += 1
-        h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine)
-        h_line.setFrameShadow(Qt.QFrame.Sunken)
-        layout.addWidget(h_line, row, 0, 1, 3)
-
-        # ===========
-        # detector orientation
-        # ===========
-
-        row += 1
-        layout.addWidget(Qt.QLabel('Det. orientation :'), row, 0)
-        h_layout = Qt.QHBoxLayout()
-        det_phi_rb = None
-        det_mu_rb = None
-        det_orient_edit = None
-        if not read_only:
-            det_phi_rb = Qt.QRadioButton(u'Width is {0}.'.format(_PHI_LOWER))
-            h_layout.addWidget(det_phi_rb)
-            det_mu_rb = Qt.QRadioButton(u'Width is {0}.'.format(_MU_LOWER))
-            h_layout.addWidget(det_mu_rb)
-        else:
-            det_orient_edit = AdjustedLineEdit(5, read_only=True)
-            det_orient_edit.setAlignment(Qt.Qt.AlignCenter)
-            h_layout.addWidget(det_orient_edit, alignment=Qt.Qt.AlignLeft)
-        layout.addLayout(h_layout, row, 1)
-
-        # ===========
         # size constraints
         # ===========
         self.setSizePolicy(Qt.QSizePolicy(Qt.QSizePolicy.Fixed,
@@ -171,11 +122,6 @@ class AcqParamsWidget(Qt.QWidget):
         self.__dir_beam_v_edit = dir_beam_v_edit
         self.__chpdeg_h_edit = chpdeg_h_edit
         self.__chpdeg_v_edit = chpdeg_v_edit
-        self.__pixelsize_h_edit = pixelsize_h_edit
-        self.__pixelsize_v_edit = pixelsize_v_edit
-        self.__det_phi_rb = det_phi_rb
-        self.__det_mu_rb = det_mu_rb
-        self.__det_orient_edit = det_orient_edit
 
     def clear(self):
         self.__beam_nrg_edit.clear()
@@ -183,13 +129,6 @@ class AcqParamsWidget(Qt.QWidget):
         self.__dir_beam_v_edit.clear()
         self.__chpdeg_h_edit.clear()
         self.__chpdeg_v_edit.clear()
-        self.__pixelsize_h_edit.clear()
-        self.__pixelsize_v_edit.clear()
-        if self.__read_only:
-            self.__det_orient_edit.clear()
-        else:
-            self.__det_phi_rb.setChecked(False)
-            self.__det_mu_rb.setChecked(False)
 
     @property
     def beam_energy(self):
@@ -250,59 +189,6 @@ class AcqParamsWidget(Qt.QWidget):
     def chperdeg_v(self, chperdeg_v):
         self.__chpdeg_v_edit.setText(str(chperdeg_v))
         self.__chpdeg_v = chperdeg_v
-
-    @property
-    def pixelsize_h(self):
-        text = self.__pixelsize_h_edit.text()
-        if len(text) == 0:
-            return None
-        return float(text)
-
-    @pixelsize_h.setter
-    def pixelsize_h(self, pixelsize_h):
-        self.__pixelsize_h_edit.setText(str(pixelsize_h))
-        self.__pixelsize_h = pixelsize_h
-
-    @property
-    def pixelsize_v(self):
-        text = self.__pixelsize_v_edit.text()
-        if len(text) == 0:
-            return None
-        return float(text)
-
-    @pixelsize_v.setter
-    def pixelsize_v(self, pixelsize_v):
-        self.__pixelsize_v_edit.setText(str(pixelsize_v))
-        self.__pixelsize_v = pixelsize_v
-
-    @property
-    def detector_orient(self):
-        if self.__read_only:
-            return self.__det_orient_edit.text()
-        elif self.__det_phi_rb.isChecked():
-            return 'phi'
-        elif self.__det_mu_rb.isChecked():
-            return 'mu'
-        return None
-
-    @detector_orient.setter
-    def detector_orient(self, detector_orient):
-        if detector_orient not in ('phi', 'mu', None):
-            raise ValueError('Unknown detector orientation : {0}.'
-                             ''.format(detector_orient))
-        if self.__read_only:
-            self.__det_orient_edit.setText(detector_orient or '')
-        elif detector_orient == 'phi':
-            self.__det_phi_rb.setChecked(True)
-        elif detector_orient == 'mu':
-            self.__det_mu_rb.setChecked(True)
-        else:
-            self.__det_phi_rb.setChecked(False)
-            self.__det_mu_rb.setChecked(False)
-            return
-            # raise ValueError('Unknown detector orientation : {0}.'
-            #                  ''.format(detector_orient))
-        self.__detector_orient = detector_orient
 
 
 class AdjustedPushButton(Qt.QPushButton):
@@ -385,8 +271,6 @@ class AdjustedLineEdit(Qt.QLineEdit):
         else:
             pass
 
-        same_txt = False
-
         if len(value) == 0:
             if len(self.__defaultText) == 0:
                 same_txt = True
@@ -401,9 +285,10 @@ class AdjustedLineEdit(Qt.QLineEdit):
                     default_value = self.__fieldType(self.__defaultText)
                 except:
                     # TODO : filter specific exception
-                    same_txt = False
+                    default_value = None
             else:
                 default_value = self.__defaultText
+
             if value == default_value:
                 same_txt = True
             else:

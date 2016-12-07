@@ -89,6 +89,7 @@ class Node(object):
     groupClasses = []
     deletable = False
     dragEnabledColumns = [None, None]
+    columnCount = ModelColumns.ColumnMax
 
     # TODO : count visible references to unload data that isn't
     # displayed anymore
@@ -119,8 +120,6 @@ class Node(object):
         self.__started = False
         self.__connected = False
         self.__model = None
-
-        self.__data = []
 
         self.__loaded = False
 
@@ -181,6 +180,7 @@ class Node(object):
         if self.editableColumns is None:
             self.editableColumns = False
 
+        self.__data = []
         self._setModel(model)
 
         self.nodeName = nodeName
@@ -193,9 +193,9 @@ class Node(object):
     def _setModel(self, model):
         if model:
             self.__model = weakref.ref(model)
-            columnCount = model.columnCount()
+            columnCount = max(model.columnCount(), self.columnCount)
         else:
-            columnCount = ModelColumns.ColumnMax
+            columnCount = self.columnCount
             self.__model = None
 
         currentCount = len(self.__data)

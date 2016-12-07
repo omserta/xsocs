@@ -192,7 +192,6 @@ class ProgressSubject(Qt.QObject):
 
 
 class ProgressGroup(Node):
-    nodeName = 'Intensity'
     editors = [ProgressBarEditor]
 
     def subjectSignals(self, column):

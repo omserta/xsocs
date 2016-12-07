@@ -34,7 +34,7 @@ from matplotlib import cm
 
 
 from silx.gui import qt as Qt
-from silx.gui.plot import PlotActions, PlotToolButtons, PlotWidget, PlotWindow
+from silx.gui.plot import PlotActions, PlotToolButtons, PlotWidget
 from silx.gui.icons import getQIcon
 from plot3d.ScalarFieldView import ScalarFieldView
 from plot3d.SFViewParamTree import TreeView as SFViewParamTree
@@ -43,7 +43,9 @@ from ..model.TreeView import TreeView
 from ..widgets.Containers import GroupBox
 from ..widgets.RangeSlider import RangeSlider
 from ..widgets.Input import StyledLineEdit
+from ..widgets.XsocsPlot2D import XsocsPlot2D
 from ..project.XsocsH5Factory import h5NodeToProjectItem
+from ...gui.icons import getQIcon as getKmapIcon
 
 
 class QSpaceTree(TreeView):
@@ -79,7 +81,7 @@ class RoiAxisWidget(Qt.QWidget):
         self.__rightEdit.setText('{0:6g}'.format(event.right))
 
 
-class PlotIntensityMap(PlotWindow):
+class PlotIntensityMap(XsocsPlot2D):
     """Plot intensities as a scatter plot
 
     :param parent: QWidget's parent
@@ -97,8 +99,8 @@ class PlotIntensityMap(PlotWindow):
             roi=False, mask=False, fit=False)
         self.setMinimumSize(150, 150)
 
-        self.setKeepDataAspectRatio(True)
-        self.setActiveCurveHandling(False)
+        # self.setKeepDataAspectRatio(True)
+        # self.setActiveCurveHandling(False)
         self.setDataMargins(0.2, 0.2, 0.2, 0.2)
 
     def setSelectedPosition(self, x, y):
@@ -113,24 +115,24 @@ class PlotIntensityMap(PlotWindow):
     def sizeHint(self):
         return Qt.QSize(200, 200)
 
-    def setPlotData(self, x, y, data):
-        """Set the scatter plot.
-
-        This is removing previous scatter plot
-
-        :param numpy.ndarray x: X coordinates of the points
-        :param numpy.ndarray y: Y coordinates of the points
-        :param numpy.ndarray data: Values associated to points
-        """
-        min_, max_ = data.min(), data.max()
-        colormap = cm.jet
-        colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
-        self.addCurve(x, y,
-                      legend='intensities',
-                      color=colors,
-                      symbol='s',
-                      linestyle='',
-                      resetzoom=False)
+    # def setPlotData(self, x, y, data):
+    #     """Set the scatter plot.
+    #
+    #     This is removing previous scatter plot
+    #
+    #     :param numpy.ndarray x: X coordinates of the points
+    #     :param numpy.ndarray y: Y coordinates of the points
+    #     :param numpy.ndarray data: Values associated to points
+    #     """
+    #     min_, max_ = data.min(), data.max()
+    #     colormap = cm.jet
+    #     colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
+    #     self.addCurve(x, y,
+    #                   legend='intensities',
+    #                   color=colors,
+    #                   symbol='s',
+    #                   linestyle='',
+    #                   resetzoom=False)
 
 
 class ROIPlotIntensityMap(PlotIntensityMap):

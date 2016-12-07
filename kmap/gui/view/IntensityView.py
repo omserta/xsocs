@@ -30,15 +30,15 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 import numpy as np
-from matplotlib import cm
 
 from silx.gui import qt as Qt
 from silx.gui.plot import PlotWindow
+
+from matplotlib import cm
+
 from ..model.TreeView import TreeView
-from ..model.Model import Model
 from ..model.ModelDef import ModelColumns, ModelRoles
 from ..project.XsocsH5Factory import h5NodeToProjectItem
-from ..project.XsocsH5Factory import XsocsH5Factory
 
 try:
     from silx.gui.plot.ImageRois import ImageRoiManager

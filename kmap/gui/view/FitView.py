@@ -31,16 +31,18 @@ __date__ = "15/09/2016"
 
 
 import numpy as np
-from matplotlib import cm
 
 from silx.gui import qt as Qt
+from silx.gui.plot import PlotWindow, PlotWidget
+
+from matplotlib import cm
+
 from kmap.gui.model.Model import Model, RootNode
 from kmap.gui.project.Hdf5Nodes import H5File
 from kmap.gui.model.ModelDef import ModelRoles, ModelColumns
 from kmap.gui.project.XsocsH5Factory import h5NodeToProjectItem
 from kmap.gui.widgets.Containers import GroupBox
 
-from silx.gui.plot import PlotWindow, PlotWidget
 from kmap.io.FitH5 import FitH5
 
 from kmap.gui.model.TreeView import TreeView

@@ -30,11 +30,6 @@ import os
 from silx.gui import qt as Qt
 
 from .widgets.Wizard import XsocsWizard
-from .Widgets import (AcqParamsWidget,
-                      AdjustedLineEdit)
-# from .Utils import (viewWidgetFromProjectEvent,
-#                     processWidgetFromViewEvent,
-#                     processDoneEvent)
 from .process.RecipSpaceWidget import RecipSpaceWidget
 from .process.FitWidget import FitWidget
 from .view.IntensityView import IntensityView

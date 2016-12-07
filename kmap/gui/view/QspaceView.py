@@ -186,26 +186,36 @@ class ROIPlotIntensityMap(PlotIntensityMap):
             dialog.setWindowTitle('ROI Intensity Map')
             layout = Qt.QVBoxLayout(dialog)
             progress = Qt.QProgressBar()
-            with self.__qspaceH5 as qspaceH5:
-                progress.setRange(0, qspaceH5.qspace_sum.size - 1)
             layout.addWidget(progress)
 
-            self.__aborted = False
             btnBox = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Abort)
-            btnBox.rejected.connect(self.__abortComputeIntensities)
+            btnBox.rejected.connect(dialog.reject)
             layout.addWidget(btnBox)
 
-            timer = Qt.QTimer(self)
-            timer.timeout.connect(self.__stepComputeIntensities)
-            timer.intensities = []
-            timer.progressBar = progress
-            timer.dialog = dialog
-            timer.start()
+            dialog.setModal(True)
+            dialog.show()
 
-            if dialog.exec_() == Qt.QDialog.Rejected:
+            qapp = Qt.QApplication.instance()
+            with self.__qspaceH5 as qspaceH5:
+                intensities = np.zeros((qspaceH5.qspace_sum.size,), dtype=np.float64)
+                progress.setRange(0, qspaceH5.qspace_sum.size - 1)
+
+                zslice, yslice, xslice = self.__roiSlices
+
+                for index in range(qspaceH5.qspace_sum.size):
+                    qspace = qspaceH5.qspace_slice(index)
+                    intensities[index] = np.sum(qspace[xslice, yslice, zslice])
+                    progress.setValue(index)
+                    qapp.processEvents()
+                    if not dialog.isVisible():
+                        break  # It has been rejected by the abort button
+                else:
+                    dialog.accept()
+
+            if dialog.result() == Qt.QDialog.Rejected:
                 return  # Aborted, stop here
 
-            intensities = np.array(timer.intensities, copy=True)
+            intensities = np.array(intensities, copy=True)
 
         # Reset plot
         self.__updateButton.setEnabled(False)
@@ -222,33 +232,6 @@ class ROIPlotIntensityMap(PlotIntensityMap):
         else:
             self.setToolTip(
                 self._ROI_TOOLTIP % tuple(self.__roiQRange.ravel()))
-
-    def __abortComputeIntensities(self):
-        """Abort computation of ROI intensities
-        """
-        self.__aborted = True
-
-    def __stepComputeIntensities(self):
-        """Step in ROI Intensity map computation
-
-        This is intended to be called by a timer in __updateClicked
-        """
-        if self.__aborted:
-            self.sender().stop()  # Stop timer
-            self.sender().dialog.reject()  # Abort dialog
-            return
-
-        intensities = self.sender().intensities
-
-        with self.__qspaceH5 as qspaceH5:
-            if len(intensities) >= qspaceH5.qspace_sum.size:
-                self.sender().stop()  # Stop timer
-                self.sender().dialog.accept()  # Closes dialog
-            else:
-                qspace = qspaceH5.qspace_slice(len(intensities))
-                zslice, yslice, xslice = self.__roiSlices
-                intensities.append(np.sum(qspace[xslice, yslice, zslice]))
-                self.sender().progressBar.setValue(len(intensities))
 
 
 class CutPlanePlotWindow(PlotWidget):

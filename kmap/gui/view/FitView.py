@@ -45,6 +45,7 @@ from kmap.gui.widgets.Containers import GroupBox
 
 from kmap.io.FitH5 import FitH5
 
+from ..widgets.XsocsPlot2D import XsocsPlot2D
 from kmap.gui.model.TreeView import TreeView
 from kmap.gui.model.NodeEditor import EditorMixin
 from kmap.gui.project.Hdf5Nodes import H5Base, H5NodeClassDef
@@ -283,7 +284,7 @@ class FitModel(Model):
         return mimeData
 
 
-class DropPlotWidget(PlotWindow):
+class DropPlotWidget(XsocsPlot2D):
     sigSelected = Qt.Signal(object)
 
     def __init__(self, *args, **kwargs):
@@ -342,16 +343,17 @@ class DropPlotWidget(PlotWindow):
             data = getMeth(entry, process, result)
             scan_x = h5f.scan_x(entry)
             scan_y = h5f.scan_y(entry)
-            data = np.log(data)
-        min_, max_ = data.min(), data.max()
-        colormap = cm.jet
-        colors = colormap(
-            (data.astype(np.float64) - min_) / (max_ - min_))
-        self.__legend = self.addCurve(scan_x,
-                                      scan_y,
-                                      color=colors,
-                                      symbol='s',
-                                      linestyle='')
+            # data = np.log(data)
+        # min_, max_ = data.min(), data.max()
+        # colormap = cm.jet
+        # colors = colormap(
+        #     (data.astype(np.float64) - min_) / (max_ - min_))
+        self.__legend = self.setPlotData(scan_x, scan_y, data)
+            # self.addCurve(scan_x,
+            #                           scan_y,
+            #                           color=colors,
+            #                           symbol='s',
+            #                           linestyle='')
         self.setGraphTitle(result + '/' + q_axis)
 
 

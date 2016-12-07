@@ -45,7 +45,6 @@ from ..widgets.RangeSlider import RangeSlider
 from ..widgets.Input import StyledLineEdit
 from ..widgets.XsocsPlot2D import XsocsPlot2D
 from ..project.XsocsH5Factory import h5NodeToProjectItem
-from ...gui.icons import getQIcon as getKmapIcon
 
 
 class QSpaceTree(TreeView):

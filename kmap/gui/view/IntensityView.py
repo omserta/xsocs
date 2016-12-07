@@ -39,6 +39,7 @@ from matplotlib import cm
 from ..model.TreeView import TreeView
 from ..model.ModelDef import ModelColumns, ModelRoles
 from ..project.XsocsH5Factory import h5NodeToProjectItem
+from ..widgets.XsocsPlot2D import XsocsPlot2D
 
 try:
     from silx.gui.plot.ImageRois import ImageRoiManager
@@ -183,13 +184,15 @@ class IntensityView(Qt.QMainWindow):
                  **kwargs):
         super(IntensityView, self).__init__(parent=parent)
 
-        self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True,
-                                                    curveStyle=False,
-                                                    mask=False,
-                                                    roi=False,
-                                                    **kwargs)
-        plotWindow.setKeepDataAspectRatio(True)
-        plotWindow.setActiveCurveHandling(False)
+        # self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True,
+        #                                             curveStyle=False,
+        #                                             mask=False,
+        #                                             roi=False,
+        #                                             **kwargs)
+        # plotWindow.setKeepDataAspectRatio(True)
+        # plotWindow.setActiveCurveHandling(False)
+
+        self.__plotWindow = plotWindow = XsocsPlot2D()
 
         dock = Qt.QDockWidget(self)
         tree = IntensityTree(self, model=model)
@@ -221,32 +224,33 @@ class IntensityView(Qt.QMainWindow):
 
     def setPlotData(self, x, y, data):
         plot = self.__plotWindow
-        if data.ndim == 1:
-            # scatter
-            min_, max_ = data.min(), data.max()
-            colormap = cm.jet
-            colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
-            plot.addCurve(x, y,
-                          color=colors,
-                          symbol='s',
-                          linestyle='')
-        elif data.ndim == 2:
-            # image
-            min_, max_ = data.min(), data.max()
-            colormap = {'name': 'temperature',
-                        'normalization': 'linear',
-                        'autoscale': True,
-                        'vmin': min_,
-                        'vmax': max_}
-            origin = x[0], y[0]
-            scale = (x[-1] - x[0]) / len(x), (y[-1] - y[0]) / len(y)
-            plot.addImage(data,
-                          origin=origin,
-                          scale=scale,
-                          colormap=colormap)
-        else:
-            raise ValueError('data has {0} dimensions, expected 1 or 2.'
-                             ''.format(data.ndim))
+        plot.setPlotData(x, y, data)
+        # if data.ndim == 1:
+        #     # scatter
+        #     min_, max_ = data.min(), data.max()
+        #     colormap = cm.jet
+        #     colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
+        #     plot.addCurve(x, y,
+        #                   color=colors,
+        #                   symbol='s',
+        #                   linestyle='')
+        # elif data.ndim == 2:
+        #     # image
+        #     min_, max_ = data.min(), data.max()
+        #     colormap = {'name': 'temperature',
+        #                 'normalization': 'linear',
+        #                 'autoscale': True,
+        #                 'vmin': min_,
+        #                 'vmax': max_}
+        #     origin = x[0], y[0]
+        #     scale = (x[-1] - x[0]) / len(x), (y[-1] - y[0]) / len(y)
+        #     plot.addImage(data,
+        #                   origin=origin,
+        #                   scale=scale,
+        #                   colormap=colormap)
+        # else:
+        #     raise ValueError('data has {0} dimensions, expected 1 or 2.'
+        #                      ''.format(data.ndim))
 
     def __roiApplied(self, roi):
         self.sigProcessApplied.emit(roi)

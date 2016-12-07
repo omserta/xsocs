@@ -168,7 +168,8 @@ class SelectDataPage(Qt.QWizardPage):
         if source == 'XSOCS':
             self.__nextId = XsocsWizard.LoadXsocsId
         if source == 'SPEC':
-            mergeWid = MergeWidget(parent=self)
+            outputDir = os.path.dirname(self.wizard().projectFile)
+            mergeWid = MergeWidget(parent=self, output_dir=outputDir)
             if mergeWid.exec_() == Qt.QDialog.Accepted:
                 xsocsH5 = mergeWid.xsocsH5
                 mergeWid.deleteLater()

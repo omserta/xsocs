@@ -256,11 +256,11 @@ class FitModel(Model):
             return super(Model, self).mimeData(indexes)
 
         if index.column() == 1:
-            q_axis = 'qx'
+            q_axis = FitH5.qx_axis
         elif index.column() == 2:
-            q_axis = 'qy'
+            q_axis = FitH5.qy_axis
         elif index.column() == 3:
-            q_axis = 'qz'
+            q_axis = FitH5.qz_axis
         else:
             raise ValueError('Unexpected column.')
 
@@ -275,7 +275,7 @@ class FitModel(Model):
         stream.writeString(entry)
         stream.writeString(process)
         stream.writeString(result)
-        stream.writeString(q_axis)
+        stream.writeInt(q_axis)
 
         mimeData = Qt.QMimeData()
         mimeData.setData('application/FitModel', data)
@@ -315,8 +315,8 @@ class DropPlotWidget(XsocsPlot2D):
         entry = stream.readString()
         process = stream.readString()
         result = stream.readString()
-        q_axis = stream.readString()
-        self.__plot(h5File, entry, process, result, q_axis)
+        q_axis = stream.readInt()
+        self.plotFitResult(h5File, entry, process, result, q_axis)
 
     def dragEnterEvent(self, event):
         # super(DropWidget, self).dragEnterEvent(event)
@@ -329,31 +329,14 @@ class DropPlotWidget(XsocsPlot2D):
     def dragMoveEvent(self, event):
         super(DropPlotWidget, self).dragMoveEvent(event)
 
-    def __plot(self, fitH5, entry, process, result, q_axis):
-        with FitH5(fitH5) as h5f:
-            if q_axis == 'qx':
-                getMeth = h5f.get_qx_result
-            elif q_axis == 'qy':
-                getMeth = h5f.get_qy_result
-            elif q_axis == 'qz':
-                getMeth = h5f.get_qz_result
-            else:
-                raise ValueError('Unknown axis.')
-            data = getMeth(entry, process, result)
+    def plotFitResult(self, fitH5Name, entry, process, result, q_axis):
+        with FitH5(fitH5Name) as h5f:
+            data = h5f.get_axis_result(entry, process, result, q_axis)
             scan_x = h5f.scan_x(entry)
             scan_y = h5f.scan_y(entry)
-            # data = np.log(data)
-        # min_, max_ = data.min(), data.max()
-        # colormap = cm.jet
-        # colors = colormap(
-        #     (data.astype(np.float64) - min_) / (max_ - min_))
+
         self.__legend = self.setPlotData(scan_x, scan_y, data)
-            # self.addCurve(scan_x,
-            #                           scan_y,
-            #                           color=colors,
-            #                           symbol='s',
-            #                           linestyle='')
-        self.setGraphTitle(result + '/' + q_axis)
+        self.setGraphTitle(result + '/' + FitH5.axis_names[q_axis])
 
 
 class FitView(Qt.QMainWindow):
@@ -482,6 +465,27 @@ class FitView(Qt.QMainWindow):
 
         self.setCentralWidget(centralWid)
 
+        self.__initPlots()
+
+    def __initPlots(self):
+
+        fitH5 = self.__fitH5
+
+        entry = None
+        process = None
+        with fitH5:
+            entries = fitH5.entries()
+            if entries:
+                entry = entries[0]
+                processes = fitH5.processes(entry)
+                if processes:
+                    process = processes[0]
+
+        if process == 'LeastSq':
+            _initLeastSq(self.__plots, fitH5.filename, entry, process)
+        elif process == 'Centroid':
+            _initCentroid(self.__plots, fitH5.filename, entry, process)
+
     def __plotSignal(self, point):
         x, y = point
         self.__plotFitResults(x, y)
@@ -540,7 +544,6 @@ class FitView(Qt.QMainWindow):
                 raise ValueError('Unknown process {0}.'.format(process))
 
         self.__setSelectedPosition(x, y)
-
 
     def __setSelectedPosition(self, x, y):
         """Set the selected position.
@@ -628,7 +631,6 @@ def _plotCentroid(plots, index, fitH5,
     # TODO : put all this in a toolbox, so it can be shared between
     # the plot and the fit functions
 
-    # heights = fitH5.get_result(entry, process, 'height')
     positions = fitH5.get_result(entry, process, 'position')
 
     plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
@@ -642,6 +644,38 @@ def _plotCentroid(plots, index, fitH5,
     plots[2].addCurve(xAcqQZ, yAcqQZ, legend='measured')
     plots[2].addXMarker(positions.qz[index], legend='center of mass')
     plots[2].setGraphTitle('QZ center of mass')
+
+
+def _initLeastSq(plots, fitH5Name, entry, process):
+    """
+
+    :param plots:
+    :param fitH5Name:
+    :param entry:
+    :param process:
+    :return:
+    """
+    # hard coded result name, this isn't satisfactory but I can't think
+    # of any other way right now.
+    plots[0].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qx_axis)
+    plots[1].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qy_axis)
+    plots[2].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qz_axis)
+
+
+def _initCentroid(plots, fitH5Name, entry, process):
+    """
+
+    :param plots:
+    :param fitH5Name:
+    :param entry:
+    :param process:
+    :return:
+    """
+    # hard coded result name, this isn't satisfactory but I can't think
+    # of any other way right now.
+    plots[0].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qx_axis)
+    plots[1].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qy_axis)
+    plots[2].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qz_axis)
 
 
 if __name__ == '__main__':

@@ -90,6 +90,48 @@ class XsocsPlot2D(PlotWindow):
         self.copyAction.setIconVisibleInMenu(True)
         menu.addAction(self.copyAction)
 
+        # grid action
+        self.gridAction.setIconVisibleInMenu(True)
+        menu.addAction(self.gridAction)
+
+        # crosshair action
+        self.crosshairAction.setIconVisibleInMenu(True)
+        menu.addAction(self.crosshairAction)
+
+        # pan action
+        self.panWithArrowKeysAction.setIconVisibleInMenu(True)
+        menu.addAction(self.panWithArrowKeysAction)
+
+        # # x log scale
+        # self.xAxisLogarithmicAction.setIconVisibleInMenu(True)
+        # menu.addAction(self.xAxisLogarithmicAction)
+        #
+        # # y log scale
+        # self.yAxisLogarithmicAction.setIconVisibleInMenu(True)
+        # menu.addAction(self.yAxisLogarithmicAction)
+
+        # x autoscale action
+        self.xAxisAutoScaleAction.setIconVisibleInMenu(True)
+        menu.addAction(self.xAxisAutoScaleAction)
+
+        # y autoscale action
+        self.yAxisAutoScaleAction.setIconVisibleInMenu(True)
+        menu.addAction(self.yAxisAutoScaleAction)
+
+        # curvestyle action
+        self.curveStyleAction.setIconVisibleInMenu(True)
+        menu.addAction(self.curveStyleAction)
+
+        # aspect ratio action
+        aspectMenu = self.keepDataAspectRatioButton.menu()
+        if aspectMenu is not None:
+            action = aspectMenu.menuAction()
+            action.setIconVisibleInMenu(True)
+            menu.addAction(action)
+        else:
+            self.keepDataAspectRatioAction.setIconVisibleInMenu(True)
+            menu.addAction(self.keepDataAspectRatioAction)
+
         options.setMenu(menu)
 
         rstZoomAction = self.resetZoomAction
@@ -117,7 +159,6 @@ class XsocsPlot2D(PlotWindow):
             colormap = cm.jet
             colors = colormap(
                 (values.astype(np.float64) - min_) / (max_ - min_))
-            # [x, y, legend, info, parameters]
             self.addCurve(info[0], info[1], color=colors, legend=curve,
                           resetzoom=False)
 

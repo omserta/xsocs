@@ -200,7 +200,6 @@ class FitThumbnailNode(FitResultNode):
                 data = fitH5.get_qz_result(self.entry,
                                            self.process,
                                            self.result)
-        data = np.log(data)
         min_, max_ = data.min(), data.max()
         colormap = cm.jet
         colors = colormap(

@@ -41,7 +41,7 @@ FitResult = namedtuple('FitResult', ['name', 'qx', 'qy', 'qz'])
 class FitH5(XsocsH5Base):
     _axis_values = range(3)
     qx_axis, qy_axis, qz_axis = _axis_values
-    _axis_names = ('qx', 'qy', 'qz')
+    axis_names = ('qx', 'qy', 'qz')
 
     title_path = '{entry}/title'
     start_time_path = '{entry}/start_time'
@@ -107,7 +107,7 @@ class FitH5(XsocsH5Base):
         return self.__get_axis_values(entry, FitH5.qz_axis)
 
     def __get_axis_values(self, entry, axis):
-        axis_name = FitH5._axis_names[axis]
+        axis_name = FitH5.axis_names[axis]
         return self._get_array_data(FitH5.qspace_axis_path.format(
             entry=entry, axis=axis_name))
 
@@ -117,9 +117,9 @@ class FitH5(XsocsH5Base):
                                                result=result)
         return self._get_array_data(result_path)
 
-    def __get_axis_result(self, entry, process, name, q_axis):
+    def get_axis_result(self, entry, process, name, q_axis):
         assert q_axis in FitH5._axis_values
-        axis_name = self._axis_names[q_axis]
+        axis_name = self.axis_names[q_axis]
         result_path = FitH5.result_path.format(entry=entry,
                                                process=process,
                                                result=name,
@@ -127,20 +127,20 @@ class FitH5(XsocsH5Base):
         return self._get_array_data(result_path)
 
     def get_qx_result(self, entry, process, result):
-        return self.__get_axis_result(entry, process, result, FitH5.qx_axis)
+        return self.get_axis_result(entry, process, result, FitH5.qx_axis)
 
     def get_qy_result(self, entry, process, result):
-        return self.__get_axis_result(entry, process, result, FitH5.qy_axis)
+        return self.get_axis_result(entry, process, result, FitH5.qy_axis)
 
     def get_qz_result(self, entry, process, result):
-        return self.__get_axis_result(entry, process, result, FitH5.qz_axis)
+        return self.get_axis_result(entry, process, result, FitH5.qz_axis)
 
     def get_result(self, entry, process, result):
         with self:
             results = {}
             for axis in FitH5._axis_values:
-                results[FitH5._axis_names[axis]] = \
-                    self.__get_axis_result(entry, process, result, axis)
+                results[FitH5.axis_names[axis]] = \
+                    self.get_axis_result(entry, process, result, axis)
             return FitResult(name=result, **results)
 
     def export_txt(self, filename):
@@ -240,7 +240,7 @@ class FitH5Writer(FitH5):
 
     def __set_axis_result(self, entry, process, name, q_axis, data):
         assert q_axis in FitH5._axis_values
-        axis_name = self._axis_names[q_axis]
+        axis_name = self.axis_names[q_axis]
         result_path = FitH5.result_path.format(entry=entry,
                                                process=process,
                                                result=name,
@@ -257,7 +257,7 @@ class FitH5Writer(FitH5):
         self.__set_axis_result(entry, process, name, FitH5.qz_axis, data)
 
     def __set_axis_values(self, entry, axis, values):
-        axis_name = FitH5._axis_names[axis]
+        axis_name = FitH5.axis_names[axis]
         self._set_array_data(FitH5.qspace_axis_path.format(entry=entry,
                                                            axis=axis_name),
                              values)

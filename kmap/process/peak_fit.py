@@ -260,20 +260,26 @@ def peak_fit(qspace_f,
         q_y = q_y[ySlice]
         q_z = q_z[zSlice]
 
+    # TODO : REFACTOR/IMPROVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     if fit_type == FitTypes.LEASTSQ:
         fit_name = 'LeastSq'
+        q_x_results = {'height': results_np[:, 0].ravel(),
+                       'position': results_np[:, 1].ravel(),
+                       'width': results_np[:, 2].ravel()}
+        q_y_results = {'height': results_np[:, 3].ravel(),
+                       'position': results_np[:, 4].ravel(),
+                       'width': results_np[:, 5].ravel()}
+        q_z_results = {'height': results_np[:, 6].ravel(),
+                       'position': results_np[:, 7].ravel(),
+                       'width': results_np[:, 8].ravel()}
     else:
         fit_name = 'Centroid'
-
-    q_x_results = {'height':results_np[:, 0].ravel(),
-                   'position': results_np[:, 1].ravel(),
-                   'width': results_np[:, 2].ravel()}
-    q_y_results = {'height': results_np[:, 3].ravel(),
-                   'position': results_np[:, 4].ravel(),
-                   'width': results_np[:, 5].ravel()}
-    q_z_results = {'height': results_np[:, 6].ravel(),
-                   'position': results_np[:, 7].ravel(),
-                   'width': results_np[:, 8].ravel()}
+        q_x_results = {'height': results_np[:, 0].ravel(),
+                       'position': results_np[:, 1].ravel()}
+        q_y_results = {'height': results_np[:, 3].ravel(),
+                       'position': results_np[:, 4].ravel()}
+        q_z_results = {'height': results_np[:, 6].ravel(),
+                       'position': results_np[:, 7].ravel()}
 
     fit_results = FitResult(sample_x=x_pos,
                             sample_y=y_pos,

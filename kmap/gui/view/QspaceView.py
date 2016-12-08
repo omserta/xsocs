@@ -327,7 +327,7 @@ class QSpaceView(Qt.QMainWindow):
         view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
 
         # Store the cut plane signals connection state
-        self.__connectedToCutPlane = False
+        self.__connectedToCutPlane = True
         view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
         view3d.getCutPlanes()[0].sigDataChanged.connect(self.__cutPlaneChanged)
 
@@ -454,9 +454,9 @@ class QSpaceView(Qt.QMainWindow):
             qxMin, qxMax = min(self.__qx), max(self.__qx)
             qyMin, qyMax = min(self.__qy), max(self.__qy)
             qzMin, qzMax = min(self.__qz), max(self.__qz)
-            isoView.setScale((qxMax - qxMin) / qxLen,
-                             (qyMax - qyMin) / qyLen,
-                             (qzMax - qzMin) / qzLen)
+            isoView.setScale((qxMax - qxMin) / (qxLen - 1),
+                             (qyMax - qyMin) / (qyLen - 1),
+                             (qzMax - qzMin) / (qzLen - 1))
             isoView.setTranslation(qxMin, qyMin, qzMin)
 
             isoView.setData(qspace.swapaxes(0, 2))

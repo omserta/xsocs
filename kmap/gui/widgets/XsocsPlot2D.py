@@ -70,11 +70,13 @@ class XsocsPlot2D(PlotWindow):
         menu = Qt.QMenu()
 
         # apply log values
-        self.__logAction = logAction = menu.addAction('Log')
+        # self.__logAction = logAction = menu.addAction('Log')
+        self.__logAction = logAction = Qt.QAction('Log', self)
         logAction.setIconVisibleInMenu(True)
         logAction.setDisabled(True)
         logAction.setCheckable(True)
         logAction.triggered.connect(self.__logActionTriggered)
+        # menu.addAction(logAction)
 
         # save to file action
         self.saveAction.setIconVisibleInMenu(True)

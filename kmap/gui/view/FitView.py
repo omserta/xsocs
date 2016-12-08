@@ -488,6 +488,8 @@ class FitView(Qt.QMainWindow):
         self.__plotFitResults(x, y)
 
     def __plotFitResults(self, x, y):
+        # TODO : the values could/should be loaded when the widget is shown for the
+        # first time
         with self.__fitH5 as fitH5:
             sampleX = fitH5.scan_x(self.__entry)
             sampleY = fitH5.scan_y(self.__entry)
@@ -506,66 +508,40 @@ class FitView(Qt.QMainWindow):
                 mask = np.where(histo > 0)
                 weights = histo[mask]
                 cube[mask] /= weights
-                qx_cube = qspaceH5.qx
-                qy_cube = qspaceH5.qy
-                qz_cube = qspaceH5.qz
-            z_sum = cube.sum(axis=0).sum(axis=0)
-            cube_sum_z = cube.sum(axis=2)
-            y_sum = cube_sum_z.sum(axis=0)
-            x_sum = cube_sum_z.sum(axis=1)
+                xAcqQX = qspaceH5.qx
+                xAcqQY = qspaceH5.qy
+                xAcqQZ = qspaceH5.qz
 
-            xData = fitH5.get_qx(entry)
-            yData = fitH5.get_qy(entry)
-            zData = fitH5.get_qz(entry)
+            yAcqQZ = cube.sum(axis=0).sum(axis=0)
+            cube_sum_z = cube.sum(axis=2)
+            yAcqQY = cube_sum_z.sum(axis=0)
+            yAcqQX = cube_sum_z.sum(axis=1)
+
+            for plot in self.__fitPlots:
+                plot.clearCurves()
+                plot.clearMarkers()
+
             # TODO : refactor
             process = self.__process
             if process == 'LeastSq':
-                heights = fitH5.get_result(entry, process, 'height')
-                positions = fitH5.get_result(entry, process, 'position')
-                widths = fitH5.get_result(entry, process, 'width')
-
-                h_x = heights.qx[xIdx]
-                p_x = positions.qx[xIdx]
-                w_x = widths.qx[xIdx]
-                self.__plotLeastSq(self.__fitPlots[0],
-                                   h_x, p_x, w_x,
-                                   xData, qx_cube, x_sum)
-
-                h_y = heights.qy[xIdx]
-                p_y = positions.qy[xIdx]
-                w_y = widths.qy[xIdx]
-                self.__plotLeastSq(self.__fitPlots[1],
-                                   h_y, p_y, w_y,
-                                   yData, qy_cube, y_sum)
-
-                h_z = heights.qz[xIdx]
-                p_z = positions.qz[xIdx]
-                w_z = widths.qz[xIdx]
-                self.__plotLeastSq(self.__fitPlots[2],
-                                   h_z, p_z, w_z,
-                                   zData, qz_cube, z_sum)
+                _plotLeastSq(self.__fitPlots, xIdx,
+                             fitH5,
+                             entry, process,
+                             xAcqQX, xAcqQY, xAcqQZ,
+                             yAcqQX, yAcqQY, yAcqQZ)
 
             elif process == 'Centroid':
-                pass
+                _plotCentroid(self.__fitPlots, xIdx,
+                              fitH5,
+                              entry, process,
+                              xAcqQX, xAcqQY, xAcqQZ,
+                              yAcqQX, yAcqQY, yAcqQZ)
             else:
                 # TODO : popup
                 raise ValueError('Unknown process {0}.'.format(process))
 
         self.__setSelectedPosition(x, y)
 
-    def __plotLeastSq(self, plot,
-                      height, position,
-                      width, xData, acqX, acqData):
-        # put all this in a toolbox
-        _const_inv_2_pi_ = np.sqrt(2 * np.pi)
-        _gauss_fn = lambda p, pos: (
-            p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
-            np.exp(-0.5 * ((pos - p[1]) / p[2]) ** 2))
-
-        params = [height, position, width]
-        fitted = _gauss_fn(params, xData)
-        plot.addCurve(xData, fitted, legend='fit')
-        plot.addCurve(acqX, acqData, legend='measured')
 
     def __setSelectedPosition(self, x, y):
         """Set the selected position.
@@ -576,6 +552,98 @@ class FitView(Qt.QMainWindow):
         for plot in self.__plots:
             plot.addXMarker(x, legend='Xselection', color='pink')
             plot.addYMarker(y, legend='Yselection', color='pink')
+
+
+# TODO : allow users to register plot functions associated with the kind
+# of process results that are being displayed
+def _plotLeastSq(plots, index, fitH5,
+                 entry, process,
+                 xAcqQX, xAcqQY, xAcqQZ,
+                 yAcqQX, yAcqQY, yAcqQZ):
+    """
+
+    :param plots: plot widgets
+    :param index: index of the selected point (in the results array)
+    :param fitH5: instance of FitH5. This instance may be already opened by
+        the caller.
+    :param entry: name of the entry to plot
+    :param process: name of the process
+    :param xData: x axis values of the fitted data
+    :param acqX: x axis values of the acquired data
+    :param acqY: y axis values of the acquired data
+    :return:
+    """
+
+    # TODO : put all this in a toolbox, so it can be shared between
+    # the plot and the fit functions
+    _const_inv_2_pi_ = np.sqrt(2 * np.pi)
+    _gauss_fn = lambda p, pos: (
+        p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
+        np.exp(-0.5 * ((pos - p[1]) / p[2]) ** 2))
+
+    with fitH5:
+        xFitQX = fitH5.get_qx(entry)
+        xFitQY = fitH5.get_qy(entry)
+        xFitQZ = fitH5.get_qz(entry)
+
+        heights = fitH5.get_result(entry, process, 'height')
+        positions = fitH5.get_result(entry, process, 'position')
+        widths = fitH5.get_result(entry, process, 'width')
+
+        h_x = heights.qx[index]
+        p_x = positions.qx[index]
+        w_x = widths.qx[index]
+
+        h_y = heights.qy[index]
+        p_y = positions.qy[index]
+        w_y = widths.qy[index]
+
+        h_z = heights.qz[index]
+        p_z = positions.qz[index]
+        w_z = widths.qz[index]
+
+    params = [h_x, p_x, w_x]
+    fitted = _gauss_fn(params, xFitQX)
+    plots[0].addCurve(xFitQX, fitted, legend='QX LSQ gauss. fit')
+    plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
+    plots[0].setGraphTitle('QX / LSQ')
+
+    params = [h_y, p_y, w_y]
+    fitted = _gauss_fn(params, xFitQY)
+    plots[1].addCurve(xFitQY, fitted, legend='QY LSQ gauss. fit')
+    plots[1].addCurve(xAcqQY, yAcqQY, legend='measured')
+    plots[1].setGraphTitle('QY / LSQ')
+
+    params = [h_z, p_z, w_z]
+    fitted = _gauss_fn(params, xFitQZ)
+    plots[2].addCurve(xFitQZ, fitted, legend='QZ LSQ gauss. fit')
+    plots[2].addCurve(xAcqQZ, yAcqQZ, legend='measured')
+    plots[2].setGraphTitle('QZ / LSQ')
+
+
+def _plotCentroid(plots, index, fitH5,
+                  entry, process,
+                  xAcqQX, xAcqQY, xAcqQZ,
+                  yAcqQX, yAcqQY, yAcqQZ):
+
+    # TODO : put all this in a toolbox, so it can be shared between
+    # the plot and the fit functions
+
+    # heights = fitH5.get_result(entry, process, 'height')
+    positions = fitH5.get_result(entry, process, 'position')
+
+    plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
+    plots[0].addXMarker(positions.qx[index], legend='center of mass')
+    plots[0].setGraphTitle('QX center of mass')
+
+    plots[1].addCurve(xAcqQY, yAcqQY, legend='measured')
+    plots[1].addXMarker(positions.qy[index], legend='center of mass')
+    plots[1].setGraphTitle('QY center of mass')
+
+    plots[2].addCurve(xAcqQZ, yAcqQZ, legend='measured')
+    plots[2].addXMarker(positions.qz[index], legend='center of mass')
+    plots[2].setGraphTitle('QZ center of mass')
+
 
 if __name__ == '__main__':
     pass

@@ -327,7 +327,7 @@ class QSpaceView(Qt.QMainWindow):
         view3d.sigSelectedRegionChanged.connect(roiPlotWindow.roiChanged)
 
         # Store the cut plane signals connection state
-        self.__connectedToCutPlane = False
+        self.__connectedToCutPlane = True
         view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
         view3d.getCutPlanes()[0].sigDataChanged.connect(self.__cutPlaneChanged)
 

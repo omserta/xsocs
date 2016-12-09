@@ -36,6 +36,8 @@ import numpy as np
 
 from silx.gui import qt as Qt
 
+from ...gui.icons import getQIcon as getKmapIcon
+
 
 RangeSliderEvent = namedtuple('RangeSliderEvent', ['left', 'right',
                                                    'leftIndex', 'rightIndex'])
@@ -63,6 +65,9 @@ class RangeSlider(Qt.QWidget):
         self.__hover = None
         self.__focus = None
         self.__range = None
+
+        self.__sliderIcons = {'left': getKmapIcon('right_arrow'),
+                              'right': getKmapIcon('left_arrow')}
 
         self.__sliders = OrderedDict([('left', Qt.QRect()),
                                       ('right', Qt.QRect())])
@@ -370,6 +375,8 @@ class RangeSlider(Qt.QWidget):
             was no previous pixmap.
         :return:
         """
+        if pixmap is not None and pixmap.width() <= 1:
+            raise ValueError('Pixmap must have a width > 1.')
         self.__pixmap = pixmap
         if resetSliders:
             self.setSliderValues(None, None)
@@ -393,6 +400,9 @@ class RangeSlider(Qt.QWidget):
 
         if profile.ndim != 1:
             raise ValueError('Profile must be a 1D array.')
+
+        if profile.shape[0] <= 1:
+            raise ValueError('Profile must be have a length > 1.')
 
         if colormap is not None:
             nColors = len(colormap)
@@ -484,6 +494,8 @@ class RangeSlider(Qt.QWidget):
         option.initFrom(self)
 
         for side, slider in sliders.items():
+            option.icon = self.__sliderIcons[side]
+            option.iconSize = slider.size() * 0.7
             if self.__hover == side:
                 option.state |= Qt.QStyle.State_MouseOver
             elif option.state & Qt.QStyle.State_MouseOver:

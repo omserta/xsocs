@@ -38,8 +38,9 @@ from matplotlib import cm, colors as mpl_colors
 
 
 from silx.gui import qt as Qt
-from silx.gui.plot import PlotWindow
+from silx.io.utils import savetxt
 from silx.gui.icons import getQIcon
+from silx.gui.plot import PlotWindow
 from silx.math.histogram import Histogramnd
 
 from ...gui.icons import getQIcon as getKmapIcon
@@ -339,7 +340,7 @@ class XsocsPlot2D(PlotWindow):
         showBarBn.setFixedWidth(size)
         showBarBn.clicked.connect(self.__showBarBnClicked)
         showBarBn.setAutoFillBackground(True)
-        self.__hidden = True
+        self.__hidden = False
         self.__firstShow = True
 
         self.__optionsBaseA = optionsBaseA = Qt.QWidget()
@@ -373,6 +374,12 @@ class XsocsPlot2D(PlotWindow):
         options.setPopupMode(Qt.QToolButton.InstantPopup)
 
         menu = Qt.QMenu()
+
+        # save scatter as 3D
+        self.__save2DAction = action = Qt.QAction('Save "2D" scatter', self)
+        action.triggered.connect(self.__save2DTriggered)
+        action.setEnabled(False)
+        menu.addAction(action)
 
         # save to file action
         self.saveAction.setIconVisibleInMenu(True)
@@ -434,6 +441,65 @@ class XsocsPlot2D(PlotWindow):
 
         optionsLayout.addWidget(optionsBaseB)
         optionsLayout.addWidget(optionsBaseA)
+
+    def __save2DTriggered(self):
+        # TODO : support more that one curve
+        if not self.__values:
+            return
+        if len(self.__values)> 1:
+            raise ValueError('Export : only one 2D scatter plot '
+                             'supported at the moment.')
+        legend = self.__values.keys()[0]
+        values = self.__values[legend][0]
+        curve = self.getCurve(legend)
+        x, y = curve[0:2]
+
+        xlabel = curve[4]['xlabel']
+        if xlabel is None:
+            xlabel = self.getGraphXLabel()
+        ylabel = curve[4]['ylabel']
+        if ylabel is None:
+            ylabel = self.getGraphYLabel()
+
+        dialog = Qt.QFileDialog(self)
+        dialog.setWindowTitle("Output File Selection")
+        dialog.setModal(True)
+        dialog.setNameFilters(['Curve as Raw ASCII (*.txt)'])
+
+        dialog.setFileMode(dialog.AnyFile)
+        dialog.setAcceptMode(dialog.AcceptSave)
+
+        if not dialog.exec_():
+            return False
+
+        # nameFilter = dialog.selectedNameFilter()
+        filename = dialog.selectedFiles()[0]
+        dialog.close()
+
+        print x.shape, y.shape, values.shape
+        stack = np.vstack((x, y, values)).transpose()
+
+        savetxt(filename, stack)
+            # , fmt="%.7g", delimiter=";", newline="\n",
+            #     header="", footer="", comments="#")
+
+
+
+        # # TODO : change this when multiple entries/processes are supported
+        # entry = self.entries()[0]
+        # if not entry:
+        #     raise ValueError('No entries.')
+        # process = self.processes(entry)[0]
+        # if not process:
+        #     raise ValueError('No processed for entry {0}.'.format(entry))
+        # with self:
+        #     with open(filename, 'w+') as res_f:
+        #         res_f.write('X Y '
+        #                     'height_x center_x width_x '
+        #                     'height_y center_y width_y '
+        #                     'height_z center_z width_z '
+        #                     '|q| status\n')
+
 
     def showEvent(self, event):
         super(XsocsPlot2D, self).showEvent(event)
@@ -533,6 +599,7 @@ class XsocsPlot2D(PlotWindow):
 
         if len(self.__values) > 0:
             self.__colormapBn.setDisabled(True)
+            self.__save2DAction.setDisabled(True)
 
     def getPlotValues(self, curve, copy=True):
         values = self.__values.get(curve)
@@ -613,6 +680,7 @@ class XsocsPlot2D(PlotWindow):
 
         if len(self.__values) > 0:
             self.__colormapBn.setDisabled(False)
+            self.__save2DAction.setDisabled(False)
 
         return legend
 

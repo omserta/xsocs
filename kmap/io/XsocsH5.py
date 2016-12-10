@@ -150,7 +150,7 @@ class XsocsH5(XsocsH5Base):
             shape = ctx.shape
             intensity = _np.zeros(shape=(shape[0],), dtype=dtype)
             img_buffer = _np.array(ctx[0], dtype=dtype)
-            for idx in range(1, shape[0]):
+            for idx in range(0, shape[0]):
                 ctx.read_direct(img_buffer, idx)
                 intensity[idx] = _np.sum(img_buffer)
         return intensity

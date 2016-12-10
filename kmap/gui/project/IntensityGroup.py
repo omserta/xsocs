@@ -88,6 +88,9 @@ class IntensityGroup(ProjectItem):
         scanPositions = self.xsocsH5.scan_positions(entry)
         return intensity, scanPositions
 
+    def getIntensityItems(self):
+        return self.children(classinfo=IntensityItem)
+
 
 def _getIntensity(entry, entry_f, projectLock, projectFile, pathTpl, queue):
     queue.put({'id': entry,

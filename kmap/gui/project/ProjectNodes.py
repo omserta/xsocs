@@ -164,7 +164,8 @@ class FitGroupNode(H5GroupNode):
 
 
 @H5NodeClassDef('FitItem',
-                attribute=('XsocsClass', 'FitItem'))
+                attribute=('XsocsClass', 'FitItem'),
+                icons='math-fit')
 class FitItemNode(H5GroupNode):
     editors = FitButton
 

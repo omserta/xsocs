@@ -350,6 +350,8 @@ class FitView(Qt.QMainWindow):
                  **kwargs):
         super(FitView, self).__init__(parent)
 
+        self.setWindowTitle('[XSOCS] {0}'.format(node.h5Path))
+
         item = h5NodeToProjectItem(node)
         fitH5 = self.__fitH5 = item.fitH5
         qspaceItem = h5NodeToProjectItem(qspaceNode)

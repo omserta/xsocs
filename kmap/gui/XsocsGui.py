@@ -83,6 +83,8 @@ class XsocsGui(Qt.QMainWindow):
                  projectH5File=None):
         super(XsocsGui, self).__init__(parent)
 
+        self.setWindowTitle('XSOCS')
+
         self.statusBar()
 
         setH5NodeFactory(XsocsH5Factory)

@@ -283,6 +283,8 @@ class QSpaceView(Qt.QMainWindow):
                  **kwargs):
         super(QSpaceView, self).__init__(parent)
 
+        self.setWindowTitle('[XSOCS] {0}'.format(node.h5Path))
+
         item = h5NodeToProjectItem(node)
 
         # plot window displaying the intensity map

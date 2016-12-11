@@ -55,6 +55,7 @@ class RectRoiWidget(Qt.QWidget):
         # TODO :
         # support multiple ROIs then batch them
         super(RectRoiWidget, self).__init__(parent)
+
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -185,6 +186,8 @@ class IntensityView(Qt.QMainWindow):
                  node,
                  **kwargs):
         super(IntensityView, self).__init__(parent=parent)
+
+        self.setWindowTitle('[XSOCS] {0}'.format(node.h5Path))
 
         self.__plotWindow = plotWindow = XsocsPlot2D()
 

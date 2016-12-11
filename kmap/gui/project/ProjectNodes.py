@@ -34,11 +34,11 @@ import os
 from silx.gui import qt as Qt, icons
 
 from ..model.ModelDef import ModelColumns
-from .IntensityGroup import IntensityGroup, IntensityItem
 from ..model.NodeEditor import EditorMixin
-from .Hdf5Nodes import H5GroupNode, H5NodeClassDef, H5DatasetNode
+
+from .IntensityGroup import IntensityItem
 from .XsocsH5Factory import h5NodeToProjectItem
-from ..model.Node import Node
+from .Hdf5Nodes import H5GroupNode, H5NodeClassDef, H5DatasetNode
 
 
 class ScatterPlotButton(EditorMixin, Qt.QWidget):
@@ -50,7 +50,7 @@ class ScatterPlotButton(EditorMixin, Qt.QWidget):
         super(ScatterPlotButton, self).__init__(parent, option, index)
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        icon = icons.getQIcon('item-1dim')
+        icon = icons.getQIcon('plot-widget')
         button = Qt.QToolButton()
         button.setIcon(icon)
         layout.addWidget(button)
@@ -88,9 +88,13 @@ class QSpaceButton(EditorMixin, Qt.QWidget):
 
 
 @H5NodeClassDef('IntensityGroupNode',
-                attribute=('XsocsClass', 'IntensityGroup'))
+                attribute=('XsocsClass', 'IntensityGroup'),
+                icons='math-sigma')
 class IntensityGroupNode(H5GroupNode):
     editors = ScatterPlotButton
+
+    # def _loadChildren(self):
+    #     return []
 
 
 @H5NodeClassDef('IntensityNode',
@@ -120,7 +124,7 @@ class FitButton(EditorMixin, Qt.QWidget):
         super(FitButton, self).__init__(parent, option, index)
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        icon = icons.getQIcon('item-1dim')
+        icon = icons.getQIcon('plot-widget')
         button = Qt.QToolButton()
         button.setIcon(icon)
         button.clicked.connect(self.__clicked)
@@ -152,7 +156,17 @@ class FitButton(EditorMixin, Qt.QWidget):
             fitItem.fitH5.export_txt(csvPath)
 
 
+@H5NodeClassDef('FitGroup',
+                attribute=('XsocsClass', 'FitGroup'),
+                icons='math-fit')
+class FitGroupNode(H5GroupNode):
+    pass
+
+
 @H5NodeClassDef('FitItem',
                 attribute=('XsocsClass', 'FitItem'))
 class FitItemNode(H5GroupNode):
     editors = FitButton
+
+    def _loadChildren(self):
+        return []

@@ -352,6 +352,9 @@ class QSpaceView(Qt.QMainWindow):
         xRoiWid.slider.setRange([qx[0], qx[-1]])
         yRoiWid.slider.setRange([qy[0], qy[-1]])
         zRoiWid.slider.setRange([qz[0], qz[-1]])
+        xRoiWid.slider.setSliderValues(qx[0], qx[-1])
+        yRoiWid.slider.setSliderValues(qy[0], qy[-1])
+        zRoiWid.slider.setSliderValues(qz[0], qz[-1])
         layout.addWidget(xRoiWid)
         layout.addWidget(yRoiWid)
         layout.addWidget(zRoiWid)
@@ -389,7 +392,8 @@ class QSpaceView(Qt.QMainWindow):
         planePlotDock.setWidget(planePlotWindow)
         features = planePlotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         planePlotDock.setFeatures(features)
-        planePlotDock.visibilityChanged.connect(self.__planePlotDockVisibilityChanged)
+        planePlotDock.visibilityChanged.connect(
+            self.__planePlotDockVisibilityChanged)
         self.splitDockWidget(treeDock, planePlotDock, Qt.Qt.Vertical)
 
         roiPlotDock = Qt.QDockWidget('ROI Intensity', self)
@@ -494,13 +498,13 @@ class QSpaceView(Qt.QMainWindow):
                     region = view3d.getSelectedRegion()
 
         if on and region:
-            ([zLeft, zRight],
-             [yLeft, yRight],
-             [xLeft, xRight]) = region.getArrayRange()
-        else:
             ([xLeft, xRight],
              [yLeft, yRight],
-             [zLeft, zRight]) = ([None, None], [None, None], [None, None])
+             [zLeft, zRight]) = region.getDataRange()
+        else:
+            ([zLeft, zRight],
+             [yLeft, yRight],
+             [xLeft, xRight]) = ([None, None], [None, None], [None, None])
 
         self.__xRoiWid.slider.setSliderValues(xLeft, xRight)
         self.__yRoiWid.slider.setSliderValues(yLeft, yRight)

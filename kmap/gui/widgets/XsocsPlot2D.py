@@ -476,30 +476,15 @@ class XsocsPlot2D(PlotWindow):
         filename = dialog.selectedFiles()[0]
         dialog.close()
 
-        print x.shape, y.shape, values.shape
         stack = np.vstack((x, y, values)).transpose()
 
-        savetxt(filename, stack)
-            # , fmt="%.7g", delimiter=";", newline="\n",
-            #     header="", footer="", comments="#")
-
-
-
-        # # TODO : change this when multiple entries/processes are supported
-        # entry = self.entries()[0]
-        # if not entry:
-        #     raise ValueError('No entries.')
-        # process = self.processes(entry)[0]
-        # if not process:
-        #     raise ValueError('No processed for entry {0}.'.format(entry))
-        # with self:
-        #     with open(filename, 'w+') as res_f:
-        #         res_f.write('X Y '
-        #                     'height_x center_x width_x '
-        #                     'height_y center_y width_y '
-        #                     'height_z center_z width_z '
-        #                     '|q| status\n')
-
+        delimiter = ";"
+        header = '{col0} {delimiter} {col1} {delimiter} {col2}'\
+                 '\n'.format(col0=xlabel,
+                             col1=ylabel,
+                             col2='values',
+                             delimiter=delimiter)
+        savetxt(filename, stack, header=header, delimiter=delimiter)
 
     def showEvent(self, event):
         super(XsocsPlot2D, self).showEvent(event)

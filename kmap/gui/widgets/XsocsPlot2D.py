@@ -376,7 +376,9 @@ class XsocsPlot2D(PlotWindow):
         menu = Qt.QMenu()
 
         # save scatter as 3D
-        self.__save2DAction = action = Qt.QAction('Save "2D" scatter', self)
+        self.__save2DAction = action = Qt.QAction(
+            getKmapIcon('save_2dscatter'), 'Save "2D" scatter', self)
+        action.setIconVisibleInMenu(True)
         action.triggered.connect(self.__save2DTriggered)
         action.setEnabled(False)
         menu.addAction(action)

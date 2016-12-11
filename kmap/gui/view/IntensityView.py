@@ -40,6 +40,8 @@ from ..model.TreeView import TreeView
 from ..model.ModelDef import ModelColumns, ModelRoles
 from ..project.XsocsH5Factory import h5NodeToProjectItem
 from ..widgets.XsocsPlot2D import XsocsPlot2D
+from ..widgets.Input import StyledLineEdit
+from ..widgets.Containers import GroupBox
 
 try:
     from silx.gui.plot.ImageRois import ImageRoiManager
@@ -56,31 +58,48 @@ class RectRoiWidget(Qt.QWidget):
         # support multiple ROIs then batch them
         super(RectRoiWidget, self).__init__(parent)
 
-        layout = Qt.QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        roiToolBar = roiManager.toolBar(rois=['rectangle'],
+                                        options=['show'])
+        roiToolBar.setMovable(False)
+        roiToolBar.addSeparator()
 
-        layout.addWidget(Qt.QLabel('x='))
-        self._xEdit = edit = Qt.QLineEdit()
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
-        layout.addWidget(Qt.QLabel('y='))
-        self._yEdit = edit = Qt.QLineEdit()
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
-        self._wEdit = edit = Qt.QLineEdit()
-        layout.addWidget(Qt.QLabel('w='))
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
-        self._hEdit = edit = Qt.QLineEdit()
-        layout.addWidget(Qt.QLabel('h='))
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
+        topLayout = Qt.QVBoxLayout(self)
+
+        grpBox = GroupBox('ROI')
+        layout = Qt.QGridLayout(grpBox)
+
+        row = 0
+        layout.addWidget(roiToolBar, row, 0, 1, 2, Qt.Qt.AlignTop)
+
+        row += 1
+        self._xEdit = edit = StyledLineEdit()
+        edit.setReadOnly(True)
+        layout.addWidget(Qt.QLabel('x='), row, 0, Qt.Qt.AlignTop)
+        layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
+
+        row += 1
+        self._yEdit = edit = StyledLineEdit()
+        edit.setReadOnly(True)
+        layout.addWidget(Qt.QLabel('y='), row, 0, Qt.Qt.AlignTop)
+        layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
+
+        row += 1
+        self._wEdit = edit = StyledLineEdit()
+        edit.setReadOnly(True)
+        layout.addWidget(Qt.QLabel('w='), row, 0, Qt.Qt.AlignTop)
+        layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
+
+        row += 1
+        self._hEdit = edit = StyledLineEdit()
+        edit.setReadOnly(True)
+        layout.addWidget(Qt.QLabel('h='), row, 0, Qt.Qt.AlignTop)
+        layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
+
+        row += 1
+
+        hLayout = Qt.QHBoxLayout()
 
         style = Qt.QApplication.style()
-        icon = style.standardIcon(Qt.QStyle.SP_DialogCloseButton)
-        self.__discardBn = discardBn = Qt.QToolButton()
-        discardBn.setToolTip('Discard ROI')
-        discardBn.setStatusTip('Discard ROI')
-        discardBn.setIcon(icon)
-        discardBn.setEnabled(False)
-        layout.addWidget(discardBn)
-        discardBn.clicked.connect(self.__discardRoi)
 
         icon = style.standardIcon(Qt.QStyle.SP_DialogApplyButton)
         self.__applyBn = applyBn = Qt.QToolButton()
@@ -90,18 +109,24 @@ class RectRoiWidget(Qt.QWidget):
         applyBn.setToolButtonStyle(Qt.Qt.ToolButtonTextBesideIcon)
         applyBn.setText('To Q Space')
         applyBn.setEnabled(False)
-        layout.addWidget(applyBn)
+        hLayout.addWidget(applyBn)
         applyBn.clicked.connect(self.__applyRoi)
 
-        fm = edit.fontMetrics()
-        padding = 2 * fm.width('0')
-        text = '0' * 8
-        width = fm.width(text) + padding
-        self._xEdit.setFixedWidth(width)
-        self._yEdit.setFixedWidth(width)
-        self._wEdit.setFixedWidth(width)
-        self._hEdit.setFixedWidth(width)
-        layout.setSizeConstraint(Qt.QLayout.SetMinimumSize)
+        icon = style.standardIcon(Qt.QStyle.SP_DialogCloseButton)
+        self.__discardBn = discardBn = Qt.QToolButton()
+        discardBn.setToolTip('Discard ROI')
+        discardBn.setStatusTip('Discard ROI')
+        discardBn.setIcon(icon)
+        discardBn.setEnabled(False)
+        hLayout.addWidget(discardBn, Qt.Qt.AlignRight)
+        discardBn.clicked.connect(self.__discardRoi)
+
+        layout.addLayout(hLayout, row, 0, 1, 2, Qt.Qt.AlignCenter)
+
+        # topLayout.setSizeConstraint(Qt.QLayout.SetMinimumSize)
+
+        topLayout.addWidget(grpBox)
+        topLayout.addStretch(100)
 
         # TODO : weakref
         self.__roiManager = roiManager
@@ -202,16 +227,21 @@ class IntensityView(Qt.QMainWindow):
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, dock)
 
         self.__roiManager = roiManager = ImageRoiManager(plotWindow)
-        roiToolBar = roiManager.toolBar(rois=['rectangle'],
-                                        options=['show'])
-        roiToolBar.addSeparator()
+        # roiToolBar = roiManager.toolBar(rois=['rectangle'],
+        #                                 options=['show'])
+        # roiToolBar.addSeparator()
+        # plotWindow.addToolBarBreak()
+        # plotWindow.addToolBar(roiToolBar)
 
         rectRoiWidget = RectRoiWidget(roiManager)
-        roiToolBar.addWidget(rectRoiWidget)
         rectRoiWidget.sigRoiApplied.connect(self.__roiApplied)
 
-        plotWindow.addToolBarBreak()
-        plotWindow.addToolBar(roiToolBar)
+
+        dock = Qt.QDockWidget(self)
+        dock.setWidget(rectRoiWidget)
+        features = dock.features() ^ Qt.QDockWidget.DockWidgetClosable
+        dock.setFeatures(features)
+        self.addDockWidget(Qt.Qt.RightDockWidgetArea, dock)
 
         self.setCentralWidget(plotWindow)
 

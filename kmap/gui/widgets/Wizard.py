@@ -25,6 +25,7 @@
 
 from __future__ import absolute_import
 
+
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
@@ -35,12 +36,12 @@ from functools import partial
 
 from silx.gui import qt as Qt
 
-from ...io.XsocsH5 import XsocsH5
 from .. import icons as XsocsIcons
 from .FileChooser import FileChooser
 from ..widgets.Containers import GroupBox
 from ..process.MergeWidget import MergeWidget
 from ..project.XsocsProject import XsocsProject
+from .ProjectChooser import ProjectSummaryWidget
 
 
 class XsocsWizard(Qt.QWizard):
@@ -197,104 +198,6 @@ class SelectDataPage(Qt.QWizardPage):
 
         if self.__nextId != -1:
             self.wizard().next()
-
-
-class ProjectSummaryWidget(Qt.QWidget):
-    def __init__(self, projectFile=None, parent=None):
-        super(ProjectSummaryWidget, self).__init__(parent)
-
-        self.__valid = False
-
-        layout = Qt.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        view = Qt.QTreeWidget()
-        view.setColumnCount(2)
-        view.setHeaderLabels(['Name', 'Value'])
-        view.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
-        layout.addWidget(view)
-
-        self.setProjectFile(projectFile)
-
-    def isValidProject(self):
-        return self.__valid
-
-    def setProjectFile(self, projectFile):
-        view = self.findChild(Qt.QTreeWidget)
-
-        view.clear()
-
-        self.__valid = False
-
-        if projectFile is None:
-            return
-
-        errMsg = ''
-
-        try:
-            # reading project file
-            errMsg = 'Failed to open X-Socs project file.'
-            projectH5 = XsocsProject(projectFile, mode='r')
-
-            # reading XSOCS data file
-            errMsg = 'Failed to open X-Socs data file.'
-            xsocsFile = projectH5.xsocsFile
-            xsocsH5 = XsocsH5(xsocsFile, mode='r')
-
-            # getting entries
-            errMsg = 'Failed to read entries from data file.'
-            entries = xsocsH5.entries()
-
-            # getting entries
-            errMsg = 'Failed to read scan parameters.'
-            params = xsocsH5.scan_params(entries[0])
-
-            inputItem = Qt.QTreeWidgetItem(
-                ['Data file', os.path.basename(xsocsFile)])
-            inputItem.setToolTip(0, xsocsFile)
-            inputItem.setToolTip(1, xsocsFile)
-            inputItem.addChild(Qt.QTreeWidgetItem(['Full path', xsocsFile]))
-            view.addTopLevelItem(inputItem)
-
-            # getting scan angles
-            errMsg = 'Failed to read scan angles.'
-            # TODO : check that there are at least 2 angles
-            text = '{0} [{1} -> {2}]'.format(
-                str(len(entries)),
-                str(xsocsH5.scan_angle(entries[0])),
-                str(xsocsH5.scan_angle(entries[-1])))
-            entriesItem = Qt.QTreeWidgetItem(['Angles', text])
-            for entryIdx, entry in enumerate(entries):
-                text = 'eta = {0}'.format(str(xsocsH5.scan_angle(entry)))
-                entryItem = Qt.QTreeWidgetItem([str(entryIdx), text])
-                entriesItem.addChild(entryItem)
-            view.addTopLevelItem(entriesItem)
-
-            # getting acquisition params
-            errMsg = 'Failed to read Acquisition parameters.'
-            title = ' '.join(str(value) for value in params.values())
-            commandItem = Qt.QTreeWidgetItem(['Scan', title])
-            commandItem.setToolTip(0, title)
-            commandItem.setToolTip(1, title)
-            for key, value in params.items():
-                commandItem.addChild(Qt.QTreeWidgetItem([key, str(value)]))
-            view.addTopLevelItem(commandItem)
-
-            for key, value in xsocsH5.acquisition_params(entries[0]).items():
-                view.addTopLevelItem(Qt.QTreeWidgetItem([key, str(value)]))
-
-        except Exception as ex:
-            style = Qt.QApplication.style()
-            errorItem = Qt.QTreeWidgetItem(['', errMsg])
-            icon = style.standardIcon(Qt.QStyle.SP_MessageBoxCritical)
-            errorItem.setIcon(0, icon)
-            errorItem.setBackground(1, Qt.QBrush(Qt.Qt.red))
-            exItem = Qt.QTreeWidgetItem([ex.__class__.__name__, str(ex)])
-            errorItem.addChild(exItem)
-            view.addTopLevelItem(errorItem)
-            errorItem.setExpanded(True)
-            return
-
-        self.__valid = True
 
 
 class ReviewProjectPage(Qt.QWizardPage):

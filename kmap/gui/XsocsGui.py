@@ -29,26 +29,42 @@ import os
 
 from silx.gui import qt as Qt
 
-from .widgets.Wizard import XsocsWizard
-from .process.RecipSpaceWidget import RecipSpaceWidget
-from .process.FitWidget import FitWidget
-from .view.IntensityView import IntensityView
-from .view.QspaceView import QSpaceView
-from .view.FitView import FitView
-from .project.XsocsProject import XsocsProject
-from .model.TreeView import TreeView
-from .model.Model import Model
-from .project.IntensityGroup import IntensityGroup
-from .project.QSpaceGroup import QSpaceItem
-from .project.FitGroup import FitItem
-from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
-from .project.Hdf5Nodes import setH5NodeFactory, H5File
 from .Utils import nextFileName
+
+from .icons import getQIcon as getXsocsIcon
+
+from .widgets.Wizard import XsocsWizard
+from .widgets.ProjectChooser import ProjectChooserDialog
+
+from .view.FitView import FitView
+from .view.QspaceView import QSpaceView
+from .view.IntensityView import IntensityView
+
+from .model.TreeView import TreeView
 from .model.ModelDef import ModelRoles
+from .model.Model import Model, RootNode
+
+from .process.FitWidget import FitWidget
+from .process.RecipSpaceWidget import RecipSpaceWidget
+
+from .project.FitGroup import FitItem
+from .project.QSpaceGroup import QSpaceItem
+from .project.XsocsProject import XsocsProject
+from .project.IntensityGroup import IntensityGroup
+from .project.Hdf5Nodes import setH5NodeFactory, H5File
+from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
 
 
 _COMPANY_NAME = 'ESRF'
 _APP_NAME = 'XSOCS'
+
+
+class ProjectRoot(RootNode):
+    ColumnNames = ['Item', '']
+
+
+class ProjectModel(Model):
+    RootNode = ProjectRoot
 
 
 class ProjectTree(TreeView):
@@ -61,16 +77,19 @@ class ProjectTree(TreeView):
 
 
 class XsocsGui(Qt.QMainWindow):
-    __sigQueuedClose = Qt.Signal()
 
     def __init__(self,
                  parent=None,
                  projectH5File=None):
         super(XsocsGui, self).__init__(parent)
 
+        self.statusBar()
+
         setH5NodeFactory(XsocsH5Factory)
         self.move(0, 0)
         self.resize(300, 600)
+
+        self.__project = None
 
         self.__intensityView = None
         self.__qspaceViews = {}
@@ -79,22 +98,20 @@ class XsocsGui(Qt.QMainWindow):
         self.__createViews()
         self.__createActions()
         self.__createMenus()
-        # self.__createToolBars()
+        self.__createToolBars()
 
         self.__startupprojectH5File = projectH5File
         self.__widget_setup = False
 
-        self.__sigQueuedClose.connect(self.__close, Qt.Qt.QueuedConnection)
         self.__readSettings()
 
-    def __close(self):
-        self.deleteLater()
+        self.__setupProject(projectFile=projectH5File)
 
     def __createViews(self):
         tree = ProjectTree()
         tree.setShowUniqueGroup(False)
         tree.sigDelegateEvent.connect(self.__viewEvent)
-        model = Model(parent=tree)
+        model = ProjectModel(parent=tree)
         model.startModel()
         tree.setModel(model)
         self.setCentralWidget(tree)
@@ -119,6 +136,8 @@ class XsocsGui(Qt.QMainWindow):
                        ''.format(projectItem, event))
 
     def __showIntensity(self, node=None):
+        if self.__project is None:
+            return
         view = self.__intensityView
         if not view:
             if node is None:
@@ -213,16 +232,6 @@ class XsocsGui(Qt.QMainWindow):
     def model(self):
         return self.tree.model()
 
-    def showEvent(self, event):
-        super(XsocsGui, self).showEvent(event)
-        if not self.__widget_setup:
-            # self.__firstInitSig.emit()
-            if not self.__showWizard():
-                self.__sigQueuedClose.emit()
-                return
-            self.__widget_setup = True
-        self.__showIntensity()
-
     def closeEvent(self, event):
         self.__writeSettings()
         super(XsocsGui, self).closeEvent(event)
@@ -243,33 +252,43 @@ class XsocsGui(Qt.QMainWindow):
         self.restoreState(settings.value("MainWindow/state", Qt.QByteArray()))
         settings.endGroup()
 
-    def __showWizard(self):
-        projectFile = self.__startupprojectH5File
-        if projectFile is None:
-            wizard = XsocsWizard(parent=self)
-            if wizard.exec_() == Qt.QDialog.Accepted:
-                # TODO : we suppose that we get a valid file... maybe we should
-                # perform some checks...
-                projectFile = wizard.projectFile
-                wizard.deleteLater()
-            else:
-                wizard.deleteLater()
-                return False
-        self.__setupProject(projectFile=projectFile)
-        return True
-
     def __setupProject(self, projectFile=None):
+
+        if projectFile is None:
+            self.__project = None
+            return
+
         mode = 'r+'
         project = XsocsProject(projectFile, mode=mode)
         rootNode = H5File(h5File=projectFile)
-        self.tree.model().appendGroup(rootNode)
+        model = self.tree.model()
+        model.removeRow(0)
+        model.appendGroup(rootNode)
         self.__project = project
+
+        self.__showIntensity()
 
         return True
 
     def __createActions(self):
         style = Qt.QApplication.style()
         self.__actions = actions = {}
+
+        # load
+        icon = style.standardIcon(Qt.QStyle.SP_DialogOpenButton)
+        openAct = Qt.QAction(icon, '&Open project', self)
+        openAct.setShortcuts(Qt.QKeySequence.Open)
+        openAct.setStatusTip('Open an existing project')
+        openAct.triggered.connect(self.__openProject)
+        actions['open'] = openAct
+
+        # create
+        icon = getXsocsIcon('create_project')
+        createAct = Qt.QAction(icon, '&Create project', self)
+        createAct.setShortcuts(Qt.QKeySequence.New)
+        createAct.setStatusTip('Create a new project')
+        createAct.triggered.connect(self.__createProject)
+        actions['create'] = createAct
 
         # exit the application
         icon = style.standardIcon(Qt.QStyle.SP_DialogCancelButton)
@@ -291,6 +310,8 @@ class XsocsGui(Qt.QMainWindow):
         menuBar = self.menuBar()
 
         fileMenu = menuBar.addMenu('&File')
+        fileMenu.addAction(actions['open'])
+        fileMenu.addAction(actions['create'])
         fileMenu.addSeparator()
         fileMenu.addAction(actions['quit'])
 
@@ -301,6 +322,39 @@ class XsocsGui(Qt.QMainWindow):
 
         menus['file'] = fileMenu
         menus['help'] = helpMenu
+
+    def __createToolBars(self):
+        actions = self.__actions
+        toolBar = self.addToolBar('File')
+        toolBar.setObjectName('Toolbar/File')
+        toolBar.addAction(actions['open'])
+        toolBar.addAction(actions['create'])
+
+    def __openProject(self):
+        dialog = ProjectChooserDialog(self)
+        dialog.setFixedWidth(500)
+        rc = dialog.exec_()
+        if rc == Qt.QDialog.Accepted:
+            projectFile = dialog.projectFile
+            dialog.deleteLater()
+        else:
+            dialog.deleteLater()
+            return
+        self.__setupProject(projectFile)
+
+    def __createProject(self):
+        wizard = XsocsWizard(parent=self)
+        if wizard.exec_() == Qt.QDialog.Accepted:
+            # TODO : we suppose that we get a valid file... maybe we should
+            # perform some checks...
+            projectFile = wizard.projectFile
+            wizard.deleteLater()
+        else:
+            wizard.deleteLater()
+            return False
+
+        self.__setupProject(projectFile=projectFile)
+        return True
 
 
 # ####################################################################

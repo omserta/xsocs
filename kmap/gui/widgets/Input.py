@@ -43,6 +43,7 @@ class StyledLineEdit(Qt.QLineEdit):
     def __init__(self, parent=None, nChar=None):
         super(StyledLineEdit, self).__init__(parent)
         self.__nChar = nChar
+        self.setAlignment(Qt.Qt.AlignLeft)
         self._updateStyleSheet()
 
     def setReadOnly(self, ro):

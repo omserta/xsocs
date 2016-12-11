@@ -152,22 +152,7 @@ class FitButton(EditorMixin, Qt.QWidget):
             fitItem.fitH5.export_txt(csvPath)
 
 
-class FitHeightNode(Node):
-    className = 'height'
-
-
-class FitCenterNode(Node):
-    className = 'center'
-
-
-class FitWidthNode(Node):
-    className = 'width'
-
-
 @H5NodeClassDef('FitItem',
                 attribute=('XsocsClass', 'FitItem'))
 class FitItemNode(H5GroupNode):
     editors = FitButton
-    groupClasses = [(None, FitHeightNode),
-                    (None, FitCenterNode),
-                    (None, FitWidthNode)]

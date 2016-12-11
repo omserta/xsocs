@@ -86,6 +86,7 @@ class XsocsGui(Qt.QMainWindow):
         self.statusBar()
 
         setH5NodeFactory(XsocsH5Factory)
+
         self.move(0, 0)
         self.resize(300, 600)
 

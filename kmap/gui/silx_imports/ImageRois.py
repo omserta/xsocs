@@ -231,7 +231,8 @@ class RoiItemBase(qt.QObject):
                                         self._points[handle][1],
                                         legend=handle,
                                         draggable=True,
-                                        symbol='x')
+                                        symbol='x',
+                                        color='pink')
             assert item == handle
 
     def _drawShape(self):
@@ -239,7 +240,8 @@ class RoiItemBase(qt.QObject):
                                   self.yData,
                                   shape=self.shape,
                                   legend=self._name,
-                                  overlay=True)
+                                  overlay=True,
+                                  color='pink')
         assert item == self._name
 
     def _setHandleData(self, name, point):
@@ -253,7 +255,8 @@ class RoiItemBase(qt.QObject):
         self._plot.setInteractiveMode('draw',
                                       shape=self.shape,
                                       source=self,
-                                      label=self._name)
+                                      label=self._name,
+                                      color='pink')
         self._connect()
 
     def edit(self, enable):
@@ -672,7 +675,7 @@ class ImageRoiManager(qt.QObject):
         keepOptionActions = [optionActions[option] for option in options]
 
         toolBar = qt.QToolBar('Roi')
-        toolBar.addWidget(qt.QLabel('Roi'))
+        # toolBar.addWidget(qt.QLabel('Roi'))
         {toolBar.addAction(action) for action in keepRoiActions}
 
         toolBar.addSeparator()

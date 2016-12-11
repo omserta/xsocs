@@ -425,35 +425,20 @@ class FitView(Qt.QMainWindow):
         grpBox = GroupBox('Fit')
         grpLayout = Qt.QVBoxLayout(grpBox)
 
-        plot = PlotWindow(grid=False,
-                          curveStyle=False,
-                          colormap=False,
-                          roi=False,
-                          mask=False,
-                          yInverted=False)
-        plot.setActiveCurveHandling(False)
+        plot = XsocsPlot2D()
+        plot.setKeepDataAspectRatio(False)
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qx fit')
 
-        plot = PlotWindow(grid=False,
-                          curveStyle=False,
-                          colormap=False,
-                          roi=False,
-                          mask=False,
-                          yInverted=False)
-        plot.setActiveCurveHandling(False)
+        plot = XsocsPlot2D()
+        plot.setKeepDataAspectRatio(False)
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qy fit')
 
-        plot = PlotWindow(grid=False,
-                          curveStyle=False,
-                          colormap=False,
-                          roi=False,
-                          mask=False,
-                          yInverted=False)
-        plot.setActiveCurveHandling(False)
+        plot = XsocsPlot2D()
+        plot.setKeepDataAspectRatio(False)
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qz fit')

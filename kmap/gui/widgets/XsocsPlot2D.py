@@ -340,7 +340,7 @@ class XsocsPlot2D(PlotWindow):
         showBarBn.setFixedWidth(size)
         showBarBn.clicked.connect(self.__showBarBnClicked)
         showBarBn.setAutoFillBackground(True)
-        self.__hidden = False
+        self.__hidden = True
         self.__firstShow = True
 
         self.__optionsBaseA = optionsBaseA = Qt.QWidget()

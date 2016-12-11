@@ -58,6 +58,19 @@ class RectRoiWidget(Qt.QWidget):
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        layout.addWidget(Qt.QLabel('x='))
+        self._xEdit = edit = Qt.QLineEdit()
+        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
+        layout.addWidget(Qt.QLabel('y='))
+        self._yEdit = edit = Qt.QLineEdit()
+        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
+        self._wEdit = edit = Qt.QLineEdit()
+        layout.addWidget(Qt.QLabel('w='))
+        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
+        self._hEdit = edit = Qt.QLineEdit()
+        layout.addWidget(Qt.QLabel('h='))
+        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
+
         style = Qt.QApplication.style()
         icon = style.standardIcon(Qt.QStyle.SP_DialogCloseButton)
         self.__discardBn = discardBn = Qt.QToolButton()
@@ -73,22 +86,11 @@ class RectRoiWidget(Qt.QWidget):
         applyBn.setToolTip('Apply ROI')
         applyBn.setStatusTip('Apply ROI')
         applyBn.setIcon(icon)
+        applyBn.setToolButtonStyle(Qt.Qt.ToolButtonTextBesideIcon)
+        applyBn.setText('To Q Space')
         applyBn.setEnabled(False)
         layout.addWidget(applyBn)
         applyBn.clicked.connect(self.__applyRoi)
-
-        layout.addWidget(Qt.QLabel('x='))
-        self._xEdit = edit = Qt.QLineEdit()
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
-        layout.addWidget(Qt.QLabel('y='))
-        self._yEdit = edit = Qt.QLineEdit()
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
-        self._wEdit = edit = Qt.QLineEdit()
-        layout.addWidget(Qt.QLabel('w='))
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
-        self._hEdit = edit = Qt.QLineEdit()
-        layout.addWidget(Qt.QLabel('h='))
-        layout.addWidget(edit, stretch=0, alignment=Qt.Qt.AlignLeft)
 
         fm = edit.fontMetrics()
         padding = 2 * fm.width('0')
@@ -183,14 +185,6 @@ class IntensityView(Qt.QMainWindow):
                  node,
                  **kwargs):
         super(IntensityView, self).__init__(parent=parent)
-
-        # self.__plotWindow = plotWindow = PlotWindow(aspectRatio=True,
-        #                                             curveStyle=False,
-        #                                             mask=False,
-        #                                             roi=False,
-        #                                             **kwargs)
-        # plotWindow.setKeepDataAspectRatio(True)
-        # plotWindow.setActiveCurveHandling(False)
 
         self.__plotWindow = plotWindow = XsocsPlot2D()
 

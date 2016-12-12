@@ -110,6 +110,25 @@ class XsocsGui(Qt.QMainWindow):
 
         self.__setupProject(projectFile=projectH5File)
 
+    def __closeAllViews(self):
+
+        if self.__intensityView:
+            self.__intensityView.close()
+            self.__intensityView.deleteLater()
+            self.__intensityView = None
+
+        views = self.__qspaceViews
+        if views:
+            for view in views:
+                view.close()
+                view.deleteLater()
+
+        views = self.__fitViews
+        if views:
+            for view in views:
+                view.close()
+                view.deleteLater()
+
     def __createViews(self):
         tree = ProjectTree()
         tree.setShowUniqueGroup(False)
@@ -343,6 +362,7 @@ class XsocsGui(Qt.QMainWindow):
         else:
             dialog.deleteLater()
             return
+        self.__closeAllViews()
         self.__setupProject(projectFile)
 
     def __createProject(self):

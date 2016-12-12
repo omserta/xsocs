@@ -119,13 +119,13 @@ class XsocsGui(Qt.QMainWindow):
 
         views = self.__qspaceViews
         if views:
-            for view in views:
+            for view in views.values():
                 view.close()
                 view.deleteLater()
 
         views = self.__fitViews
         if views:
-            for view in views:
+            for view in views.values():
                 view.close()
                 view.deleteLater()
 

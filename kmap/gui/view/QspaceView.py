@@ -316,9 +316,10 @@ class QSpaceView(Qt.QMainWindow):
 
         # setting up the plot3D and its param tree
         self.__view3d = view3d = ScalarFieldView()
+        view3d.addIsosurface(0., '#FF000060')
         view3d.addIsosurface(
             lambda data: np.mean(data) + np.std(data),
-            '#FF0000FF')
+            '#00FF00FF')
         view3d.setMinimumSize(400, 400)
         view3d.setAxesLabels('qx', 'qy', 'qz')
         self.setCentralWidget(view3d)

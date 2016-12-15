@@ -304,17 +304,25 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         colorLabel.setPixmap(pixmap)
 
 
+XsocsPlot2DPoint = namedtuple('XsocsPlot2DPoint', ['x', 'y', 'xIdx', 'yIdx'])
+
+
 class XsocsPlot2D(PlotWindow):
     """
     Base class for the 2D scatter plot.
     The colormap widget only supports one plot at the moment.
     """
 
+    sigPointSelected = Qt.Signal(object)
+
     def __init__(self, **kwargs):
         super(XsocsPlot2D, self).__init__(**kwargs)
 
         self.setActiveCurveHandling(False)
         self.setKeepDataAspectRatio(True)
+
+        self.__sigPlotConnected = False
+        self.__pointSelectionEnabled = False
 
         self.__logScatter = False
         self.__colormap = cm.jet
@@ -443,6 +451,69 @@ class XsocsPlot2D(PlotWindow):
 
         optionsLayout.addWidget(optionsBaseB)
         optionsLayout.addWidget(optionsBaseA)
+
+    def __drawSelectedPosition(self, x, y):
+        """Set the selected position.
+
+        :param float x:
+        :param float y:
+        """
+        self.addXMarker(x, legend='Xselection', color='pink')
+        self.addYMarker(y, legend='Yselection', color='pink')
+
+    def __onPlotSignal(self, event):
+        if self.__pointSelectionEnabled:
+            if event['event'] in ('mouseClicked'):
+                x, y = event['x'], event['y']
+                self.selectPoint(x, y)
+
+                curves = self.getAllCurves(just_legend=True)
+                if not curves:
+                    xIdx = None
+                    yIdx = None
+                else:
+                    curveX, curveY = self.getCurve(curves[0])[0:2]
+                    xIdx = ((curveX - x) ** 2 + (curveY - y) ** 2).argmin()
+                    yIdx = xIdx
+                    x = curveX[xIdx]
+                    y = curveY[xIdx]
+
+                point = XsocsPlot2DPoint(x=x, y=y, xIdx=xIdx, yIdx=yIdx)
+
+                self.selectPoint(x, y)
+                self.sigPointSelected.emit(point)
+
+    def selectPoint(self, x, y):
+        """
+        Called when PointSelectionEnabled is True and the mouse is clicked.
+        The default implementation just draws a crosshair at the position
+        of the closest point of the 2D scatter plot, if any, or at the
+        position x,y if an image is plotted. sigPointSelected is not emitted.
+        :param x:
+        :param y:
+        :return:
+        """
+        self.__drawSelectedPosition(x, y)
+
+    def setPointSelectionEnabled(self, enabled):
+        self.__connectPlotSignal(pointSelection=enabled)
+
+    def isPointSelectionEnabled(self, enabled):
+        return self.__pointSelectionEnabled
+
+    def __connectPlotSignal(self, pointSelection=None):
+        currentState = self.__sigPlotConnected
+
+        if pointSelection is not None:
+            self.__pointSelectionEnabled = pointSelection
+
+        newState = self.__pointSelectionEnabled
+        if currentState != newState:
+            if newState:
+                self.sigPlotSignal.connect(self.__onPlotSignal)
+            else:
+                self.sigPlotSignal.disconnect(self.__onPlotSignal)
+            self.__sigPlotConnected = newState
 
     def __save2DTriggered(self):
         # TODO : support more that one curve
@@ -640,6 +711,9 @@ class XsocsPlot2D(PlotWindow):
                     **kwargs):
 
         colors = None
+
+        if values is not None and self.__values:
+            raise ValueError('XsocsPlot2D only supports one 2D scatter plot.')
 
         if colormap is None:
             colormap = XsocsPlot2DColormap(colormap=cm.jet,

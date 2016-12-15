@@ -98,40 +98,19 @@ class PlotIntensityMap(XsocsPlot2D):
             roi=False, mask=False, fit=False)
         self.setMinimumSize(150, 150)
 
-        # self.setKeepDataAspectRatio(True)
-        # self.setActiveCurveHandling(False)
         self.setDataMargins(0.2, 0.2, 0.2, 0.2)
 
-    def setSelectedPosition(self, x, y):
-        """Set the selected position.
-
-        :param float x:
-        :param float y:
-        """
-        self.addXMarker(x, legend='Xselection', color='pink')
-        self.addYMarker(y, legend='Yselection', color='pink')
+    # def setSelectedPosition(self, x, y):
+    #     """Set the selected position.
+    #
+    #     :param float x:
+    #     :param float y:
+    #     """
+    #     self.addXMarker(x, legend='Xselection', color='pink')
+    #     self.addYMarker(y, legend='Yselection', color='pink')
 
     def sizeHint(self):
         return Qt.QSize(200, 200)
-
-    # def setPlotData(self, x, y, data):
-    #     """Set the scatter plot.
-    #
-    #     This is removing previous scatter plot
-    #
-    #     :param numpy.ndarray x: X coordinates of the points
-    #     :param numpy.ndarray y: Y coordinates of the points
-    #     :param numpy.ndarray data: Values associated to points
-    #     """
-    #     min_, max_ = data.min(), data.max()
-    #     colormap = cm.jet
-    #     colors = colormap((data.astype(np.float64) - min_) / (max_ - min_))
-    #     self.addCurve(x, y,
-    #                   legend='intensities',
-    #                   color=colors,
-    #                   symbol='s',
-    #                   linestyle='',
-    #                   resetzoom=False)
 
 
 class ROIPlotIntensityMap(PlotIntensityMap):
@@ -287,15 +266,18 @@ class QSpaceView(Qt.QMainWindow):
 
         item = h5NodeToProjectItem(node)
 
+        self.__qspaceH5 = item.qspaceH5
+
         # plot window displaying the intensity map
         self.__plotWindow = plotWindow = PlotIntensityMap(parent=self)
-        plotWindow.setGraphTitle('Intensity Map')
         plotWindow.setToolTip('Intensity Map integrated on whole QSpaces')
-        plotWindow.sigPlotSignal.connect(self.__plotSignal)
+        plotWindow.setPointSelectionEnabled(True)
+        plotWindow.sigPointSelected.connect(self.__pointSelected)
 
         self.__roiPlotWindow = roiPlotWindow = ROIPlotIntensityMap(
             parent=self, qspaceH5=item.qspaceH5)
-        roiPlotWindow.sigPlotSignal.connect(self.__plotSignal)
+        roiPlotWindow.setPointSelectionEnabled(True)
+        roiPlotWindow.sigPointSelected.connect(self.__pointSelected)
 
         self.__planePlotWindow = planePlotWindow = CutPlanePlotWindow(self)
 
@@ -310,7 +292,7 @@ class QSpaceView(Qt.QMainWindow):
             qz = self.__qz = qspaceH5.qz
 
             firstX = sampleX[0]
-            firstY = sampleX[1]
+            firstY = sampleY[1]
 
         self.__node = node
 
@@ -428,30 +410,35 @@ class QSpaceView(Qt.QMainWindow):
 
         self.sigProcessApplied.emit(self.__node, roi)
 
-    def __plotSignal(self, event):
-        if event['event'] not in ('mouseClicked'):
-            return
-        x, y = event['x'], event['y']
+    def __pointSelected(self, point):
+        xIdx = point.xIdx
+        x = point.x
+        y = point.y
 
-        self.__showIsoView(x, y)
+        self.__showIsoView(x, y, xIdx)
 
-    def __showIsoView(self, x, y):
+    def __showIsoView(self, x, y, idx=None):
         isoView = self.__view3d
-        item = h5NodeToProjectItem(self.__node)
 
-        with item.qspaceH5 as qspaceH5:
-            sampleX = qspaceH5.sample_x
-            sampleY = qspaceH5.sample_y
+        if self.sender() == self.__roiPlotWindow:
+            self.__plotWindow.selectPoint(x, y)
+        elif self.sender() == self.__roiPlotWindow:
+            self.__roiPlotWindow.selectPoint(x, y)
+        else:
+            self.__plotWindow.selectPoint(x, y)
+            self.__roiPlotWindow.selectPoint(x, y)
 
-            xIdx = ((sampleX - x)**2 + (sampleY - y)**2).argmin()
+        with self.__qspaceH5 as qspaceH5:
+            if idx is None:
+                sampleX = qspaceH5.sample_x
+                sampleY = qspaceH5.sample_y
 
-            x = sampleX[xIdx]
-            y = sampleY[xIdx]
+                idx = ((sampleX - x)**2 + (sampleY - y)**2).argmin()
 
-            self.__plotWindow.setSelectedPosition(x, y)
-            self.__roiPlotWindow.setSelectedPosition(x, y)
+                x = sampleX[idx]
+                y = sampleY[idx]
 
-            qspace = qspaceH5.qspace_slice(xIdx)
+            qspace = qspaceH5.qspace_slice(idx)
 
             # Set scale and translation
             # Do it before setting data as corresponding

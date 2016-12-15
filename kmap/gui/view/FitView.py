@@ -294,16 +294,7 @@ class DropPlotWidget(XsocsPlot2D):
         self.setActiveCurveHandling(False)
         self.setKeepDataAspectRatio(True)
         self.setAcceptDrops(True)
-        self.sigPlotSignal.connect(self.__plotSignal)
-
-    def __plotSignal(self, event):
-        if event['event'] not in ('mouseClicked',):
-            return
-        if self.__legend is None:
-            return
-
-        x, y = event['x'], event['y']
-        self.sigSelected.emit((x, y))
+        self.setPointSelectionEnabled(True)
 
     def dropEvent(self, event):
         mimeData = event.mimeData()
@@ -398,7 +389,7 @@ class FitView(Qt.QMainWindow):
                               yInverted=False)
         grpLayout.addWidget(plot)
         self.__plots.append(plot)
-        plot.sigSelected.connect(self.__plotSignal)
+        plot.sigPointSelected.connect(self.__plotSignal)
 
         plot = DropPlotWidget(grid=False,
                               curveStyle=False,
@@ -408,7 +399,7 @@ class FitView(Qt.QMainWindow):
                               yInverted=False)
         grpLayout.addWidget(plot)
         self.__plots.append(plot)
-        plot.sigSelected.connect(self.__plotSignal)
+        plot.sigPointSelected.connect(self.__plotSignal)
 
         plot = DropPlotWidget(grid=False,
                               curveStyle=False,
@@ -418,7 +409,7 @@ class FitView(Qt.QMainWindow):
                               yInverted=False)
         grpLayout.addWidget(plot)
         self.__plots.append(plot)
-        plot.sigSelected.connect(self.__plotSignal)
+        plot.sigPointSelected.connect(self.__plotSignal)
 
         layout.addWidget(grpBox, 0, 1)
 
@@ -474,20 +465,20 @@ class FitView(Qt.QMainWindow):
             _initCentroid(self.__plots, fitH5.filename, entry, process)
 
     def __plotSignal(self, point):
-        x, y = point
-        self.__plotFitResults(x, y)
+        # x, y = point.x, point.y
+        self.__plotFitResults(point.xIdx)
 
-    def __plotFitResults(self, x, y):
+    def __plotFitResults(self, xIdx):
         # TODO : the values could/should be loaded when the widget is shown for the
         # first time
         with self.__fitH5 as fitH5:
-            sampleX = fitH5.scan_x(self.__entry)
-            sampleY = fitH5.scan_y(self.__entry)
-
-            xIdx = ((sampleX - x)**2 + (sampleY - y)**2).argmin()
-
-            x = sampleX[xIdx]
-            y = sampleY[xIdx]
+            # sampleX = fitH5.scan_x(self.__entry)
+            # sampleY = fitH5.scan_y(self.__entry)
+            #
+            # xIdx = ((sampleX - x)**2 + (sampleY - y)**2).argmin()
+            #
+            # x = sampleX[xIdx]
+            # y = sampleY[xIdx]
 
             entry = self.__entry
 
@@ -530,17 +521,17 @@ class FitView(Qt.QMainWindow):
                 # TODO : popup
                 raise ValueError('Unknown process {0}.'.format(process))
 
-        self.__setSelectedPosition(x, y)
+        # self.__setSelectedPosition(x, y)
 
-    def __setSelectedPosition(self, x, y):
-        """Set the selected position.
-
-        :param float x:
-        :param float y:
-        """
-        for plot in self.__plots:
-            plot.addXMarker(x, legend='Xselection', color='pink')
-            plot.addYMarker(y, legend='Yselection', color='pink')
+    # def __setSelectedPosition(self, x, y):
+    #     """Set the selected position.
+    #
+    #     :param float x:
+    #     :param float y:
+    #     """
+    #     for plot in self.__plots:
+    #         plot.addXMarker(x, legend='Xselection', color='pink')
+    #         plot.addYMarker(y, legend='Yselection', color='pink')
 
 
 # TODO : allow users to register plot functions associated with the kind

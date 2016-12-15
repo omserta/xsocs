@@ -110,7 +110,11 @@ class XsocsGui(Qt.QMainWindow):
 
         self.__setupProject(projectFile=projectH5File)
 
-    def __closeAllViews(self):
+    def __closeAllDataViews(self):
+        """
+        Closes all currently opened views.
+        :return:
+        """
 
         if self.__intensityView:
             self.__intensityView.close()
@@ -130,6 +134,10 @@ class XsocsGui(Qt.QMainWindow):
                 view.deleteLater()
 
     def __createViews(self):
+        """
+
+        :return:
+        """
         tree = ProjectTree()
         tree.setShowUniqueGroup(False)
         tree.sigDelegateEvent.connect(self.__viewEvent)
@@ -362,7 +370,7 @@ class XsocsGui(Qt.QMainWindow):
         else:
             dialog.deleteLater()
             return
-        self.__closeAllViews()
+        self.__closeAllDataViews()
         self.__setupProject(projectFile)
 
     def __createProject(self):

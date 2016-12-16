@@ -91,9 +91,57 @@ class StyledLineEdit(Qt.QLineEdit):
             # There are two stylesheet units "em" and "xm" that I tried,
             # but the results were not satisfactory.
             fm = self.fontMetrics()
-            text = 'M' * (self.__nChar + self._padding)
-            width = fm.width(text)
+            # text = 'M' * (self.__nChar + self._padding)
+            # width = fm.width(text)
+            width = fm.width('M') * self.__nChar
+            height = fm.height()
             sheet += """StyledLineEdit{{ max-width: {0}px;
-                                         min-width: {0}px; }}
-                     """.format(width)
+                                         min-width: {0}px;
+                                         max-height: {1}px;
+                                         min-height: {1}px;}}
+                     """.format(width, height)
+        self.setStyleSheet(sheet)
+
+
+class StyledLabel(Qt.QLabel):
+    """
+    Styled QLabel.
+    """
+
+    _padding = 2
+
+    def __init__(self, parent=None, nChar=None):
+        super(StyledLabel, self).__init__(parent)
+        self.__nChar = nChar
+        self.setAlignment(Qt.Qt.AlignLeft)
+        self.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Sunken)
+        self._updateStyleSheet()
+
+    def setNChar(self, nChar):
+        """
+        Sets the number of characters to be displayed.
+        :param nChar: None to reset to default.
+        :return:
+        """
+        self.__nChar = nChar
+        self._updateStyleSheet()
+
+    def _updateStyleSheet(self):
+        """
+        Sets the style sheet.
+        :return:
+        """
+        sheet = ''
+
+        if self.__nChar is not None:
+            # There are two stylesheet units "em" and "xm" that I tried,
+            # but the results were not satisfactory.
+            fm = self.fontMetrics()
+            width = fm.width('M') * self.__nChar
+            height = fm.height()
+            sheet += """StyledLabel{{ max-width: {0}px;
+                                                     min-width: {0}px;
+                                                     max-height: {1}px;
+                                                     min-height: {1}px;}}
+                                 """.format(width, height)
         self.setStyleSheet(sheet)

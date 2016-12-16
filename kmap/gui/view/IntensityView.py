@@ -72,25 +72,25 @@ class RectRoiWidget(Qt.QWidget):
         layout.addWidget(roiToolBar, row, 0, 1, 2, Qt.Qt.AlignTop)
 
         row += 1
-        self._xEdit = edit = StyledLineEdit()
+        self._xEdit = edit = StyledLineEdit(nChar=6)
         edit.setReadOnly(True)
         layout.addWidget(Qt.QLabel('x='), row, 0, Qt.Qt.AlignTop)
         layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
 
         row += 1
-        self._yEdit = edit = StyledLineEdit()
+        self._yEdit = edit = StyledLineEdit(nChar=6)
         edit.setReadOnly(True)
         layout.addWidget(Qt.QLabel('y='), row, 0, Qt.Qt.AlignTop)
         layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
 
         row += 1
-        self._wEdit = edit = StyledLineEdit()
+        self._wEdit = edit = StyledLineEdit(nChar=6)
         edit.setReadOnly(True)
         layout.addWidget(Qt.QLabel('w='), row, 0, Qt.Qt.AlignTop)
         layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
 
         row += 1
-        self._hEdit = edit = StyledLineEdit()
+        self._hEdit = edit = StyledLineEdit(nChar=6)
         edit.setReadOnly(True)
         layout.addWidget(Qt.QLabel('h='), row, 0, Qt.Qt.AlignTop)
         layout.addWidget(edit, row, 1, Qt.Qt.AlignTop)
@@ -215,6 +215,8 @@ class IntensityView(Qt.QMainWindow):
         self.setWindowTitle('[XSOCS] {0}'.format(node.h5Path))
 
         self.__plotWindow = plotWindow = XsocsPlot2D()
+        plotWindow.setShowMousePosition(True)
+        plotWindow.setShowSelectedCoordinates(False)
 
         dock = Qt.QDockWidget(self)
         tree = IntensityTree(self, model=model)

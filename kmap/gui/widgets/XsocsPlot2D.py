@@ -34,7 +34,7 @@ import weakref
 from collections import namedtuple
 
 import numpy as np
-from matplotlib import cm, colors as mpl_colors
+from matplotlib import cm
 
 
 from silx.gui import qt as Qt
@@ -43,10 +43,11 @@ from silx.gui.icons import getQIcon
 from silx.gui.plot import PlotWindow
 from silx.math.histogram import Histogramnd
 
-from ...gui.icons import getQIcon as getKmapIcon
-from ..widgets.RangeSlider import RangeSlider
-from ..widgets.Input import StyledLineEdit
 from ..widgets.Containers import GroupBox
+from ..widgets.RangeSlider import RangeSlider
+from ..widgets.PointWidget import PointWidget
+from ...gui.icons import getQIcon as getKmapIcon
+from ..widgets.Input import StyledLineEdit, StyledLabel
 
 
 _defaultNColors = 256
@@ -55,13 +56,12 @@ XsocsPlot2DColormap = namedtuple('XsocsPlot2DColormap',
                                  ['colormap', 'minVal', 'maxVal', 'nColors'])
 
 
-def _arrayToIndexedPixmap(vector, cmap, nColors=256, range=None):
+def _arrayToIndexedPixmap(vector, cmap, nColors=256):
     """
 
     :param vector:
     :param cmap:
     :param nColors:
-    :param range:
     :return:
     """
     assert vector.ndim <= 2
@@ -307,6 +307,70 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
 XsocsPlot2DPoint = namedtuple('XsocsPlot2DPoint', ['x', 'y', 'xIdx', 'yIdx'])
 
 
+class DoublePointDock(Qt.QDockWidget):
+    """
+    Widget for displaying selected point and mouse coordinate
+    """
+
+    mousePoint = property(lambda self: self.__mousePoint)
+    selectedPoint = property(lambda self: self.__selectedPoint)
+
+    def __init__(self, *args, **kwargs):
+        super(DoublePointDock, self).__init__(*args, **kwargs)
+
+        widget = Qt.QWidget()
+        layout = Qt.QGridLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.__mouseVisible = True
+        self.__selectedVisible = True
+
+        self.__mousePoint = mousePoint = PointWidget()
+        self.__mouseLabel = mouseLabel = Qt.QLabel('Mouse')
+        mousePoint.setFrameStyle(Qt.QFrame.Box)
+        self.__selectedPoint = selectedPoint = PointWidget()
+        self.__selectedLabel = selectedLabel = Qt.QLabel('Selected')
+        selectedPoint.setFrameStyle(Qt.QFrame.Box)
+
+        layout.addWidget(mouseLabel, 0, 0)
+        layout.addWidget(mousePoint, 0, 1)
+        layout.addWidget(selectedLabel, 1, 0)
+        layout.addWidget(selectedPoint, 1, 1)
+
+        layout.setColumnStretch(layout.columnCount(), 1)
+        layout.setRowStretch(layout.rowCount(), 1)
+
+        widget.installEventFilter(self)
+        self.setWidget(widget)
+
+    def eventFilter(self, obj, event):
+        if event.type() == Qt.QEvent.Resize:
+            self.setFixedHeight(event.size().height())
+        return super(DoublePointDock, self).eventFilter(obj, event)
+
+    def sizeHint(self):
+        return Qt.QSize(0, 0)
+
+    def setShowSelectedPoint(self, show):
+        if show != self.__selectedVisible:
+            layout = self.layout()
+            if show:
+                layout.addWidget(self.__selectedPoint, 1, 0)
+                layout.addWidget(self.__selectedLabel, 1, 1)
+            else:
+                layout.takeAt(layout.indexOf(self.__selectedPoint))
+                self.__selectedPoint.setParent(None)
+                layout.takeAt(layout.indexOf(self.__selectedLabel))
+                self.__selectedLabel.setParent(None)
+        self.__selectedVisible = show
+        # self.updateGeometry()
+        # self.parent().adjustSize()
+
+    def setShowMousePoint(self, show):
+        self.__mousePoint.setVisible(show)
+        self.__mouseLabel.setVisible(show)
+
+
 class XsocsPlot2D(PlotWindow):
     """
     Base class for the 2D scatter plot.
@@ -323,17 +387,43 @@ class XsocsPlot2D(PlotWindow):
 
         self.__sigPlotConnected = False
         self.__pointSelectionEnabled = False
+        self.__showSelectedCoordinates = False
+        self.__showMousePosition = False
 
         self.__logScatter = False
         self.__colormap = cm.jet
         self.__values = {}
         self.__cmapDialog = None
 
+        pointDock = self.__pointWidget = DoublePointDock()
+
+        # dock = self.__pointDock = Qt.QDockWidget()
+        # dock.setWidget(pointWidget)
+        features = Qt.QDockWidget.DockWidgetVerticalTitleBar | Qt.QDockWidget.DockWidgetClosable
+        pointDock.setFeatures(features)
+        pointDock.sizeHint = lambda: Qt.QSize()
+        self.addDockWidget(Qt.Qt.BottomDockWidgetArea, pointDock)
+        pointDockAction = pointDock.toggleViewAction()
+        pointDockAction.setIcon(getQIcon('crosshair'))
+        pointDockAction.setIconVisibleInMenu(True)
+
+        pointDockBn = Qt.QToolButton()
+        pointDockBn.setDefaultAction(pointDockAction)
+        closeButton = Qt.QToolButton()
+        style = Qt.QApplication.style()
+        icon = style.standardIcon(Qt.QStyle.SP_TitleBarCloseButton)
+        closeButton.setIcon(icon)
+        closeButton.setFixedSize(closeButton.iconSize())
+        closeButton.clicked.connect(pointDockAction.trigger)
+        pointDock.setTitleBarWidget(closeButton)
+
         toolbars = self.findChildren(Qt.QToolBar)
         for toolbar in toolbars:
             toolbar.hide()
 
         centralWid = self.centralWidget()
+
+        centralWid.installEventFilter(self)
 
         self.__optionsBase = optionsBase = Qt.QWidget(centralWid)
         optionsLayout = Qt.QHBoxLayout(optionsBase)
@@ -366,6 +456,11 @@ class XsocsPlot2D(PlotWindow):
         optionsLayoutB = Qt.QHBoxLayout(optionsBaseB)
         optionsLayoutB.setContentsMargins(0, 0, 0, 0)
         optionsLayoutB.setSpacing(0)
+
+        # coordinates dock action
+        pointDockBn = Qt.QToolButton()
+        pointDockBn.setDefaultAction(pointDockAction)
+        optionsLayoutB.addWidget(pointDockBn)
 
         # colormap dialog action
         self.__colormapBn = colormapBn = Qt.QToolButton()
@@ -461,9 +556,16 @@ class XsocsPlot2D(PlotWindow):
         self.addXMarker(x, legend='Xselection', color='pink')
         self.addYMarker(y, legend='Yselection', color='pink')
 
+    def __displaySelectedCoordinates(self, x, y):
+        if self.__showSelectedCoordinates:
+            self.__pointWidget.selectedPoint.setPoint(x, y)
+
+    def __displayMousePosition(self, x, y):
+        self.__pointWidget.mousePoint.setPoint(x, y)
+
     def __onPlotSignal(self, event):
-        if self.__pointSelectionEnabled:
-            if event['event'] in ('mouseClicked'):
+        if self.__pointSelectionEnabled or self.__showSelectedCoordinates:
+            if event['event'] == 'mouseClicked':
                 x, y = event['x'], event['y']
                 self.selectPoint(x, y)
 
@@ -481,7 +583,11 @@ class XsocsPlot2D(PlotWindow):
                 point = XsocsPlot2DPoint(x=x, y=y, xIdx=xIdx, yIdx=yIdx)
 
                 self.selectPoint(x, y)
+
                 self.sigPointSelected.emit(point)
+        if self.__showMousePosition:
+            if event['event'] == 'mouseMoved':
+                self.__displayMousePosition(event['x'], event['y'])
 
     def selectPoint(self, x, y):
         """
@@ -493,7 +599,21 @@ class XsocsPlot2D(PlotWindow):
         :param y:
         :return:
         """
+        self.__displaySelectedCoordinates(x, y)
         self.__drawSelectedPosition(x, y)
+
+    def setShowSelectedCoordinates(self, show):
+        self.__pointWidget.setShowSelectedPoint(show)
+        self.__connectPlotSignal(showSelectedCoordinates=show)
+
+    def getShowSelectedCoordinates(self):
+        return self.__showSelectedCoordinates
+
+    def setShowMousePosition(self, show):
+        self.__connectPlotSignal(showMousePosition=show)
+
+    def getShowMousePosition(self):
+        return self.__showMousePosition
 
     def setPointSelectionEnabled(self, enabled):
         self.__connectPlotSignal(pointSelection=enabled)
@@ -501,13 +621,25 @@ class XsocsPlot2D(PlotWindow):
     def isPointSelectionEnabled(self, enabled):
         return self.__pointSelectionEnabled
 
-    def __connectPlotSignal(self, pointSelection=None):
+    def __connectPlotSignal(self,
+                            pointSelection=None,
+                            showSelectedCoordinates=None,
+                            showMousePosition=None):
         currentState = self.__sigPlotConnected
 
         if pointSelection is not None:
             self.__pointSelectionEnabled = pointSelection
 
-        newState = self.__pointSelectionEnabled
+        if showSelectedCoordinates is not None:
+            self.__showSelectedCoordinates = showSelectedCoordinates
+
+        if showMousePosition is not None:
+            self.__showMousePosition = showMousePosition
+
+        newState = (self.__pointSelectionEnabled |
+                    self.__showSelectedCoordinates |
+                    self.__showMousePosition)
+
         if currentState != newState:
             if newState:
                 self.sigPlotSignal.connect(self.__onPlotSignal)
@@ -581,9 +713,10 @@ class XsocsPlot2D(PlotWindow):
                             last_bin_closed=True)
         return histo
 
-    def resizeEvent(self, event):
-        super(XsocsPlot2D, self).resizeEvent(event)
-        self.__moveOptionBar()
+    def eventFilter(self, obj, event):
+        if event.type() == Qt.QEvent.Resize:
+            self.__moveOptionBar()
+        return super(XsocsPlot2D, self).eventFilter(obj, event)
 
     def __moveOptionBar(self):
         optionsBase = self.__optionsBase
@@ -712,8 +845,9 @@ class XsocsPlot2D(PlotWindow):
 
         colors = None
 
-        if values is not None and self.__values:
-            raise ValueError('XsocsPlot2D only supports one 2D scatter plot.')
+        # TODO
+        # if values is not None and self.__values:
+        #     raise ValueError('XsocsPlot2D only supports one 2D scatter plot.')
 
         if colormap is None:
             colormap = XsocsPlot2DColormap(colormap=cm.jet,

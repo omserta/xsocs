@@ -295,6 +295,8 @@ class DropPlotWidget(XsocsPlot2D):
         self.setKeepDataAspectRatio(True)
         self.setAcceptDrops(True)
         self.setPointSelectionEnabled(True)
+        self.setShowMousePosition(True)
+        self.setShowSelectedCoordinates(True)
 
     def dropEvent(self, event):
         mimeData = event.mimeData()
@@ -423,18 +425,24 @@ class FitView(Qt.QMainWindow):
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qx fit')
+        self.setShowMousePosition(True)
+        self.setShowSelectedCoordinates(True)
 
         plot = XsocsPlot2D()
         plot.setKeepDataAspectRatio(False)
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qy fit')
+        self.setShowMousePosition(True)
+        self.setShowSelectedCoordinates(True)
 
         plot = XsocsPlot2D()
         plot.setKeepDataAspectRatio(False)
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qz fit')
+        self.setShowMousePosition(True)
+        self.setShowSelectedCoordinates(True)
 
         layout.addWidget(grpBox, 0, 2)
 

@@ -62,8 +62,8 @@ class RoiAxisWidget(Qt.QWidget):
         layout = Qt.QGridLayout(self)
         label = Qt.QLabel(label)
         slider = self.__slider = RangeSlider()
-        leftEdit = self.__leftEdit = StyledLineEdit(nChar=5)
-        rightEdit = self.__rightEdit = StyledLineEdit(nChar=5)
+        leftEdit = self.__leftEdit = StyledLineEdit(nChar=7)
+        rightEdit = self.__rightEdit = StyledLineEdit(nChar=7)
         leftEdit.setReadOnly(True)
         rightEdit.setReadOnly(True)
 
@@ -86,28 +86,13 @@ class PlotIntensityMap(XsocsPlot2D):
     :param parent: QWidget's parent
     """
 
-    def __init__(self, parent=None):
-        super(PlotIntensityMap, self).__init__(
-            parent=parent, backend=None,
-            resetzoom=True, autoScale=False,
-            logScale=False, grid=True,
-            curveStyle=False, colormap=False,
-            aspectRatio=True, yInverted=False,
-            copy=True, save=True, print_=True,
-            control=False, position=False,
-            roi=False, mask=False, fit=False)
+    def __init__(self, parent=None, **kwargs):
+        super(PlotIntensityMap, self).__init__(**kwargs)
         self.setMinimumSize(150, 150)
 
         self.setDataMargins(0.2, 0.2, 0.2, 0.2)
-
-    # def setSelectedPosition(self, x, y):
-    #     """Set the selected position.
-    #
-    #     :param float x:
-    #     :param float y:
-    #     """
-    #     self.addXMarker(x, legend='Xselection', color='pink')
-    #     self.addYMarker(y, legend='Yselection', color='pink')
+        self.setShowMousePosition(True)
+        self.setShowSelectedCoordinates(True)
 
     def sizeHint(self):
         return Qt.QSize(200, 200)

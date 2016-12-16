@@ -58,10 +58,9 @@ class RectRoiWidget(Qt.QWidget):
         # support multiple ROIs then batch them
         super(RectRoiWidget, self).__init__(parent)
 
-        roiToolBar = roiManager.toolBar(rois=['rectangle'],
+        self.__roiToolBar = roiToolBar = roiManager.toolBar(rois=['rectangle'],
                                         options=['show'])
         roiToolBar.setMovable(False)
-        roiToolBar.addSeparator()
 
         topLayout = Qt.QVBoxLayout(self)
 
@@ -136,6 +135,9 @@ class RectRoiWidget(Qt.QWidget):
                                          Qt.Qt.QueuedConnection)
         roiManager.sigRoiMoved.connect(self.__roiMoved,
                                        Qt.Qt.QueuedConnection)
+
+    def sizeHint(self):
+        return Qt.QSize(self.__roiToolBar.sizeHint().width() + 10, 0)
 
     def __discardRoi(self, checked):
         self.__roiManager.clear()

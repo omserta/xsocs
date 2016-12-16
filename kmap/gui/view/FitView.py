@@ -333,7 +333,7 @@ class DropPlotWidget(XsocsPlot2D):
 
 
 class FitView(Qt.QMainWindow):
-    sigProcessApplied = Qt.Signal(object)
+    sigPointSelected = Qt.Signal(object)
 
     def __init__(self,
                  parent,
@@ -342,6 +342,8 @@ class FitView(Qt.QMainWindow):
                  qspaceNode,
                  **kwargs):
         super(FitView, self).__init__(parent)
+
+        self.__firstShow = True
 
         self.setWindowTitle('[XSOCS] {0}'.format(node.h5Path))
 
@@ -425,24 +427,24 @@ class FitView(Qt.QMainWindow):
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qx fit')
-        self.setShowMousePosition(True)
-        self.setShowSelectedCoordinates(True)
+        plot.setShowMousePosition(True)
+        plot.setShowSelectedCoordinates(True)
 
         plot = XsocsPlot2D()
         plot.setKeepDataAspectRatio(False)
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qy fit')
-        self.setShowMousePosition(True)
-        self.setShowSelectedCoordinates(True)
+        plot.setShowMousePosition(True)
+        plot.setShowSelectedCoordinates(True)
 
         plot = XsocsPlot2D()
         plot.setKeepDataAspectRatio(False)
         grpLayout.addWidget(plot)
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qz fit')
-        self.setShowMousePosition(True)
-        self.setShowSelectedCoordinates(True)
+        plot.setShowMousePosition(True)
+        plot.setShowSelectedCoordinates(True)
 
         layout.addWidget(grpBox, 0, 2)
 
@@ -451,7 +453,16 @@ class FitView(Qt.QMainWindow):
 
         self.setCentralWidget(centralWid)
 
-        self.__initPlots()
+        # self.__initPlots()
+
+    def showEvent(self, event):
+        # TODO : this is a workaround to the fact that
+        # plot ranges aren't set correctly when adding data when the plot
+        # widget hasn't been shown yet.
+        super(FitView, self).showEvent(event)
+        if self.__firstShow:
+            self.__firstShow = False
+            self.__initPlots()
 
     def __initPlots(self):
 
@@ -473,8 +484,8 @@ class FitView(Qt.QMainWindow):
             _initCentroid(self.__plots, fitH5.filename, entry, process)
 
     def __plotSignal(self, point):
-        # x, y = point.x, point.y
         self.__plotFitResults(point.xIdx)
+        self.sigPointSelected.emit(point)
 
     def __plotFitResults(self, xIdx):
         # TODO : the values could/should be loaded when the widget is shown for the
@@ -643,9 +654,12 @@ def _initLeastSq(plots, fitH5Name, entry, process):
     """
     # hard coded result name, this isn't satisfactory but I can't think
     # of any other way right now.
-    plots[0].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qx_axis)
-    plots[1].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qy_axis)
-    plots[2].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qz_axis)
+    plots[0].plotFitResult(fitH5Name, entry, process,
+                           'position', FitH5.qx_axis)
+    plots[1].plotFitResult(fitH5Name, entry, process,
+                           'position', FitH5.qy_axis)
+    plots[2].plotFitResult(fitH5Name, entry, process,
+                           'position', FitH5.qz_axis)
 
 
 def _initCentroid(plots, fitH5Name, entry, process):

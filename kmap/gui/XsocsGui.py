@@ -26,6 +26,7 @@
 from __future__ import absolute_import
 
 import os
+from collections import OrderedDict
 
 from silx.gui import qt as Qt
 
@@ -95,8 +96,8 @@ class XsocsGui(Qt.QMainWindow):
         self.__project = None
 
         self.__intensityView = None
-        self.__qspaceViews = {}
-        self.__fitViews = {}
+        self.__qspaceViews = OrderedDict()
+        self.__fitViews = OrderedDict()
 
         self.__createViews()
         self.__createActions()
@@ -214,7 +215,7 @@ class XsocsGui(Qt.QMainWindow):
 
     tree = property(lambda self: self.centralWidget())
 
-    def __showQSpace(self, node):
+    def __showQSpace(self, node, bringToFront=True):
         view = self.__qspaceViews.get(node)
         if not view:
             view = QSpaceView(self, model=node.model, node=node)
@@ -227,7 +228,9 @@ class XsocsGui(Qt.QMainWindow):
             view.resize(size)
             view.sigProcessApplied.connect(self.__qspaceRoiApplied)
         view.show()
-        view.raise_()
+        if bringToFront:
+            view.raise_()
+        return view
 
     def __qspaceRoiApplied(self, node, roi):
         item = h5NodeToProjectItem(node)
@@ -257,7 +260,26 @@ class XsocsGui(Qt.QMainWindow):
             # TODO : unmaintainable and FUGLY!!!!! node.parent().parent()
             view = FitView(self, node.model, node, node.parent().parent())
             self.__fitViews[node] = view
+            view.sigPointSelected.connect(self.__fitViewPointSelected)
         view.show()
+        return view
+
+    def __fitViewPointSelected(self, point):
+        sender = self.sender()
+        if not isinstance(sender, FitView):
+            return
+        views = self.__fitViews.values()
+        try:
+            viewIdx = views.index(sender)
+        except ValueError:
+            # TODO
+            return
+        fitNode = self.__fitViews.keys()[viewIdx]
+
+        qspaceNode = fitNode.parent().parent()
+        qspaceView = self.__showQSpace(qspaceNode, bringToFront=False)
+        qspaceView.selectPoint(point.x, point.y)
+
 
     def model(self):
         return self.tree.model()

@@ -396,6 +396,9 @@ class QSpaceView(Qt.QMainWindow):
 
         self.sigProcessApplied.emit(self.__node, roi)
 
+    def selectPoint(self, x, y):
+        self.__showIsoView(x, y)
+
     def __pointSelected(self, point):
         xIdx = point.xIdx
         x = point.x

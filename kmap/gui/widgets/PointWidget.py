@@ -40,7 +40,9 @@ class PointWidget(Qt.QFrame):
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.__xEdit = xEdit = StyledLineEdit(nChar=6)
+        xEdit.setReadOnly(True)
         self.__yEdit = yEdit = StyledLineEdit(nChar=6)
+        yEdit.setReadOnly(True)
 
         xLabel = 'x'
         yLabel = 'y'

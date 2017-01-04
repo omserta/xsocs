@@ -332,43 +332,54 @@ class DoublePointDock(Qt.QDockWidget):
         self.__selectedLabel = selectedLabel = Qt.QLabel('Selected')
         selectedPoint.setFrameStyle(Qt.QFrame.Box)
 
-        layout.addWidget(mouseLabel, 0, 0)
-        layout.addWidget(mousePoint, 0, 1)
-        layout.addWidget(selectedLabel, 1, 0)
-        layout.addWidget(selectedPoint, 1, 1)
+        layout.addWidget(mouseLabel, 0, 0, Qt.Qt.AlignLeft)
+        layout.addWidget(mousePoint, 0, 1, Qt.Qt.AlignLeft)
+        layout.addWidget(selectedLabel, 1, 0, Qt.Qt.AlignLeft)
+        layout.addWidget(selectedPoint, 1, 1, Qt.Qt.AlignLeft)
 
-        layout.setColumnStretch(layout.columnCount(), 1)
-        layout.setRowStretch(layout.rowCount(), 1)
+        layout.setColumnStretch(2, 1)
 
-        widget.installEventFilter(self)
         self.setWidget(widget)
 
-    def eventFilter(self, obj, event):
-        if event.type() == Qt.QEvent.Resize:
-            self.setFixedHeight(event.size().height())
-        return super(DoublePointDock, self).eventFilter(obj, event)
-
-    def sizeHint(self):
-        return Qt.QSize(0, 0)
-
     def setShowSelectedPoint(self, show):
+        """
+        Shows/hides the PointWidget displaying the currently selected point.
+        :param show:
+        :return:
+        """
         if show != self.__selectedVisible:
-            layout = self.layout()
+            layout = self.widget().layout()
             if show:
-                layout.addWidget(self.__selectedPoint, 1, 0)
-                layout.addWidget(self.__selectedLabel, 1, 1)
+                layout.addWidget(self.__selectedLabel, 1, 0, Qt.Qt.AlignLeft)
+                layout.addWidget(self.__selectedPoint, 1, 1, Qt.Qt.AlignLeft)
             else:
                 layout.takeAt(layout.indexOf(self.__selectedPoint))
                 self.__selectedPoint.setParent(None)
                 layout.takeAt(layout.indexOf(self.__selectedLabel))
                 self.__selectedLabel.setParent(None)
         self.__selectedVisible = show
-        # self.updateGeometry()
-        # self.parent().adjustSize()
+        self.widget().updateGeometry()
+        self.widget().adjustSize()
 
     def setShowMousePoint(self, show):
-        self.__mousePoint.setVisible(show)
-        self.__mouseLabel.setVisible(show)
+        """
+        Shows/Hides the PointWidget displaying the mouse position.
+        :param show:
+        :return:
+        """
+        if show != self.__mouseVisible:
+            layout = self.widget().layout()
+            if show:
+                layout.addWidget(self.__mouseLabel, 0, 0)
+                layout.addWidget(self.__mousePoint, 0, 1)
+            else:
+                layout.takeAt(layout.indexOf(self.__mousePoint))
+                self.__mousePoint.setParent(None)
+                layout.takeAt(layout.indexOf(self.__mouseLabel))
+                self.__mouseLabel.setParent(None)
+        self.__mouseVisible = show
+        self.widget().updateGeometry()
+        self.widget().adjustSize()
 
 
 class XsocsPlot2D(PlotWindow):
@@ -397,8 +408,6 @@ class XsocsPlot2D(PlotWindow):
 
         pointDock = self.__pointWidget = DoublePointDock()
 
-        # dock = self.__pointDock = Qt.QDockWidget()
-        # dock.setWidget(pointWidget)
         features = Qt.QDockWidget.DockWidgetVerticalTitleBar | Qt.QDockWidget.DockWidgetClosable
         pointDock.setFeatures(features)
         pointDock.sizeHint = lambda: Qt.QSize()
@@ -406,6 +415,8 @@ class XsocsPlot2D(PlotWindow):
         pointDockAction = pointDock.toggleViewAction()
         pointDockAction.setIcon(getQIcon('crosshair'))
         pointDockAction.setIconVisibleInMenu(True)
+        pointDock.setShowMousePoint(self.__showMousePosition)
+        pointDock.setShowSelectedPoint(self.__showSelectedCoordinates)
 
         pointDockBn = Qt.QToolButton()
         pointDockBn.setDefaultAction(pointDockAction)
@@ -585,6 +596,7 @@ class XsocsPlot2D(PlotWindow):
                 self.selectPoint(x, y)
 
                 self.sigPointSelected.emit(point)
+
         if self.__showMousePosition:
             if event['event'] == 'mouseMoved':
                 self.__displayMousePosition(event['x'], event['y'])
@@ -603,28 +615,63 @@ class XsocsPlot2D(PlotWindow):
         self.__drawSelectedPosition(x, y)
 
     def setShowSelectedCoordinates(self, show):
+        """
+        Controls the visibility of the selected position widget.
+        :param show:
+        :return:
+        """
         self.__pointWidget.setShowSelectedPoint(show)
         self.__connectPlotSignal(showSelectedCoordinates=show)
 
     def getShowSelectedCoordinates(self):
+        """
+        Returns True if the selected position is shown.
+        :return:
+        """
         return self.__showSelectedCoordinates
 
     def setShowMousePosition(self, show):
+        """
+        Controls the visibility of the mouse position widget.
+        :param show:
+        :return:
+        """
+        self.__pointWidget.setShowMousePoint(show)
         self.__connectPlotSignal(showMousePosition=show)
 
     def getShowMousePosition(self):
+        """
+        Returns True if the mouse position is shown.
+        :return:
+        """
         return self.__showMousePosition
 
     def setPointSelectionEnabled(self, enabled):
+        """
+        Controls the point selection behaviour.
+        :param enabled: True to allow point selection.
+        :return:
+        """
         self.__connectPlotSignal(pointSelection=enabled)
 
-    def isPointSelectionEnabled(self, enabled):
+    def isPointSelectionEnabled(self):
+        """
+        Returns True if plot points selection is enabled.
+        :return:
+        """
         return self.__pointSelectionEnabled
 
     def __connectPlotSignal(self,
                             pointSelection=None,
                             showSelectedCoordinates=None,
                             showMousePosition=None):
+        """
+        Connects/disconnects the plot signal as needed.
+        :param pointSelection:
+        :param showSelectedCoordinates:
+        :param showMousePosition:
+        :return:
+        """
         currentState = self.__sigPlotConnected
 
         if pointSelection is not None:

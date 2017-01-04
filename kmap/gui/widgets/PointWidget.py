@@ -34,6 +34,9 @@ from .Input import StyledLabel, StyledLineEdit
 
 
 class PointWidget(Qt.QFrame):
+    """
+    Widget displaying 2 values (x, y).
+    """
     def __init__(self, **kwargs):
         super(PointWidget, self).__init__(**kwargs)
 
@@ -53,5 +56,11 @@ class PointWidget(Qt.QFrame):
         layout.addWidget(yEdit)
 
     def setPoint(self, x, y):
+        """
+        Sets the values to display.
+        :param x:
+        :param y:
+        :return:
+        """
         self.__xEdit.setText('{0:6g}'.format(x))
         self.__yEdit.setText('{0:6g}'.format(y))

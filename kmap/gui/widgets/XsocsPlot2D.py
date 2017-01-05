@@ -937,6 +937,12 @@ class XsocsPlot2D(PlotWindow):
         # if values is not None and self.__values:
         #     raise ValueError('XsocsPlot2D only supports one 2D scatter plot.')
 
+        finite = np.isfinite(values)
+
+        x = x[finite]
+        y = y[finite]
+        values = values[finite]
+
         if colormap is None:
             colormap = XsocsPlot2DColormap(colormap=cm.jet,
                                            minVal=None,

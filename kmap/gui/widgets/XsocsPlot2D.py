@@ -43,6 +43,7 @@ from silx.io.utils import savetxt
 from silx.gui.icons import getQIcon
 from silx.gui.plot import PlotWindow
 from silx.math.histogram import Histogramnd
+from silx.gui.plot.MPLColormap import viridis
 
 from ..widgets.Containers import GroupBox
 from ..widgets.RangeSlider import RangeSlider
@@ -57,17 +58,15 @@ XsocsPlot2DColormap = namedtuple('XsocsPlot2DColormap',
                                  ['colormap', 'minVal', 'maxVal', 'nColors'])
 
 
-def _arrayToIndexedPixmap(vector, cmap, nColors=256):
+def _arrayToPixmap(vector, cmap, nColors=256):
     """
-
-    :param vector:
-    :param cmap:
-    :param nColors:
+    Creates a pixmap from an array, using the provided colormap.
+    :param vector: a numpy array.
+    :param cmap: a matplotlib colormap.
+    :param nColors: number of colors to use.
     :return:
     """
     assert vector.ndim <= 2
-
-    # colors = cmap(np.arange(nColors))  # .to_rgba(np.arange(255))
 
     sm = cm.ScalarMappable(cmap=cmap)
     colors = sm.to_rgba(np.arange(nColors))
@@ -102,7 +101,7 @@ def _applyColormap(colormap,
                    maxVal=None,
                    clip=True):
     """
-
+    Converts an array (values) to a rgba array.
     :param colormap: An Xsocs2DColormap instance
     :param values: Values to convert to color values.
     :param minVal: clips the values to minVal. If None, it will take the value
@@ -131,7 +130,8 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
     Right now only supports one scatter plot!
     """
     colormaps = OrderedDict([('jet', cm.jet),
-                             ('afmhot', cm.afmhot)])
+                             ('afmhot', cm.afmhot),
+                             ('viridis', viridis)])
 
     def __init__(self, plot, curve, **kwargs):
 
@@ -172,9 +172,11 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         grpBox = GroupBox('Colormap')
         grpBoxLayout = Qt.QGridLayout(grpBox)
         self.__cmapCBox = cmapCBox = Qt.QComboBox()
+
         for key, value in self.colormaps.items():
             cmapCBox.addItem(key, userData=value)
         cmapCBox.setCurrentIndex(index)
+
         grpBoxLayout.addWidget(cmapCBox, 0, 0, Qt.Qt.AlignCenter)
 
         cmapCBox.currentIndexChanged.connect(self.__cmapCBoxChanged)
@@ -216,11 +218,34 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
 
         rngSlider.sigSliderMoved.connect(self.__rngSliderMoved)
 
-    def __cmapCBoxChanged(self):
+    def __updateColorMap(self, colormap, minVal, maxVal, nColors):
+        """
+        Updates the __colormap member
+        :param colormap:
+        :param minVal:
+        :param maxVal:
+        :param nColors:
+        :return:
+        """
+        self.__colormap = XsocsPlot2DColormap(colormap=colormap,
+                                              minVal=minVal,
+                                              maxVal=maxVal,
+                                              nColors=nColors)
+
+    def __cmapCBoxChanged(self, index):
         """
         Slot for the currentIndexChanged signal (colormap combobox).
         :return:
         """
+        colormap = self.__cmapCBox.itemData(self.__cmapCBox.currentIndex())
+
+        currentCmap = self.__colormap
+
+        self.__updateColorMap(colormap,
+                              currentCmap.minVal,
+                              currentCmap.maxVal,
+                              currentCmap.nColors)
+
         self.__setColormapPixmap()
         self.__applyColormap()
 
@@ -234,6 +259,11 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         blockedMax = self.__maxEdit.blockSignals(True)
         self.__minEdit.setText('{0:6g}'.format(event.left))
         self.__maxEdit.setText('{0:6g}'.format(event.right))
+        colormap = self.__colormap
+        self.__updateColorMap(colormap.colormap,
+                              event.left,
+                              event.right,
+                              colormap.nColors)
         self.__minEdit.blockSignals(blockedMin)
         self.__maxEdit.blockSignals(blockedMax)
         self.__applyColormap()
@@ -248,6 +278,11 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         blocked = self.__rngSlider.blockSignals(True)
         self.__rngSlider.setSliderValues(minVal, maxVal)
         self.__rngSlider.blockSignals(blocked)
+        colormap = self.__colormap
+        self.__updateColorMap(colormap.colormap,
+                              minVal,
+                              maxVal,
+                              colormap.nColors)
         self.__applyColormap()
 
     def __applyColormap(self):
@@ -258,19 +293,10 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         plot = self.__plot()
         if plot is None:
             return
-        minVal = float(self.__minEdit.text())
-        maxVal = float(self.__maxEdit.text())
-        plotColormap = self.__colormap
+        colormap = self.__colormap
         curve = self.getCurve()
 
-        colormap = self.__cmapCBox.itemData(self.__cmapCBox.currentIndex())
-
-        plotColormap = XsocsPlot2DColormap(colormap=colormap,
-                                       minVal=minVal,
-                                       maxVal=maxVal,
-                                       nColors=plotColormap.nColors)
-        self.__colormap = plotColormap
-        plot.setPlotColormap(curve, plotColormap)
+        plot.setPlotColormap(curve, colormap)
         self.__drawHistogram()
 
     def getCurve(self):
@@ -280,9 +306,24 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         """
         return self.__curve
 
+    def __setSliderProfile(self):
+        """
+        Draws the histogram profile on the slider.
+        :return:
+        """
+        histo = self.__histogram
+        rngSlider = self.__rngSlider
+        colormap = self.__colormap
+
+        pixmap = _arrayToPixmap(histo.histo,
+                                cm.jet,
+                                256)
+
+        rngSlider.setSliderPixmap(pixmap)
+
     def __setupWidgets(self):
         """
-        Sets up the dialog.
+        Initializes the colorbars, histogram, etc...
         :return:
         """
         self.__setColormapPixmap()
@@ -305,9 +346,14 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         rngSlider.setRange([histo.edges[0][0], histo.edges[0][-1]])
         rngSlider.setSliderValues(colormap.minVal, colormap.maxVal)
 
+        self.__setSliderProfile()
         self.__drawHistogram()
 
     def __drawHistogram(self):
+        """
+        Draws the histogram.
+        :return:
+        """
         histo = self.__histogram
         self.__filledProfile.setProfile(histo.edges[0][0:-1],
                                         histo.histo,
@@ -325,24 +371,19 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
         Sets the colormap preview label.
         :return:
         """
-        print 'set in'
         style = Qt.QApplication.style()
         size = style.pixelMetric(Qt.QStyle.PM_SmallIconSize)
 
         colorLabel = self.__colorLabel
-        plotColormap = self.__colormap
-        colormap = self.__cmapCBox.itemData(self.__cmapCBox.currentIndex())
+        colormap = self.__colormap
 
-        image = np.tile(np.arange(plotColormap.nColors,
+        image = np.tile(np.arange(colormap.nColors,
                                   dtype=np.uint8),
                         (size, 1))
-        print colormap.name
-        pixmap = _arrayToIndexedPixmap(image,
-                                       colormap,
-                                       nColors=plotColormap.nColors)
-        print pixmap.isNull()
+        pixmap = _arrayToPixmap(image,
+                                colormap.colormap,
+                                nColors=colormap.nColors)
         colorLabel.setPixmap(pixmap)
-        print 'set out'
 
 
 XsocsPlot2DPoint = namedtuple('XsocsPlot2DPoint', ['x', 'y', 'xIdx', 'yIdx'])

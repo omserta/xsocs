@@ -131,7 +131,8 @@ class XsocsPlot2DColorDialog(Qt.QDialog):
     """
     colormaps = OrderedDict([('jet', cm.jet),
                              ('afmhot', cm.afmhot),
-                             ('viridis', viridis)])
+                             ('viridis', viridis),
+                             ('gray', cm.gray)])
 
     def __init__(self, plot, curve, **kwargs):
 

@@ -33,30 +33,22 @@ __date__ = "01/01/2017"
 import numpy as np
 
 from silx.gui import qt as Qt
-from silx.gui.plot import PlotWindow, PlotWidget
-
-from matplotlib import cm
 
 from kmap.gui.model.Model import Model, RootNode
 from kmap.gui.project.Hdf5Nodes import H5File
-from kmap.gui.model.ModelDef import ModelRoles, ModelColumns
-from kmap.gui.project.XsocsH5Factory import h5NodeToProjectItem
-from kmap.gui.widgets.Containers import GroupBox
+from kmap.gui.model.ModelDef import ModelRoles
 
 from kmap.io.FitH5 import FitH5
 
-from ..widgets.XsocsPlot2D import XsocsPlot2D
-from kmap.gui.model.TreeView import TreeView
-from kmap.gui.model.NodeEditor import EditorMixin
-from kmap.gui.project.Hdf5Nodes import H5Base, H5NodeClassDef
+from ...widgets.XsocsPlot2D import XsocsPlot2D
+from ...project.Hdf5Nodes import H5Base, H5NodeClassDef
 
 
-
-class FitResultEditor(EditorMixin, PlotWidget):
+class PlotGrabber(XsocsPlot2D):
     persistent = True
 
     def __init__(self, *args, **kwargs):
-        super(FitResultEditor, self).__init__(*args, **kwargs)
+        super(PlotGrabber, self).__init__(*args, **kwargs)
         self._backend._enableAxis('left', False)
         self._backend._enableAxis('right', False)
         self._backend.ax.get_xaxis().set_visible(False)
@@ -65,34 +57,18 @@ class FitResultEditor(EditorMixin, PlotWidget):
         self.setActiveCurveHandling(False)
         self.setKeepDataAspectRatio(True)
         self.setDataMargins(0, 0, 0, 0)
+        self.setCollaspibleMenuVisible(False)
+        self.setPointWidgetVisible(False)
 
-    def setEditorData(self, index):
-        node = index.data(ModelRoles.InternalDataRole)
-
-        if node and not node.setEditorData(self, index.column()):
-            value = index.data(Qt.Qt.EditRole)
-            return self.setModelValue(value)
-
-        return True
-
-    def setModelValue(self, value):
-        return False
-
-    def getEditorData(self):
-        pass
-
-    def sizeHint(self):
-        return Qt.QSize(100, 100)
-
-    def minimumSizeHint(self):
-        return Qt.QSize(100, 100)
-
-    def maximumSize(self):
-        return Qt.QSize(100, 100)
+    def toPixmap(self):
+        return Qt.QPixmap.grabWidget(self)
 
 
 @H5NodeClassDef('FitH5')
 class FitH5Node(H5File):
+    """
+    Node linked to a FitH5 file.
+    """
     # TODO : check the file format (make sure that all required
     # groups/datasets are there)
 
@@ -111,6 +87,9 @@ class FitH5Node(H5File):
 
 @H5NodeClassDef('FitEntry')
 class FitEntryNode(H5Base):
+    """
+    Node linked to an entry in a FitH5 file.
+    """
 
     entry = property(lambda self: self.h5Path.lstrip('/').split('/')[0])
 
@@ -129,6 +108,9 @@ class FitEntryNode(H5Base):
 
 
 class FitProcessNode(FitEntryNode):
+    """
+    Node linked to a process group in a FitH5 file.
+    """
     process = property(lambda self: self.h5Path.split('/')[1])
 
     def _loadChildren(self):
@@ -147,6 +129,9 @@ class FitProcessNode(FitEntryNode):
 
 
 class FitResultNode(FitProcessNode):
+    """
+    Node linked to a result group in a FitH5 file.
+    """
     result = property(lambda self: self.h5Path.split('/')[-1])
 
     def __init__(self, *args, **kwargs):
@@ -154,96 +139,56 @@ class FitResultNode(FitProcessNode):
         super(FitResultNode, self).__init__(*args, **kwargs)
 
     def _setupNode(self):
-        self.setData(1, 'Qx', Qt.Qt.DisplayRole)
-        self.setData(1, Qt.Qt.AlignCenter, Qt.Qt.TextAlignmentRole)
-        self.setData(2, 'Qy', Qt.Qt.DisplayRole)
-        self.setData(2, Qt.Qt.AlignCenter, Qt.Qt.TextAlignmentRole)
-        self.setData(3, 'Qz', Qt.Qt.DisplayRole)
-        self.setData(3, Qt.Qt.AlignCenter, Qt.Qt.TextAlignmentRole)
+        plot = PlotGrabber()
+        plot.setFixedSize(Qt.QSize(100, 100))
+        plot.toPixmap()
 
-    def _loadChildren(self):
-        return [FitThumbnailNode(self.h5File, self.h5Path)]
+        qApp = Qt.qApp
+        qApp.processEvents()
 
+        with FitH5(self.h5File) as fitH5:
+            x = fitH5.scan_x(self.entry)
+            y = fitH5.scan_y(self.entry)
 
+            data = fitH5.get_qx_result(self.entry,
+                                       self.process,
+                                       self.result)
+            plot.setPlotData(x, y, data)
+            pixmap = plot.toPixmap()
+            self.setData(1, pixmap, Qt.Qt.DecorationRole)
+            qApp.processEvents()
 
-class FitThumbnailNode(FitResultNode):
-    editors = [None, FitResultEditor, FitResultEditor, FitResultEditor]
+            data = fitH5.get_qy_result(self.entry,
+                                       self.process,
+                                       self.result)
+            plot.setPlotData(x, y, data)
+            pixmap = plot.toPixmap()
+            self.setData(2, pixmap, Qt.Qt.DecorationRole)
+            qApp.processEvents()
 
-    def __init__(self, *args, **kwargs):
-        self.dragEnabledColumns = [False, True, True, True]
-        super(FitThumbnailNode, self).__init__(*args, **kwargs)
-
-    def _setupNode(self):
-        self.setData(ModelColumns.NameColumn, None, Qt.Qt.DisplayRole)
+            data = fitH5.get_qz_result(self.entry,
+                                       self.process,
+                                       self.result)
+            plot.setPlotData(x, y, data)
+            pixmap = plot.toPixmap()
+            self.setData(3, pixmap, Qt.Qt.DecorationRole)
+            qApp.processEvents()
 
     def _loadChildren(self):
         return []
 
-    def sizeHint(self, column):
-        if column == ModelColumns.ValueColumn:
-            return Qt.QSize(100, 100)
-        return super(FitResultNode, self).sizeHint(column)
-
-    def setEditorData(self, editor, column):
-        if not isinstance(editor, FitResultEditor):
-            return False
-        with FitH5(self.h5File) as fitH5:
-            x = fitH5.scan_x(self.entry)
-            y = fitH5.scan_y(self.entry)
-            if column == 1:
-                data = fitH5.get_qx_result(self.entry,
-                                           self.process,
-                                           self.result)
-            elif column == 2:
-                data = fitH5.get_qy_result(self.entry,
-                                           self.process,
-                                           self.result)
-            else:
-                data = fitH5.get_qz_result(self.entry,
-                                           self.process,
-                                           self.result)
-        min_, max_ = data.min(), data.max()
-        colormap = cm.jet
-        colors = colormap(
-            (data.astype(np.float64) - min_) / (max_ - min_))
-        editor.addCurve(x,
-                        y,
-                        color=colors,
-                        symbol='s',
-                        linestyle='')
-        return True
-
-    def _setModelData(self, editor, column):
-        """
-        This is called by the View's delegate just before the editor is closed,
-        it allows this item to update itself with data from the editor.
-
-        :param editor:
-        :return:
-        """
-        return False
-
-    def _openedEditorEvent(self, editor, column, args=None, kwargs=None):
-        """
-        This is called by custom editors while they're opened in the view.
-        See ItemDelegate.__notifyView. Defqult implementation calls
-        _setModelData on this node.
-
-        :param editor:
-        :param column:
-        :param args: event's args
-        :param kwargs: event's kwargs
-        :return:
-        """
-
-        return self._setModelData(editor, column)
-
 
 class FitRootNode(RootNode):
+    """
+    Root node for the FitModel
+    """
     ColumnNames = ['Param', 'Qx', 'Qy', 'Qz']
 
 
 class FitModel(Model):
+    """
+    Model displaying a FitH5 file contents.
+    """
     RootNode = FitRootNode
     ColumnsWithDelegates = [1, 2, 3]
 

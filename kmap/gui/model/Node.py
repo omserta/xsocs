@@ -317,9 +317,6 @@ class Node(object):
         self._connect()
         for child in self._children(initialize=False):
             child.start()
-        self.__init()
-        # for column in self.activeColumns:
-            # self._getModelData(column, init=True)
 
     def stop(self):
         self._disconnect()
@@ -338,9 +335,10 @@ class Node(object):
         """
         # TODO : simplify
         if (clear or branchName is not None) and self.branchName != branchName:
+            self._disconnect()
             self.__branchName = branchName
             # TODO : reset the whole branch
-            self.__init()
+            self._connect()
         if propagate:
             for child in self._children(initialize=False):
                 child.branchName = branchName
@@ -481,7 +479,7 @@ class Node(object):
                 self.__slots[column] = slots
             # TODO : list of booleans
             self.__connected = True
-            self._setupNode()
+            self.__init()
 
     def _disconnect(self):
         if not self.__connected:

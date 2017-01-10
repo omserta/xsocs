@@ -498,8 +498,6 @@ class XsocsPlot2D(PlotWindow):
         pointDockAction = pointDock.toggleViewAction()
         pointDockAction.setIcon(getQIcon('crosshair'))
         pointDockAction.setIconVisibleInMenu(True)
-        pointDock.setShowMousePoint(self.__showMousePosition)
-        pointDock.setShowSelectedPoint(self.__showSelectedCoordinates)
 
         pointDockBn = Qt.QToolButton()
         pointDockBn.setDefaultAction(pointDockAction)
@@ -641,6 +639,10 @@ class XsocsPlot2D(PlotWindow):
         optionsLayout.addWidget(optionsBaseB)
         optionsLayout.addWidget(optionsBaseA)
 
+        self.setShowMousePosition(self.__showMousePosition)
+        self.setShowSelectedCoordinates(self.__showSelectedCoordinates)
+        self.setPointSelectionEnabled(self.__pointSelectionEnabled)
+
     def __drawSelectedPosition(self, x, y):
         """Set the selected position.
 
@@ -683,6 +685,12 @@ class XsocsPlot2D(PlotWindow):
         if self.__showMousePosition:
             if event['event'] == 'mouseMoved':
                 self.__displayMousePosition(event['x'], event['y'])
+
+    def setCollaspibleMenuVisible(self, visible):
+        self.__optionsBase.setVisible(visible)
+
+    def setPointWidgetVisible(self, visible):
+        self.__pointWidget.setVisible(visible)
 
     def selectPoint(self, x, y):
         """

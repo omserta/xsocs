@@ -47,7 +47,6 @@ from .fitview.DropPlotWidget import DropPlotWidget
 class FitView(Qt.QMainWindow):
     sigPointSelected = Qt.Signal(object)
 
-    __sigStartModel = Qt.Signal()
     __sigInitPlots = Qt.Signal()
 
     def __init__(self,
@@ -82,7 +81,6 @@ class FitView(Qt.QMainWindow):
         treeDock = Qt.QDockWidget()
 
         self.__model = FitModel()
-        # self.__model.startModel()
         rootNode = FitH5Node(item.fitFile)
         self.__model.appendGroup(rootNode)
 
@@ -107,9 +105,8 @@ class FitView(Qt.QMainWindow):
                               mask=False,
                               yInverted=False)
         grpLayout.addWidget(plot)
-        plot.setVisible(False)
         self.__plots.append(plot)
-        plot.sigPointSelected.connect(self.__plotSignal)
+        plot.sigPointSelected.connect(self.__slotPointSelected)
 
         plot = DropPlotWidget(grid=False,
                               curveStyle=False,
@@ -118,9 +115,8 @@ class FitView(Qt.QMainWindow):
                               mask=False,
                               yInverted=False)
         grpLayout.addWidget(plot)
-        plot.setVisible(False)
         self.__plots.append(plot)
-        plot.sigPointSelected.connect(self.__plotSignal)
+        plot.sigPointSelected.connect(self.__slotPointSelected)
 
         plot = DropPlotWidget(grid=False,
                               curveStyle=False,
@@ -129,9 +125,8 @@ class FitView(Qt.QMainWindow):
                               mask=False,
                               yInverted=False)
         grpLayout.addWidget(plot)
-        plot.setVisible(False)
         self.__plots.append(plot)
-        plot.sigPointSelected.connect(self.__plotSignal)
+        plot.sigPointSelected.connect(self.__slotPointSelected)
 
         layout.addWidget(grpBox, 0, 1)
 
@@ -146,7 +141,6 @@ class FitView(Qt.QMainWindow):
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qx fit')
         plot.setShowMousePosition(True)
-        # plot.setPointSelectionEnabled(True)
 
         plot = XsocsPlot2D()
         plot.setKeepDataAspectRatio(False)
@@ -154,7 +148,6 @@ class FitView(Qt.QMainWindow):
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qy fit')
         plot.setShowMousePosition(True)
-        # plot.setPointSelectionEnabled(True)
 
         plot = XsocsPlot2D()
         plot.setKeepDataAspectRatio(False)
@@ -162,7 +155,6 @@ class FitView(Qt.QMainWindow):
         self.__fitPlots.append(plot)
         plot.setGraphTitle('Qz fit')
         plot.setShowMousePosition(True)
-        # plot.setPointSelectionEnabled(True)
 
         layout.addWidget(grpBox, 0, 2)
 
@@ -172,7 +164,6 @@ class FitView(Qt.QMainWindow):
         self.setCentralWidget(centralWid)
 
         self.__sigInitPlots.connect(self.__firstInit, Qt.Qt.QueuedConnection)
-        # self.__sigStartModel.connect(self.__startModel, Qt.Qt.QueuedConnection)
 
     def showEvent(self, event):
         """
@@ -191,9 +182,15 @@ class FitView(Qt.QMainWindow):
         if self.__firstShow:
             self.__firstShow = False
             self.__sigInitPlots.emit()
-            # self.__sigStartModel.emit()
 
     def __firstInit(self):
+        """
+        Called asynchronously the first time the window is shown.
+        This allows us to show the window even though it is not completely
+        ready yet (so that the user doesn't have to wait for too long
+        before seeing some results).
+        :return:
+        """
         self.__initPlots()
         self.__startModel()
 
@@ -205,6 +202,10 @@ class FitView(Qt.QMainWindow):
         self.__model.startModel()
 
     def __initPlots(self):
+        """
+        Initializes the "map" plots.
+        :return:
+        """
         fitH5 = self.__fitH5
 
         entry = None
@@ -222,7 +223,12 @@ class FitView(Qt.QMainWindow):
         elif process == 'Centroid':
             _initCentroid(self.__plots, fitH5.filename, entry, process)
 
-    def __plotSignal(self, point):
+    def __slotPointSelected(self, point):
+        """
+        Called when a point is selected on one of the "map" plots.
+        :param point:
+        :return:
+        """
         sender = self.sender()
         for plot in self.__plots:
             if plot != sender:
@@ -231,8 +237,11 @@ class FitView(Qt.QMainWindow):
         self.sigPointSelected.emit(point)
 
     def __plotFitResults(self, xIdx):
-        # TODO : the values could/should be loaded when the widget is shown for the
-        # first time
+        """
+        Plots the fit results for the selected point on the plot.
+        :param xIdx:
+        :return:
+        """
 
         with self.__fitH5 as fitH5:
 
@@ -397,17 +406,19 @@ def _initLeastSq(plots, fitH5Name, entry, process):
 
     qApp = Qt.qApp
     qApp.processEvents()
+
     plots[0].plotFitResult(fitH5Name, entry, process,
                            'position', FitH5.qx_axis)
-    plots[0].setVisible(True)
+
     qApp.processEvents()
+
     plots[1].plotFitResult(fitH5Name, entry, process,
                            'position', FitH5.qy_axis)
-    plots[1].setVisible(True)
+
     qApp.processEvents()
+
     plots[2].plotFitResult(fitH5Name, entry, process,
                            'position', FitH5.qz_axis)
-    plots[2].setVisible(True)
 
 
 def _initCentroid(plots, fitH5Name, entry, process):
@@ -422,15 +433,15 @@ def _initCentroid(plots, fitH5Name, entry, process):
     # hard coded result name, this isn't satisfactory but I can't think
     # of any other way right now.
     qApp = Qt.qApp
+    # plots[0].setVisible(True)
     qApp.processEvents()
     plots[0].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qx_axis)
-    plots[0].setVisible(True)
+    # plots[1].setVisible(True)
     qApp.processEvents()
     plots[1].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qy_axis)
-    plots[1].setVisible(True)
+    # plots[2].setVisible(True)
     qApp.processEvents()
     plots[2].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qz_axis)
-    plots[2].setVisible(True)
 
 
 if __name__ == '__main__':

@@ -579,28 +579,34 @@ class XsocsPlot2D(PlotWindow):
         menu.addAction(action)
 
         # save to file action
-        self.saveAction.setIconVisibleInMenu(True)
-        menu.addAction(self.saveAction)
+        action = self.getSaveAction()
+        action.setIconVisibleInMenu(True)
+        menu.addAction(action)
 
         # print action
-        self.printAction.setIconVisibleInMenu(True)
-        menu.addAction(self.printAction)
+        action = self.getPrintAction()
+        action.setIconVisibleInMenu(True)
+        menu.addAction(action)
 
         # screenshot action
-        self.copyAction.setIconVisibleInMenu(True)
-        menu.addAction(self.copyAction)
+        action = self.getCopyAction()
+        action.setIconVisibleInMenu(True)
+        menu.addAction(action)
 
         # grid action
-        self.gridAction.setIconVisibleInMenu(True)
-        menu.addAction(self.gridAction)
+        action = self.getGridAction()
+        action.setIconVisibleInMenu(True)
+        menu.addAction(action)
 
         # crosshair action
-        self.crosshairAction.setIconVisibleInMenu(True)
-        menu.addAction(self.crosshairAction)
+        action = self.getCrosshairAction()
+        action.setIconVisibleInMenu(True)
+        menu.addAction(action)
 
         # pan action
-        self.panWithArrowKeysAction.setIconVisibleInMenu(True)
-        menu.addAction(self.panWithArrowKeysAction)
+        action = self.getPanWithArrowKeysAction()
+        action.setIconVisibleInMenu(True)
+        menu.addAction(action)
 
         # # x log scale
         # self.xAxisLogarithmicAction.setIconVisibleInMenu(True)

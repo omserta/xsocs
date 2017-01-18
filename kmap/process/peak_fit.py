@@ -33,14 +33,14 @@ __license__ = "MIT"
 import time
 import ctypes
 import multiprocessing as mp
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import multiprocessing.sharedctypes as mp_sharedctypes
 
 import numpy as np
 
-from scipy.optimize import leastsq
 # from silx.math import curve_fit
 from ..io import QSpaceH5
+from .fit_funcs import gaussian_fit, centroid
 
 disp_times = False
 
@@ -50,39 +50,360 @@ class FitTypes(object):
     LEASTSQ, CENTROID = ALLOWED
 
 
-FitResult = namedtuple('FitResult', ['sample_x', 'sample_y',
-                                     'q_x', 'q_y', 'q_z',
-                                     'q_x_results', 'q_y_results', 'q_z_results',
-                                     'status',
-                                     'fit_name'])
+class FitResult(object):
+    """
+    Fit results
+    """
+    _AXIS = QX_AXIS, QY_AXIS, QZ_AXIS = range(3)
+    _AXIS_NAMES = ('qx', 'qy', 'qz')
 
-_const_inv_2_pi_ = np.sqrt(2 * np.pi)
+    def __init__(self, entry,
+                 q_x, q_y, q_z,
+                 sample_x, sample_y):
+        super(FitResult, self).__init__()
 
-# 1d Gaussian func
-_gauss_fn = lambda p, x: (p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
-                          np.exp(-0.5 * ((x - p[1]) / p[2]) ** 2))
-# 1d Gaussian fit
-_gauss_fit_err = lambda p, x, y: (p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
-                                  np.exp(-0.5 * ((x - p[1]) / p[2]) ** 2) - y)
+        self._entry = entry
+
+        self._sample_x = sample_x
+        self._sample_y = sample_y
+
+        self._q_x = q_x
+        self._q_y = q_y
+        self._q_z = q_z
+
+        self._processes = OrderedDict()
+
+    def processes(self):
+        """
+        Returns the process names
+        :return:
+        """
+        return self._processes.keys()
+
+    def params(self, process):
+        return self._get_process(process, create=False)['params'].keys()
+
+    def status(self, process, axis):
+        assert axis in self._AXIS
+
+        process = self._get_process(process, create=False)
+
+        return process['status'][self._AXIS_NAMES[axis]]
+
+    def qx_status(self, process):
+        """
+        Returns qx fit status the given process
+        :param process:
+        :param param: param name
+        :return:
+        """
+        return self.status(process, self.QX_AXIS)
+
+    def qy_status(self, process):
+        """
+        Returns qy fit status the given process
+        :param process:
+        :param param: param name
+        :return:
+        """
+        return self.status(process, self.QY_AXIS)
+
+    def qz_status(self, process):
+        """
+        Returns qz fit status the given process
+        :param process:
+        :param param: param name
+        :return:
+        """
+        return self.status(process, self.QZ_AXIS)
+
+    def results(self, process, param, axis=None):
+        """
+        Returns the fitted parameter results for a given process.
+        :param process: process name
+        :param param: param name
+        :param axis: if provided, returns only the result for the given axis
+        :return:
+        """
+
+        param = self._get_param(process, param, create=False)
+
+        if axis is not None:
+            assert axis in self._AXIS
+            return param[self._AXIS_NAMES[axis]]
+        return param
+
+    def qx_results(self, process, param):
+        """
+        Returns qx fit results for the given process
+        :param process:
+        :param param: param name
+        :return:
+        """
+        return self.results(process, param, axis=self.QX_AXIS)
+
+    def qy_results(self, process):
+        """
+        Returns qy fit results for the given process
+        :param process:
+        :param param: param name
+        :return:
+        """
+        return self.results(process, axis=self.QY_AXIS)
+
+    def qz_results(self, process):
+        """
+        Returns qz fit results for the given process
+        :param process:
+        :param param: param name
+        :return:
+        """
+        return self.results(process, axis=self.QZ_AXIS)
+
+    def add_qx_result(self, process, param, result):
+        self._add_axis_result(process, self.QX_AXIS, param, result)
+
+    def add_qy_result(self, process, param, result):
+        self._add_axis_result(process, self.QY_AXIS, param, result)
+
+    def add_qz_result(self, process, param, result):
+        self._add_axis_result(process, self.QZ_AXIS, param, result)
+
+    def _add_axis_result(self, process, axis, param, result):
+        assert axis in self._AXIS
+
+        param_data = self._get_param(process, param)
+        param_data[self._AXIS_NAMES[axis]] = result
+        
+    def set_qx_status(self, process, status):
+        self._set_axis_status(process, self.QX_AXIS, status)
+
+    def set_qy_status(self, process, status):
+        self._set_axis_status(process, self.QY_AXIS, status)
+
+    def set_qz_status(self, process, status):
+        self._set_axis_status(process, self.QZ_AXIS, status)
+
+    def _set_axis_status(self, process, axis, status):
+        assert axis in self._AXIS
+
+        _process = self._get_process(process)
+        statuses = _process['status']
+
+        statuses[self._AXIS_NAMES[axis]] = status
+
+    def _get_process(self, process, create=True):
+
+        if process not in self._processes:
+            if not create:
+                raise KeyError('Unknown process {0}.'.format(process))
+            status = OrderedDict([('qx_status', None),
+                                  ('qy_status', None),
+                                  ('qz_status', None)])
+            _process = OrderedDict([('params', OrderedDict()),
+                                    ('status', status)])
+            self._processes[process] = _process
+        else:
+            _process = self._processes[process]
+
+        return _process
+
+    def _get_param(self, process, param, create=True):
+        process = self._get_process(process, create=create)
+        params = process['params']
+
+        if param not in params:
+            if not create:
+                raise KeyError('Unknown param {0}.'.format(param))
+            _param = OrderedDict()
+            for axis in self._AXIS_NAMES:
+                _param[axis] = None
+            params[param] = _param
+        else:
+            _param = params[param]
+
+        return _param
+
+    entry = property(lambda self: self._entry)
+
+    sample_x = property(lambda self: self._sample_x)
+    sample_y = property(lambda self: self._sample_y)
+
+    q_x = property(lambda  self: self._q_x)
+    q_y = property(lambda  self: self._q_y)
+    q_z = property(lambda self: self._q_z)
 
 
-def _qspace_gauss_fit(x, y, v0):
-    result = leastsq(_gauss_fit_err,
-                     v0,
-                     args=(x, y,),
-                     maxfev=100000,
-                     full_output=True)
-    if result[4] not in [1, 2, 3, 4]:
-        raise ValueError('Failed to fit : {0}.'.format(result[3]))
+class FitSharedResults(object):
+    def __init__(self,
+                 n_points=None,
+                 n_params=None,
+                 shared_results=None,
+                 shared_status=None):
+        super(FitSharedResults, self).__init__()
+        assert n_points is not None, n_params is not None
 
-    return result[0]
+        self._shared_qx_results = None
+        self._shared_qy_results = None
+        self._shared_qz_results = None
+
+        self._shared_qx_status = None
+        self._shared_qy_status = None
+        self._shared_qz_status = None
+
+        self._npy_qx_results = None
+        self._npy_qy_results = None
+        self._npy_qz_results = None
+
+        self._npy_qx_status = None
+        self._npy_qy_status = None
+        self._npy_qz_status = None
+
+        self._n_points = n_points
+        self._n_params = n_params
+
+        self._init_shared_results(shared_results)
+        self._init_shared_status(shared_status)
+        self._init_npy_results()
+        self._init_npy_status()
+
+    def _init_shared_results(self, shared_results=None):
+        if shared_results is None:
+            self._shared_qx_results = mp_sharedctypes.RawArray(
+                ctypes.c_double, self._n_points * self._n_params)
+            self._shared_qy_results = mp_sharedctypes.RawArray(
+                ctypes.c_double, self._n_points * self._n_params)
+            self._shared_qz_results = mp_sharedctypes.RawArray(
+                ctypes.c_double, self._n_points * self._n_params)
+        else:
+            self._shared_qx_results = shared_results[0]
+            self._shared_qy_results = shared_results[1]
+            self._shared_qz_results = shared_results[2]
+
+    def _init_shared_status(self, shared_status=None):
+        if shared_status is None:
+            self._shared_qx_status = mp_sharedctypes.RawArray(
+                ctypes.c_bool, self._n_points)
+            self._shared_qy_status = mp_sharedctypes.RawArray(
+                ctypes.c_bool, self._n_points)
+            self._shared_qz_status = mp_sharedctypes.RawArray(
+                ctypes.c_bool, self._n_points)
+        else:
+            self._shared_qx_status = shared_status[0]
+            self._shared_qy_status = shared_status[1]
+            self._shared_qz_status = shared_status[2]
+
+    def _init_npy_results(self):
+        self._npy_qx_results = np.frombuffer(self._shared_qx_results)
+        self._npy_qx_results.shape = self._n_points, self._n_params
+        self._npy_qy_results = np.frombuffer(self._shared_qy_results)
+        self._npy_qy_results.shape = self._n_points, self._n_params
+        self._npy_qz_results = np.frombuffer(self._shared_qz_results)
+        self._npy_qz_results.shape = self._n_points, self._n_params
+
+    def _init_npy_status(self):
+        self._npy_qx_status = np.frombuffer(self._shared_qx_status,
+                                            dtype=bool)
+        self._npy_qy_status = np.frombuffer(self._shared_qy_status,
+                                            dtype=bool)
+        self._npy_qz_status = np.frombuffer(self._shared_qz_status,
+                                            dtype=bool)
+
+    def set_qx_results(self, idx, results, status):
+        self._npy_qx_results[idx] = results
+        self._npy_qx_status[idx] = status
+        
+    def set_qy_results(self, idx, results, status):
+        self._npy_qy_results[idx] = results
+        self._npy_qy_status[idx] = status
+        
+    def set_qz_results(self, idx, results, status):
+        self._npy_qz_results[idx] = results
+        self._npy_qz_status[idx] = status
+
+    def local_copy(self):
+        shared_results = (self._shared_qx_results,
+                          self._shared_qy_results,
+                          self._shared_qz_results)
+        shared_status = (self._shared_qx_status,
+                         self._shared_qy_status,
+                         self._shared_qz_status)
+        return FitSharedResults(n_points=self._n_points,
+                                n_params=self._n_params,
+                                shared_results=shared_results,
+                                shared_status=shared_status)
+
+    def fit_results(self, *args, **kwargs):
+        raise NotImplementedError('')
 
 
-def _qspace_centroid(x, y, v0):
-    # TODO : throw exception if fit failed
-    com = x.dot(y) / y.sum()
-    idx = np.abs(x - com).argmin()
-    return [y[idx], com, np.nan]
+class GaussianResults(FitSharedResults):
+    def __init__(self,
+                 n_points=None,
+                 shared_results=None,
+                 shared_status=None):
+        super(GaussianResults, self).__init__(n_points=n_points,
+                                              n_params=3,
+                                              shared_results=shared_results,
+                                              shared_status=shared_status)
+
+    def fit_results(self, *args, **kwargs):
+        qx_results = self._npy_qx_results
+        qy_results = self._npy_qy_results
+        qz_results = self._npy_qz_results
+
+        qx_status = self._npy_qx_status
+        qy_status = self._npy_qy_status
+        qz_status = self._npy_qz_status
+
+        fit_name = 'Gaussian'
+        results = FitResult(fit_name, *args, **kwargs)
+        results.add_qx_result('gaussian', 'intensity', qx_results[:, 0].ravel())
+        results.add_qx_result('gaussian', 'position', qx_results[:, 1].ravel())
+        results.add_qx_result('gaussian', 'width', qx_results[:, 2].ravel())
+        results.set_qx_status('gaussian', qx_status)
+
+        results.add_qy_result('gaussian', 'intensity', qy_results[:, 0].ravel())
+        results.add_qy_result('gaussian', 'position', qy_results[:, 1].ravel())
+        results.add_qy_result('gaussian', 'width', qy_results[:, 2].ravel())
+        results.set_qy_status('gaussian', qy_status)
+
+        results.add_qz_result('gaussian', 'intensity', qz_results[:, 0].ravel())
+        results.add_qz_result('gaussian', 'position', qz_results[:, 1].ravel())
+        results.add_qz_result('gaussian', 'width', qz_results[:, 2].ravel())
+        results.set_qz_status('gaussian', qz_status)
+
+        return results
+
+
+# class CentroidResults(FitSharedResults):
+#     def __init__(self,
+#                  n_points=None,
+#                  shared_results=None,
+#                  shared_status=None):
+#         super(CentroidResults, self).__init__(n_points=n_points,
+#                                               n_params=2,
+#                                               shared_results=shared_results,
+#                                               shared_status=shared_status)
+#
+#     def fit_results(self):
+#         qx_results = self._npy_qx_results
+#         qy_results = self._npy_qy_results
+#         qz_results = self._npy_qz_results
+#
+#         qx_status = self._npy_qx_status
+#         qy_status = self._npy_qy_status
+#         qz_status = self._npy_qz_status
+#
+#         fit_name = 'Centroid'
+#         q_x_results = {'height': qx_results[:, 0].ravel(),
+#                        'position': qx_results[:, 1].ravel()}
+#         q_y_results = {'height': qy_results[:, 0].ravel(),
+#                        'position': qy_results[:, 1].ravel()}
+#         q_z_results = {'height': qz_results[:, 0].ravel(),
+#                        'position': qz_results[:, 1].ravel()}
+#
+#         return [(fit_name, q_x_results, q_y_results, q_z_results)]
 
 
 def peak_fit(qspace_f,
@@ -113,9 +434,11 @@ def peak_fit(qspace_f,
         raise ValueError('Unknown fit type : {0}'.format(fit_type))
 
     if fit_type == FitTypes.LEASTSQ:
-        fit_fn = _qspace_gauss_fit
+        fit_fn = gaussian_fit
+        n_params = 9
     if fit_type == FitTypes.CENTROID:
-        fit_fn = _qspace_centroid
+        fit_fn = centroid
+        n_params = 9
 
     with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
         with qspace_h5.qspace_dset_ctx() as dset:
@@ -131,11 +454,13 @@ def peak_fit(qspace_f,
         x_pos = qspace_h5.sample_x[indices]
         y_pos = qspace_h5.sample_y[indices]
 
-        shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
-        # TODO : find something better
-        shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
-        # success = np.ndarray((n_indices,), dtype=np.bool)
-        # success[:] = True
+        # shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
+        # # TODO : find something better
+        # shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
+        # # success = np.ndarray((n_indices,), dtype=np.bool)
+        # # success[:] = True
+
+    shared_results = GaussianResults(n_points=n_indices)
 
     # with h5py.File(qspace_f, 'r') as qspace_h5:
     #
@@ -178,13 +503,19 @@ def peak_fit(qspace_f,
 
     pool = mp.Pool(n_proc,
                    initializer=_init_thread,
-                   initargs=(shared_res,
-                             shared_success,
+                   initargs=(shared_results,
                              fit_fn,
                              (n_indices, 9),
                              idx_queue,
                              qspace_f,
                              read_lock))
+                   # initargs=(shared_res,
+                   #           shared_success,
+                   #           fit_fn,
+                   #           (n_indices, 9),
+                   #           idx_queue,
+                   #           qspace_f,
+                   #           read_lock))
 
     if disp_times:
         class myTimes(object):
@@ -227,10 +558,21 @@ def peak_fit(qspace_f,
     # fit_x = np.ndarray((n_indices, 3), dtype=np.float64)
     # fit_y = np.ndarray((n_indices, 3), dtype=np.float64)
     # fit_z = np.ndarray((n_indices, 3), dtype=np.float64)
-    results_np = np.frombuffer(shared_res)
-    results_np.shape = n_indices, 9
 
-    success = np.frombuffer(shared_success, dtype=bool)
+    # results_np = np.frombuffer(shared_res)
+    # results_np.shape = n_indices, 9
+    # success = np.frombuffer(shared_success, dtype=bool)
+
+    # results_np = shared_results._shared_array
+    # success = shared_results._shared_status
+    # qx_results = shared_results._shared_qx_results
+    # qy_results = shared_results._shared_qy_results
+    # qz_results = shared_results._shared_qz_results
+    #
+    # qx_status = shared_results._shared_qx_status
+    # qy_status = shared_results._shared_qy_status
+    # qz_status = shared_results._shared_qz_status
+    
 
     # results[:, 2:5] = results_np[:, 0:3]
     # results[:, 5:8] = results_np[:, 3:6]
@@ -244,8 +586,8 @@ def peak_fit(qspace_f,
         print('Fit {0}'.format(res_times.t_fit))
         print('Write {0}'.format(res_times.t_write))
 
-    status = np.zeros(x_pos.shape)
-    status[success] = 1
+    # status = np.zeros(x_pos.shape)
+    # status[success] = 1
 
     with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
         q_x = qspace_h5.qx
@@ -261,41 +603,67 @@ def peak_fit(qspace_f,
         q_z = q_z[zSlice]
 
     # TODO : REFACTOR/IMPROVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    if fit_type == FitTypes.LEASTSQ:
-        fit_name = 'LeastSq'
-        q_x_results = {'height': results_np[:, 0].ravel(),
-                       'position': results_np[:, 1].ravel(),
-                       'width': results_np[:, 2].ravel()}
-        q_y_results = {'height': results_np[:, 3].ravel(),
-                       'position': results_np[:, 4].ravel(),
-                       'width': results_np[:, 5].ravel()}
-        q_z_results = {'height': results_np[:, 6].ravel(),
-                       'position': results_np[:, 7].ravel(),
-                       'width': results_np[:, 8].ravel()}
-    else:
-        fit_name = 'Centroid'
-        q_x_results = {'height': results_np[:, 0].ravel(),
-                       'position': results_np[:, 1].ravel()}
-        q_y_results = {'height': results_np[:, 3].ravel(),
-                       'position': results_np[:, 4].ravel()}
-        q_z_results = {'height': results_np[:, 6].ravel(),
-                       'position': results_np[:, 7].ravel()}
+    # if fit_type == FitTypes.LEASTSQ:
+    #     fit_name = 'LeastSq'
+    #     q_x_results = {'height': q_x_results[:, 0].ravel(),
+    #                    'position': q_x_results[:, 1].ravel(),
+    #                    'width': q_x_results[:, 2].ravel()}
+    #     q_y_results = {'height': q_y_results[:, 3].ravel(),
+    #                    'position': results_np[:, 4].ravel(),
+    #                    'width': results_np[:, 5].ravel()}
+    #     q_z_results = {'height': results_np[:, 6].ravel(),
+    #                    'position': results_np[:, 7].ravel(),
+    #                    'width': results_np[:, 8].ravel()}
+    # else:
+    #     fit_name = 'Centroid'
+    #     q_x_results = {'height': results_np[:, 0].ravel(),
+    #                    'position': results_np[:, 1].ravel()}
+    #     q_y_results = {'height': results_np[:, 3].ravel(),
+    #                    'position': results_np[:, 4].ravel()}
+    #     q_z_results = {'height': results_np[:, 6].ravel(),
+    #                    'position': results_np[:, 7].ravel()}
 
-    fit_results = FitResult(sample_x=x_pos,
-                            sample_y=y_pos,
-                            q_x=q_x,
-                            q_y=q_y,
-                            q_z=q_z,
-                            q_x_results=q_x_results,
-                            q_y_results=q_y_results,
-                            q_z_results=q_z_results,
-                            status=status,
-                            fit_name=fit_name)
+    # # TODO : REFACTOR/IMPROVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # if fit_type == FitTypes.LEASTSQ:
+    #     fit_name = 'LeastSq'
+    #     q_x_results = {'height': results_np[:, 0].ravel(),
+    #                    'position': results_np[:, 1].ravel(),
+    #                    'width': results_np[:, 2].ravel()}
+    #     q_y_results = {'height': results_np[:, 3].ravel(),
+    #                    'position': results_np[:, 4].ravel(),
+    #                    'width': results_np[:, 5].ravel()}
+    #     q_z_results = {'height': results_np[:, 6].ravel(),
+    #                    'position': results_np[:, 7].ravel(),
+    #                    'width': results_np[:, 8].ravel()}
+    # else:
+    #     fit_name = 'Centroid'
+    #     q_x_results = {'height': results_np[:, 0].ravel(),
+    #                    'position': results_np[:, 1].ravel()}
+    #     q_y_results = {'height': results_np[:, 3].ravel(),
+    #                    'position': results_np[:, 4].ravel()}
+    #     q_z_results = {'height': results_np[:, 6].ravel(),
+    #                    'position': results_np[:, 7].ravel()}
+
+    fit_results = shared_results.fit_results(sample_x=x_pos,
+                                             sample_y=y_pos,
+                                             q_x=q_x,
+                                             q_y=q_y,
+                                             q_z=q_z)
+
+    # fit_results = FitResult(sample_x=x_pos,
+    #                         sample_y=y_pos,
+    #                         q_x=q_x,
+    #                         q_y=q_y,
+    #                         q_z=q_z,
+    #                         q_x_results=q_x_results,
+    #                         q_y_results=q_y_results,
+    #                         q_z_results=q_z_results,
+    #                         status=status,
+    #                         fit_name=fit_name)
     return fit_results
 
 
 def _init_thread(shared_res_,
-                 shared_success_,
                  fit_fn_,
                  result_shape_,
                  idx_queue_,
@@ -310,7 +678,6 @@ def _init_thread(shared_res_,
         read_lock
 
     shared_res = shared_res_
-    shared_success = shared_success_
     fit_fn = fit_fn_
     result_shape = result_shape_
     idx_queue = idx_queue_
@@ -336,9 +703,13 @@ def _fit_process(th_idx, roiIndices=None):
         t_fit = 0.
         t_mask = 0.
 
-        results = np.frombuffer(shared_res)
-        results.shape = result_shape
-        success = np.frombuffer(shared_success, dtype=bool)
+        # results = np.frombuffer(shared_res)
+        # results.shape = result_shape
+        # success = np.frombuffer(shared_success, dtype=bool)
+        l_shared_res = shared_res.local_copy()
+        # results = l_shared_res._shared_array
+        # success = l_shared_res._shared_status
+
         qspace_h5 = QSpaceH5.QSpaceH5(qspace_f)
 
         # Put this in the main thread
@@ -433,7 +804,10 @@ def _fit_process(th_idx, roiIndices=None):
             except Exception as ex:
                 print('Z Failed', ex)
                 z_0 = None
+                fit_z = [np.nan, np.nan, np.nan]
                 success_z = False
+
+            l_shared_res.set_qz_results(i_cube, fit_z, success_z)
 
             z_sum = 0
 
@@ -451,7 +825,10 @@ def _fit_process(th_idx, roiIndices=None):
             except Exception as ex:
                 print('Y Failed', ex, i_cube)
                 y_0 = None
+                fit_y = [np.nan, np.nan, np.nan]
                 success_y = False
+
+            l_shared_res.set_qy_results(i_cube, fit_y, success_y)
 
             y_sum = 0
 
@@ -467,7 +844,10 @@ def _fit_process(th_idx, roiIndices=None):
             except Exception as ex:
                 print('X Failed', ex)
                 x_0 = None
+                fit_x = [np.nan, np.nan, np.nan]
                 success_x = False
+
+            l_shared_res.set_qx_results(i_cube, fit_x, success_x)
 
             x_sum = 0
 
@@ -475,25 +855,25 @@ def _fit_process(th_idx, roiIndices=None):
 
             t0 = time.time()
 
-            success[i_cube] = True
-
-            if success_x:
-                results[i_cube, 0:3] = fit_x
-            else:
-                results[i_cube, 0:3] = np.nan
-                success[i_cube] = False
-
-            if success_y:
-                results[i_cube, 3:6] = fit_y
-            else:
-                results[i_cube, 3:6] = np.nan
-                success[i_cube] = False
-
-            if success_z:
-                results[i_cube, 6:9] = fit_z
-            else:
-                results[i_cube, 6:9] = np.nan
-                success[i_cube] = False
+            # success[i_cube] = True
+            #
+            # if success_x:
+            #     results[i_cube, 0:3] = fit_x
+            # else:
+            #     results[i_cube, 0:3] = np.nan
+            #     success[i_cube] = False
+            #
+            # if success_y:
+            #     results[i_cube, 3:6] = fit_y
+            # else:
+            #     results[i_cube, 3:6] = np.nan
+            #     success[i_cube] = False
+            #
+            # if success_z:
+            #     results[i_cube, 6:9] = fit_z
+            # else:
+            #     results[i_cube, 6:9] = np.nan
+            #     success[i_cube] = False
 
             t_write = time.time() - t0
 

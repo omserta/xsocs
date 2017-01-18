@@ -38,17 +38,37 @@ from .XsocsH5Base import XsocsH5Base
 FitResult = namedtuple('FitResult', ['name', 'qx', 'qy', 'qz'])
 
 
-class FitH5(XsocsH5Base):
-    _axis_values = range(3)
-    qx_axis, qy_axis, qz_axis = _axis_values
+class FitH5QAxis(object):
+    axis_values = range(3)
+    qx_axis, qy_axis, qz_axis = axis_values
     axis_names = ('qx', 'qy', 'qz')
+
+    @staticmethod
+    def axis_name(axis):
+        return FitH5QAxis.axis_names[axis]
+
+
+class FitH5(XsocsH5Base):
+    """
+    File containing fit results.
+    Requirements :
+    - the number of sample position is defined at entry level : all processes
+    within the same entry are applied to the same sample points.
+    - all results arrays within an entry (even if they don't belong to the same
+    process) have the same size (equal to the number of sample points defined
+    for that entry)
+    - all arrays are 1D.
+    """
+    # _axis_values = range(3)
+    # qx_axis, qy_axis, qz_axis = _axis_values
+    # axis_names = ('qx', 'qy', 'qz')
 
     title_path = '{entry}/title'
     start_time_path = '{entry}/start_time'
     end_time_path = '{entry}/end_time'
     date_path = '{entry}/{process}/date'
     qspace_axis_path = '{entry}/qspace_axis/{axis}'
-    status_path = '{entry}/{process}/status'
+    status_path = '{entry}/{process}/status/{axis}'
     configuration_path = '{entry}/{process}/configuration'
     result_grp_path = '{entry}/{process}/results'
     result_path = '{entry}/{process}/results/{result}/{axis}'
@@ -56,11 +76,20 @@ class FitH5(XsocsH5Base):
     scan_y_path = '{entry}/sample/y_pos'
 
     def title(self, entry):
+        """
+        Returns the title for the given entry.
+        :param entry:
+        :return:
+        """
         with self._get_file() as h5_file:
             path = entry + '/title'
             return h5_file[path][()]
 
     def entries(self):
+        """
+        Return the entry names.
+        :return:
+        """
         with self._get_file() as h5_file:
             # TODO : this isnt pretty but for some reason the attrs.get() fails
             # when there is no attribute NX_class (should return the default
@@ -71,6 +100,11 @@ class FitH5(XsocsH5Base):
                                    'NX_class'] == 'NXentry')])
 
     def processes(self, entry):
+        """
+        Return the processes names for the given entry.
+        :param entry:
+        :return:
+        """
         with self._get_file() as h5_file:
             entry_grp = h5_file[entry]
             processes = sorted([key for key in entry_grp
@@ -79,117 +113,219 @@ class FitH5(XsocsH5Base):
                                         'NX_class'] == 'NXprocess')])
         return processes
 
-    def results(self, entry, process):
+    def get_result_names(self, entry, process):
+        """
+        Returns the result names for the given process. Names are ordered
+        alphabetically.
+        :param entry:
+        :param process:
+        :return:
+        """
+        results_path = self.result_grp_path.format(entry=entry,
+                                                   process=process)
         with self._get_file() as h5_file:
-            result_grp = h5_file[FitH5.result_grp_path.format(entry=entry,
-                                                              process=process)]
-            return sorted(result_grp.keys())
+            return sorted(h5_file[results_path].keys())
 
-    def get_status(self, entry, process):
-        status_path = FitH5.status_path.format(entry=entry, process=process)
+    def get_status(self, entry, process, axis):
+        """
+        Returns the fit status for the given entry/process/axis
+        :param entry:
+        :param process:
+        :param axis: FitH5QAxis.qx_axis, FitH5QAxis.qy_axis
+         or FitH5QAxis.qz_axis
+        :return:
+        """
+        axis_name = FitH5QAxis.axis_name(axis)
+        status_path = FitH5.status_path.format(entry=entry,
+                                               process=process,
+                                               axis=axis_name)
         return self._get_array_data(status_path)
 
     def scan_x(self, entry):
+        """
+        Return the sample points coordinates along x for the given entry.
+        :param entry:
+        :return:
+        """
         dset_path = FitH5.scan_x_path.format(entry=entry)
         return self._get_array_data(dset_path)
 
     def scan_y(self, entry):
+        """
+        Return the sample points coordinates along y for the given entry.
+        :param entry:
+        :return:
+        """
         dset_path = FitH5.scan_y_path.format(entry=entry)
         return self._get_array_data(dset_path)
 
     def get_qx(self, entry):
-        return self.__get_axis_values(entry, FitH5.qx_axis)
+        """
+        Returns the axis values for qx for the given entry.
+        :param entry:
+        :return:
+        """
+        return self.__get_axis_values(entry, FitH5QAxis.qx_axis)
 
     def get_qy(self, entry):
-        return self.__get_axis_values(entry, FitH5.qy_axis)
+        """
+        Returns the axis values for qy for the given entry.
+        :param entry:
+        :return:
+        """
+        return self.__get_axis_values(entry, FitH5QAxis.qy_axis)
 
     def get_qz(self, entry):
-        return self.__get_axis_values(entry, FitH5.qz_axis)
+        """
+        Returns the axis values for qz for the given entry.
+        :param entry:
+        :return:
+        """
+        return self.__get_axis_values(entry, FitH5QAxis.qz_axis)
 
     def __get_axis_values(self, entry, axis):
-        axis_name = FitH5.axis_names[axis]
+        """
+        Returns the axis values.
+        :param entry:
+        :param axis: FitH5QAxis.qx_axis, FitH5QAxis.qy_axis
+         or FitH5QAxis.qz_axis
+        :return:
+        """
+        axis_name = FitH5QAxis.axis_name(axis)
         return self._get_array_data(FitH5.qspace_axis_path.format(
             entry=entry, axis=axis_name))
 
-    def result(self, entry, process, result):
+    def get_axis_result(self, entry, process, result, axis):
+        """
+        Returns the results for the given entry/process/result name/axis.
+        :param entry:
+        :param process:
+        :param result:
+        :param axis: FitH5QAxis.qx_axis, FitH5QAxis.qy_axis or
+         FitH5QAxis.qz_axis
+        :return:
+        """
+        assert axis in FitH5QAxis.axis_values
+        axis_name = FitH5QAxis.axis_name(axis)
         result_path = FitH5.result_path.format(entry=entry,
                                                process=process,
-                                               result=result)
-        return self._get_array_data(result_path)
-
-    def get_axis_result(self, entry, process, name, q_axis):
-        assert q_axis in FitH5._axis_values
-        axis_name = self.axis_names[q_axis]
-        result_path = FitH5.result_path.format(entry=entry,
-                                               process=process,
-                                               result=name,
+                                               result=result,
                                                axis=axis_name)
         return self._get_array_data(result_path)
 
     def get_qx_result(self, entry, process, result):
-        return self.get_axis_result(entry, process, result, FitH5.qx_axis)
+        """
+        Returns the results (qx) for the given entry/process/result name.
+        :param entry:
+        :param process:
+        :param result:
+        :return:
+        """
+        return self.get_axis_result(entry, process, result, FitH5QAxis.qx_axis)
 
     def get_qy_result(self, entry, process, result):
-        return self.get_axis_result(entry, process, result, FitH5.qy_axis)
+        """
+        Returns the results (qy) for the given entry/process/result name.
+        :param entry:
+        :param process:
+        :param result:
+        :return:
+        """
+        return self.get_axis_result(entry, process, result, FitH5QAxis.qy_axis)
 
     def get_qz_result(self, entry, process, result):
-        return self.get_axis_result(entry, process, result, FitH5.qz_axis)
+        """
+        Returns the results (qz) for the given entry/process/result name.
+        :param entry:
+        :param process:
+        :param result:
+        :return:
+        """
+        return self.get_axis_result(entry, process, result, FitH5QAxis.qz_axis)
 
     def get_result(self, entry, process, result):
+        """
+        Returns the results values (qx, qy, qz) for
+        the given entry/process/result name.
+        :param entry:
+        :param process:
+        :param result:
+        :return: a FitResult instance.
+        """
         with self:
             results = {}
-            for axis in FitH5._axis_values:
-                results[FitH5.axis_names[axis]] = \
+            for axis in FitH5QAxis.axis_values:
+                results[FitH5QAxis.axis_name(axis)] = \
                     self.get_axis_result(entry, process, result, axis)
             return FitResult(name=result, **results)
 
-    def export_txt(self, filename):
-        # TODO : change this when multiple entries/processes are supported
-        entry = self.entries()[0]
-        if not entry:
-            raise ValueError('No entries.')
-        process = self.processes(entry)[0]
-        if not process:
-            raise ValueError('No processed for entry {0}.'.format(entry))
+    def get_n_points(self, entry):
+        """
+        Returns the number of sample positions for this entry.
+        :param entry:
+        :return:
+        """
+        dset_path = FitH5.scan_x_path.format(entry=entry)
+        shape = self._get_array_data(dset_path, shape=True)
+        return shape[0]
+
+    def export_csv(self, entry, filename):
+        """
+        Exports an entry results as csv.
+        :param entry:
+        :param filename:
+        :return:
+        """
+
+        x, y = self.scan_x(entry), self.scan_y(entry)
+
+        processes = self.processes(entry)
+
+        if len(processes) == 0:
+            raise ValueError('No process found for entry {0}.'.format(entry))
+
+        # with open(filename, 'w+') as res_f:
         with self:
-            with open(filename, 'w+') as res_f:
-                res_f.write('X Y '
-                            'height_x center_x width_x '
-                            'height_y center_y width_y '
-                            'height_z center_z width_z '
-                            '|q| status\n')
 
-                heights = self.get_result(entry, process, 'height')
-                positions = self.get_result(entry, process, 'position')
-                widths = self.get_result(entry, process, 'width')
+            header_process = ['_', 'process:']
+            header_list = ['X', 'Y']
+            for process in processes:
+                result_names = self.get_result_names(entry, process)
+                for axis in FitH5QAxis.axis_names:
+                    for result_name in result_names:
+                        header_process.append(process)
+                        header_list.append(result_name + '_' + axis)
+                    header_process.append(process)
+                    header_list.append('status_' + axis)
 
-                x_height = heights.qx
-                x_center = positions.qx
-                x_width = widths.qx
+            header = ' '.join(header_process) + '\n' + ' '.join(header_list)
 
-                y_height = heights.qy
-                y_center = positions.qy
-                y_width = widths.qy
+            results = np.zeros((len(x), len(header_list)))
 
-                z_height = heights.qz
-                z_center = positions.qz
-                z_width = widths.qz
+            results[:, 0] = x
+            results[:, 1] = y
 
-                q = np.sqrt(x_center ** 2 +
-                            y_center ** 2 +
-                            z_center ** 2)
+            col_idx = 2
+            for process in processes:
+                result_names = self.get_result_names(entry, process)
+                for axis in FitH5QAxis.axis_values:
+                    for result_name in result_names:
+                        result = self.get_axis_result(entry,
+                                                      process,
+                                                      result_name,
+                                                      axis)
+                        results[:, col_idx] = result
+                        col_idx += 1
+                    results[:, col_idx] = self.get_status(entry,
+                                                          process,
+                                                          axis)
+                    col_idx += 1
 
-                status = self.get_status(entry, process)
-                x, y = self.scan_x(entry), self.scan_y(entry)
-
-                for i, s in enumerate(status):
-                    r = [x[i], y[i],
-                         x_height[i], x_center[i], x_width[i],
-                         y_height[i], y_center[i], y_width[i],
-                         z_height[i], z_center[i], z_width[i],
-                         q[i], s]
-                    res_str = '{0}\n'.format(' '.join(str(e) for e in r))
-                    res_f.write(res_str)
+            np.savetxt(filename,
+                       results,
+                       fmt='%.10g',
+                       header=header,
+                       comments='')
 
 
 class FitH5Writer(FitH5):
@@ -234,13 +370,16 @@ class FitH5Writer(FitH5):
     def set_title(self, entry, title):
         self._set_scalar_data(FitH5.title_path.format(entry), title)
 
-    def set_status(self, entry, process, data):
-        status_path = FitH5.status_path.format(entry=entry, process=process)
+    def set_status(self, entry, process, axis, data):
+        axis_name = FitH5QAxis.axis_name(axis)
+        status_path = FitH5.status_path.format(entry=entry,
+                                               process=process,
+                                               axis=axis_name)
         self._set_array_data(status_path, data)
 
     def __set_axis_result(self, entry, process, name, q_axis, data):
-        assert q_axis in FitH5._axis_values
-        axis_name = self.axis_names[q_axis]
+        assert q_axis in FitH5QAxis.axis_values
+        axis_name = FitH5QAxis.axis_name(q_axis)
         result_path = FitH5.result_path.format(entry=entry,
                                                process=process,
                                                result=name,
@@ -248,199 +387,25 @@ class FitH5Writer(FitH5):
         self._set_array_data(result_path, data)
 
     def set_qx_result(self, entry, process, name, data):
-        self.__set_axis_result(entry, process, name, FitH5.qx_axis, data)
+        self.__set_axis_result(entry, process, name, FitH5QAxis.qx_axis, data)
 
     def set_qy_result(self, entry, process, name, data):
-        self.__set_axis_result(entry, process, name, FitH5.qy_axis, data)
+        self.__set_axis_result(entry, process, name, FitH5QAxis.qy_axis, data)
 
     def set_qz_result(self, entry, process, name, data):
-        self.__set_axis_result(entry, process, name, FitH5.qz_axis, data)
+        self.__set_axis_result(entry, process, name, FitH5QAxis.qz_axis, data)
 
     def __set_axis_values(self, entry, axis, values):
-        axis_name = FitH5.axis_names[axis]
+        axis_name = FitH5QAxis.axis_name(axis)
         self._set_array_data(FitH5.qspace_axis_path.format(entry=entry,
                                                            axis=axis_name),
                              values)
 
     def set_qx(self, entry, values):
-        self.__set_axis_values(entry, FitH5.qx_axis, values)
+        self.__set_axis_values(entry, FitH5QAxis.qx_axis, values)
 
     def set_qy(self, entry, values):
-        self.__set_axis_values(entry, FitH5.qy_axis, values)
+        self.__set_axis_values(entry, FitH5QAxis.qy_axis, values)
 
     def set_qz(self, entry, values):
-        self.__set_axis_values(entry, FitH5.qz_axis, values)
-
-
-
-#
-# class FitH5Writer(FitH5):
-#
-#     def __init__(self, h5_f, mode='a', **kwargs):
-#         super(FitH5Writer, self).__init__(h5_f, mode=mode, **kwargs)
-#
-#     def set_scan_positions(self, x, y):
-#         path_tpl = FitH5.scan_positions_path + '/{0}'
-#         self._set_array_data(path_tpl.format('x'), x)
-#         self._set_array_data(path_tpl.format('y'), y)
-#
-#     def set_x_fit(self, height, center, width):
-#         self.__set_fit('x', height, center, width)
-#
-#     def set_y_fit(self, height, center, width):
-#         self.__set_fit('y', height, center, width)
-#
-#     def set_z_fit(self, height, center, width):
-#         self.__set_fit('z', height, center, width)
-#
-#     def __set_fit(self, axis, height, center, width):
-#         path_tpl = FitH5.q_fit_path.format(axis) + '/{0}'
-#         self._set_array_data(path_tpl.format('height'), height)
-#         self._set_array_data(path_tpl.format('center'), center)
-#         self._set_array_data(path_tpl.format('width'), width)
-#
-#     def set_status(self, status):
-#         self._set_array_data(FitH5.status_path, status)
-#
-#     def __set_axis_values(self, axis, values):
-#         self._set_array_data(FitH5.axis_path.format(axis), values)
-#
-#     def set_x_axis(self, values):
-#         self.__set_axis_values('x', values)
-#
-#     def set_y_axis(self, values):
-#         self.__set_axis_values('y', values)
-#
-#     def set_z_axis(self, values):
-#         self.__set_axis_values('z', values)
-
-
-# class FitH5(XsocsH5Base):
-#     scan_positions_path = 'scan_positions'
-#     q_fit_path = 'q{0}fit'
-#     status_path = 'success'
-#     axis_path = 'axis/{0}'
-#
-#     @property
-#     def scan_positions(self):
-#         with self:
-#             return self.sample_x, self.sample_y
-#
-#     sample_x = property(lambda self:
-#                         self._get_array_data(FitH5.scan_positions_path + '/x'))
-#
-#     sample_y = property(lambda self:
-#                         self._get_array_data(FitH5.scan_positions_path + '/y'))
-#
-#     x_fit = property(lambda self: self.__get_fit('x'))
-#
-#     y_fit = property(lambda self: self.__get_fit('y'))
-#
-#     z_fit = property(lambda self: self.__get_fit('z'))
-#
-#     x_height = property(lambda self: self.__get_data('x', 'height'))
-#
-#     y_height = property(lambda self: self.__get_data('y', 'height'))
-#
-#     z_height = property(lambda self: self.__get_data('z', 'height'))
-#
-#     x_center = property(lambda self: self.__get_data('x', 'center'))
-#
-#     y_center = property(lambda self: self.__get_data('y', 'center'))
-#
-#     z_center = property(lambda self: self.__get_data('z', 'center'))
-#
-#     x_width = property(lambda self: self.__get_data('x', 'width'))
-#
-#     y_width = property(lambda self: self.__get_data('y', 'width'))
-#
-#     z_width = property(lambda self: self.__get_data('z', 'width'))
-#
-#     status = property(lambda self: self._get_array_data(FitH5.status_path))
-#
-#     x_axis = property(lambda self: self.__get_axis_values('x'))
-#
-#     y_axis = property(lambda self: self.__get_axis_values('y'))
-#
-#     z_axis = property(lambda self: self.__get_axis_values('z'))
-#
-#     def __get_fit(self, axis):
-#         with self:
-#             height = self.__get_data(axis, 'height')
-#             center = self.__get_data(axis, 'center')
-#             width = self.__get_data(axis, 'width')
-#         return height, center, width
-#
-#     def __get_data(self, axis, data):
-#         data_path = FitH5.q_fit_path.format(axis) + '/{0}'.format(data)
-#         return self._get_array_data(data_path)
-#
-#     def __get_axis_values(self, axis):
-#         return self._get_array_data(FitH5.axis_path.format(axis))
-#
-#     def export_txt(self, filename):
-#         with self:
-#             with open(filename, 'w+') as res_f:
-#                 res_f.write('X Y '
-#                             'height_x center_x width_x '
-#                             'height_y center_y width_y '
-#                             'height_z center_z width_z '
-#                             '|q| status\n')
-#                 x_height, x_center, x_width = self.x_fit
-#                 y_height, y_center, y_width = self.y_fit
-#                 z_height, z_center, z_width = self.z_fit
-#                 q = np.sqrt(x_center ** 2 +
-#                             y_center ** 2 +
-#                             z_center ** 2)
-#                 status = self.status
-#                 x, y = self.scan_positions
-#
-#                 for i, s in enumerate(status):
-#                     r = [x[i], y[i],
-#                          x_height[i], x_center[i], x_width[i],
-#                          y_height[i], y_center[i], y_width[i],
-#                          z_height[i], z_center[i], z_width[i],
-#                          q[i], s]
-#                     res_str = '{0}\n'.format(' '.join(str(e) for e in r))
-#                     res_f.write(res_str)
-#
-#
-# class FitH5Writer(FitH5):
-#
-#     def __init__(self, h5_f, mode='a', **kwargs):
-#         super(FitH5Writer, self).__init__(h5_f, mode=mode, **kwargs)
-#
-#     def set_scan_positions(self, x, y):
-#         path_tpl = FitH5.scan_positions_path + '/{0}'
-#         self._set_array_data(path_tpl.format('x'), x)
-#         self._set_array_data(path_tpl.format('y'), y)
-#
-#     def set_x_fit(self, height, center, width):
-#         self.__set_fit('x', height, center, width)
-#
-#     def set_y_fit(self, height, center, width):
-#         self.__set_fit('y', height, center, width)
-#
-#     def set_z_fit(self, height, center, width):
-#         self.__set_fit('z', height, center, width)
-#
-#     def __set_fit(self, axis, height, center, width):
-#         path_tpl = FitH5.q_fit_path.format(axis) + '/{0}'
-#         self._set_array_data(path_tpl.format('height'), height)
-#         self._set_array_data(path_tpl.format('center'), center)
-#         self._set_array_data(path_tpl.format('width'), width)
-#
-#     def set_status(self, status):
-#         self._set_array_data(FitH5.status_path, status)
-#
-#     def __set_axis_values(self, axis, values):
-#         self._set_array_data(FitH5.axis_path.format(axis), values)
-#
-#     def set_x_axis(self, values):
-#         self.__set_axis_values('x', values)
-#
-#     def set_y_axis(self, values):
-#         self.__set_axis_values('y', values)
-#
-#     def set_z_axis(self, values):
-#         self.__set_axis_values('z', values)
+        self.__set_axis_values(entry, FitH5QAxis.qz_axis, values)

@@ -153,7 +153,7 @@ class FitButton(EditorMixin, Qt.QWidget):
         dialog.selectFile(os.path.join(workdir, itemBasename))
         if dialog.exec_():
             csvPath = dialog.selectedFiles()[0]
-            fitItem.fitH5.export_txt(csvPath)
+            fitItem.fitH5.export_csv(fitItem.fitH5.entries()[0], csvPath)
 
 
 @H5NodeClassDef('FitGroup',

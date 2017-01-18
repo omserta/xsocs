@@ -31,7 +31,7 @@ __date__ = "15/09/2016"
 
 from silx.gui import qt as Qt
 
-from kmap.io.FitH5 import FitH5
+from kmap.io.FitH5 import FitH5, FitH5QAxis
 
 from ...widgets.XsocsPlot2D import XsocsPlot2D
 
@@ -81,7 +81,7 @@ class DropPlotWidget(XsocsPlot2D):
             scan_y = h5f.scan_y(entry)
 
         self.__legend = self.setPlotData(scan_x, scan_y, data)
-        self.setGraphTitle(result + '/' + FitH5.axis_names[q_axis])
+        self.setGraphTitle(result + '/' + FitH5QAxis.axis_names[q_axis])
 
 
 if __name__ == '__main__':

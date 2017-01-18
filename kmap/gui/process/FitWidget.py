@@ -33,7 +33,7 @@ from collections import OrderedDict
 from silx.gui import qt as Qt
 
 from ...io.QSpaceH5 import QSpaceH5
-from ...io.FitH5 import FitH5Writer
+from ...io.FitH5 import FitH5Writer, FitH5QAxis
 from ..widgets.Containers import GroupBox
 from ..widgets.Input import StyledLineEdit
 from ..widgets.FileChooser import FileChooser
@@ -181,34 +181,88 @@ class FitWidget(Qt.QDialog):
         results = peak_fit(self.__qspaceFile,
                            fit_type=self.__fitType,
                            roiIndices=self.__roiIndices)
+
         with FitH5Writer(self.__selectedFile, mode='w') as fitH5:
-            entry = results.fit_name
-            process = results.fit_name
+            entry = results.entry
             fitH5.create_entry(entry)
-            fitH5.create_process(entry, process)
 
             fitH5.set_scan_x(entry, results.sample_x)
             fitH5.set_scan_y(entry, results.sample_y)
-            fitH5.set_status(entry, process, results.status)
+
             fitH5.set_qx(entry, results.q_x)
             fitH5.set_qy(entry, results.q_y)
             fitH5.set_qz(entry, results.q_z)
 
-            for resName, data in results.q_x_results.items():
-                fitH5.set_qx_result(entry,
-                                    process,
-                                    resName,
-                                    data)
-            for resName, data in results.q_y_results.items():
-                fitH5.set_qy_result(entry,
-                                    process,
-                                    resName,
-                                    data)
-            for resName, data in results.q_z_results.items():
-                fitH5.set_qz_result(entry,
-                                    process,
-                                    resName,
-                                    data)
+            processes = results.processes()
+
+            for process in processes:
+                fitH5.create_process(entry, process)
+
+                for param in results.params(process):
+                    xresult = results.results(process, param, results.QX_AXIS)
+                    yresult = results.results(process, param, results.QY_AXIS)
+                    zresult = results.results(process, param, results.QZ_AXIS)
+
+                    xstatus = results.qx_status(process)
+                    ystatus = results.qy_status(process)
+                    zstatus = results.qz_status(process)
+
+                    fitH5.set_qx_result(entry,
+                                        process,
+                                        param,
+                                        xresult)
+
+                    fitH5.set_qy_result(entry,
+                                        process,
+                                        param,
+                                        yresult)
+
+                    fitH5.set_qz_result(entry,
+                                        process,
+                                        param,
+                                        zresult)
+
+                    fitH5.set_status(entry,
+                                     process,
+                                     FitH5QAxis.qx_axis,
+                                     xstatus)
+                    fitH5.set_status(entry,
+                                     process,
+                                     FitH5QAxis.qy_axis,
+                                     ystatus)
+                    fitH5.set_status(entry,
+                                     process,
+                                     FitH5QAxis.qz_axis,
+                                     zstatus)
+
+        # with FitH5Writer(self.__selectedFile, mode='w') as fitH5:
+        #     entry = results.fit_name
+        #     process = results.fit_name
+        #     fitH5.create_entry(entry)
+        #     fitH5.create_process(entry, process)
+        #
+        #     fitH5.set_scan_x(entry, results.sample_x)
+        #     fitH5.set_scan_y(entry, results.sample_y)
+        #     fitH5.set_status(entry, process, results.status)
+        #     fitH5.set_qx(entry, results.q_x)
+        #     fitH5.set_qy(entry, results.q_y)
+        #     fitH5.set_qz(entry, results.q_z)
+        #
+        #     for resName, data in results.q_x_results.items():
+        #         fitH5.set_qx_result(entry,
+        #                             process,
+        #                             resName,
+        #                             data)
+        #     for resName, data in results.q_y_results.items():
+        #         fitH5.set_qy_result(entry,
+        #                             process,
+        #                             resName,
+        #                             data)
+        #     for resName, data in results.q_z_results.items():
+        #         fitH5.set_qz_result(entry,
+        #                             process,
+        #                             resName,
+        #                             data)
 
         self.__fitFile = self.__selectedFile
         self._setStatus(FitWidget.StatusCompleted)

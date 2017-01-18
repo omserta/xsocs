@@ -29,7 +29,6 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "01/01/2017"
 
-
 import numpy as np
 
 from silx.gui import qt as Qt
@@ -38,7 +37,7 @@ from kmap.gui.model.Model import Model, RootNode
 from kmap.gui.project.Hdf5Nodes import H5File
 from kmap.gui.model.ModelDef import ModelRoles
 
-from kmap.io.FitH5 import FitH5
+from kmap.io.FitH5 import FitH5, FitH5QAxis
 
 from ...widgets.XsocsPlot2D import XsocsPlot2D
 from ...project.Hdf5Nodes import H5Base, H5NodeClassDef
@@ -111,16 +110,16 @@ class FitProcessNode(FitEntryNode):
     """
     Node linked to a process group in a FitH5 file.
     """
-    process = property(lambda self: self.h5Path.split('/')[1])
+    process = property(lambda self: self.h5Path.lstrip('/').split('/')[1])
 
     def _loadChildren(self):
         base = self.h5Path.rstrip('/')
         entry = self.entry
         process = self.process
         children = []
-
+        print 'PATH', self.h5Path, self.entry, self.process
         with FitH5(self.h5File, mode='r') as h5f:
-            results = h5f.results(entry, process)
+            results = h5f.get_result_names(entry, process)
         for result in results:
             child = FitResultNode(self.h5File, base + '/' + result)
             children.append(child)
@@ -203,11 +202,11 @@ class FitModel(Model):
             return super(Model, self).mimeData(indexes)
 
         if index.column() == 1:
-            q_axis = FitH5.qx_axis
+            q_axis = FitH5QAxis.qx_axis
         elif index.column() == 2:
-            q_axis = FitH5.qy_axis
+            q_axis = FitH5QAxis.qy_axis
         elif index.column() == 3:
-            q_axis = FitH5.qz_axis
+            q_axis = FitH5QAxis.qz_axis
         else:
             raise ValueError('Unexpected column.')
 

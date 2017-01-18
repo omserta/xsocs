@@ -36,7 +36,7 @@ from silx.gui import qt as Qt
 from kmap.gui.project.XsocsH5Factory import h5NodeToProjectItem
 from kmap.gui.widgets.Containers import GroupBox
 
-from kmap.io.FitH5 import FitH5
+from kmap.io.FitH5 import FitH5, FitH5QAxis
 
 from ..widgets.XsocsPlot2D import XsocsPlot2D
 from kmap.gui.model.TreeView import TreeView
@@ -218,7 +218,7 @@ class FitView(Qt.QMainWindow):
                 if processes:
                     process = processes[0]
 
-        if process == 'LeastSq':
+        if process == 'gaussian':
             _initLeastSq(self.__plots, fitH5.filename, entry, process)
         elif process == 'Centroid':
             _initCentroid(self.__plots, fitH5.filename, entry, process)
@@ -269,7 +269,7 @@ class FitView(Qt.QMainWindow):
 
             # TODO : refactor
             process = self.__process
-            if process == 'LeastSq':
+            if process == 'gaussian':
                 _plotLeastSq(self.__fitPlots, xIdx,
                              fitH5,
                              entry, process,
@@ -319,7 +319,7 @@ def _plotLeastSq(plots, index, fitH5,
         xFitQY = fitH5.get_qy(entry)
         xFitQZ = fitH5.get_qz(entry)
 
-        heights = fitH5.get_result(entry, process, 'height')
+        heights = fitH5.get_result(entry, process, 'intensity')
         positions = fitH5.get_result(entry, process, 'position')
         widths = fitH5.get_result(entry, process, 'width')
 
@@ -408,17 +408,17 @@ def _initLeastSq(plots, fitH5Name, entry, process):
     qApp.processEvents()
 
     plots[0].plotFitResult(fitH5Name, entry, process,
-                           'position', FitH5.qx_axis)
+                           'position', FitH5QAxis.qx_axis)
 
     qApp.processEvents()
 
     plots[1].plotFitResult(fitH5Name, entry, process,
-                           'position', FitH5.qy_axis)
+                           'position', FitH5QAxis.qy_axis)
 
     qApp.processEvents()
 
     plots[2].plotFitResult(fitH5Name, entry, process,
-                           'position', FitH5.qz_axis)
+                           'position', FitH5QAxis.qz_axis)
 
 
 def _initCentroid(plots, fitH5Name, entry, process):
@@ -435,13 +435,13 @@ def _initCentroid(plots, fitH5Name, entry, process):
     qApp = Qt.qApp
     # plots[0].setVisible(True)
     qApp.processEvents()
-    plots[0].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qx_axis)
+    plots[0].plotFitResult(fitH5Name, entry, process, 'position', FitH5QAxis.qx_axis)
     # plots[1].setVisible(True)
     qApp.processEvents()
-    plots[1].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qy_axis)
+    plots[1].plotFitResult(fitH5Name, entry, process, 'position', FitH5QAxis.qy_axis)
     # plots[2].setVisible(True)
     qApp.processEvents()
-    plots[2].plotFitResult(fitH5Name, entry, process, 'position', FitH5.qz_axis)
+    plots[2].plotFitResult(fitH5Name, entry, process, 'position', FitH5QAxis.qz_axis)
 
 
 if __name__ == '__main__':

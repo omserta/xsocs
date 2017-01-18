@@ -35,15 +35,10 @@ from collections import namedtuple
 from silx.gui import qt as Qt
 
 from ..widgets.Containers import GroupBox
-from ..Widgets import (AcqParamsWidget,
-                       AdjustedLineEdit,
+from ..Widgets import (AdjustedLineEdit,
                        AdjustedPushButton)
 from ...process.qspace import RecipSpaceConverter
 
-_MAX_BEAM_ENERGY_EV = 10**6
-
-_MU_LOWER = u'\u03BC'
-_PHI_LOWER = u'\u03C6'
 _ETA_LOWER = u'\u03B7'
 
 _DEFAULT_IMG_BIN = [1, 1]
@@ -263,40 +258,12 @@ class RecipSpaceWidget(Qt.QDialog):
         grp_layout.addWidget(scans_table, alignment=Qt.Qt.AlignLeft)
 
         # ################
-        # Acq. parameters
-        # ################
-        params_gbx = GroupBox("Acq. Parameters")
-        grp_layout = Qt.QVBoxLayout(params_gbx)
-        topLayout.addWidget(params_gbx,
-                            1, 0, alignment=Qt.Qt.AlignTop)
-
-        def_acqparam_bn = Qt.QCheckBox('Use input file values')
-        def_acqparam_bn.setCheckState(Qt.Qt.Checked)
-        grp_layout.addWidget(def_acqparam_bn)
-
-        h_line = Qt.QFrame()
-        h_line.setFrameShape(Qt.QFrame.HLine)
-        h_line.setFrameShadow(Qt.QFrame.Sunken)
-        grp_layout.addWidget(h_line)
-
-        param_stacked = Qt.QStackedWidget()
-        grp_layout.addWidget(param_stacked)
-
-        acq_params_ro = AcqParamsWidget(read_only=True)
-        param_stacked.addWidget(acq_params_ro)
-
-        acq_params_rw = AcqParamsWidget()
-        param_stacked.addWidget(acq_params_rw)
-
-        grp_layout.addStretch(1)
-
-        # ################
         # conversion params
         # ################
 
         conv_gbx = GroupBox("Conversion parameters")
         grp_layout = Qt.QVBoxLayout(conv_gbx)
-        topLayout.addWidget(conv_gbx, 2, 0, alignment=Qt.Qt.AlignTop)
+        topLayout.addWidget(conv_gbx, 1, 0, alignment=Qt.Qt.AlignTop)
 
         conv_params_wid = ConversionParamsWidget()
         grp_layout.addWidget(conv_params_wid)
@@ -347,7 +314,6 @@ class RecipSpaceWidget(Qt.QDialog):
                                  ['h5_file_edit',
                                   'h5_file_bn',
                                   'scans_gbx',
-                                  'params_gbx',
                                   'conv_gbx',
                                   'output_gbx',
                                   'xMinText',
@@ -357,10 +323,6 @@ class RecipSpaceWidget(Qt.QDialog):
                                   'n_img_label',
                                   'n_angles_label',
                                   'scans_table',
-                                  'def_acqparam_bn',
-                                  'param_stacked',
-                                  'acq_params_ro',
-                                  'acq_params_rw',
                                   'conv_params_wid',
                                   'output_file_edit',
                                   'output_file_bn',
@@ -368,7 +330,6 @@ class RecipSpaceWidget(Qt.QDialog):
         self.__widgets = SelfWidgets(h5_file_edit=h5_file_edit,
                                      h5_file_bn=h5_file_bn,
                                      scans_gbx=scans_gbx,
-                                     params_gbx=params_gbx,
                                      conv_gbx=conv_gbx,
                                      output_gbx=output_gbx,
                                      xMinText=xMinText,
@@ -378,10 +339,6 @@ class RecipSpaceWidget(Qt.QDialog):
                                      n_img_label=n_img_label,
                                      n_angles_label=n_angles_label,
                                      scans_table=scans_table,
-                                     def_acqparam_bn=def_acqparam_bn,
-                                     param_stacked=param_stacked,
-                                     acq_params_ro=acq_params_ro,
-                                     acq_params_rw=acq_params_rw,
                                      conv_params_wid=conv_params_wid,
                                      output_file_edit=output_file_edit,
                                      output_file_bn=output_file_bn,
@@ -389,7 +346,6 @@ class RecipSpaceWidget(Qt.QDialog):
 
         cancel_bn.clicked.connect(self.close)
         h5_file_bn.clicked.connect(self.__pickInputFile)
-        def_acqparam_bn.stateChanged.connect(self.__acqParamChkBnStateChanged)
         output_file_bn.clicked.connect(self.__pickOutputFile)
         convert_bn.clicked.connect(self.__convertBnClicked)
 
@@ -440,18 +396,6 @@ class RecipSpaceWidget(Qt.QDialog):
                                     str(ex))
             return
 
-        if not widgets.def_acqparam_bn.isChecked():
-            beam_energy = widgets.acq_params_rw.beam_energy
-            direct_beam_h = widgets.acq_params_rw.direct_beam_h
-            direct_beam_v = widgets.acq_params_rw.direct_beam_v
-            chperdeg_h = widgets.acq_params_rw.chperdeg_h
-            chperdeg_v = widgets.acq_params_rw.chperdeg_v
-            kwargs = dict(beam_energy=beam_energy,
-                          chan_per_deg=[chperdeg_h, chperdeg_v],
-                          center_chan=[direct_beam_h, direct_beam_v])
-        else:
-            kwargs = {}
-
         converter.output_f = output_file
         if len(converter.check_overwrite()):
             ans = Qt.QMessageBox.warning(self,
@@ -464,7 +408,7 @@ class RecipSpaceWidget(Qt.QDialog):
                 return
 
         self.__converter = converter
-        procDialog = _ConversionProcessDialog(converter, parent=self, **kwargs)
+        procDialog = _ConversionProcessDialog(converter, parent=self)
         procDialog.accepted.connect(partial(
             self.__convertDone, status=RecipSpaceWidget.StatusCompleted))
         procDialog.rejected.connect(partial(
@@ -495,19 +439,6 @@ class RecipSpaceWidget(Qt.QDialog):
                              ''.format(status))
         self.__status = status
 
-    def __acqParamChkBnStateChanged(self, state):
-        """
-        Sets the current acquisition parameters widget shown
-        in the QStackedWidget
-        """
-        widgets = self.__widgets
-        param_stacked = widgets.param_stacked
-        if state == Qt.Qt.Checked:
-            current_widget = widgets.acq_params_ro
-        else:
-            current_widget = widgets.acq_params_rw
-        param_stacked.setCurrentWidget(current_widget)
-
     def __resetState(self):
         widgets = self.__widgets
 
@@ -516,7 +447,6 @@ class RecipSpaceWidget(Qt.QDialog):
 
         widgets.n_img_label.setText('')
         widgets.n_angles_label.setText('')
-        widgets.def_acqparam_bn.setChecked(True)
 
         self.__groupsSetEnabled(False)
 
@@ -585,35 +515,7 @@ class RecipSpaceWidget(Qt.QDialog):
             converter.rect_roi = self.__rectRoi
 
         self.__fillScansInfos()
-        self.__fillAcqParamWidgets()
         self.__groupsSetEnabled(True)
-
-    def __fillAcqParamWidgets(self):
-        """
-        Fills both AcqParamWidgets (read only and editable) with
-        info found in the input file
-        """
-        converter = self.__converter
-        if converter is None:
-            return
-        scans = converter.scans
-        params = converter.scan_params(scans[0])
-
-        widgets = self.__widgets
-        widgets.def_acqparam_bn.setChecked(True)
-
-        ro_wid = widgets.acq_params_ro
-        rw_wid = widgets.acq_params_rw
-
-        direct_beam = params['center_chan']
-        chperdeg = params['chan_per_deg']
-
-        for wid in [ro_wid, rw_wid]:
-            wid.beam_energy = params['beam_energy']
-            wid.direct_beam_h = direct_beam[0]
-            wid.direct_beam_v = direct_beam[1]
-            wid.chperdeg_h = chperdeg[0]
-            wid.chperdeg_v = chperdeg[1]
 
     def __fillScansInfos(self):
         """
@@ -670,7 +572,6 @@ class RecipSpaceWidget(Qt.QDialog):
     def __groupsSetEnabled(self, enable=True):
         widgets = self.__widgets
         widgets.scans_gbx.setEnabled(enable)
-        widgets.params_gbx.setEnabled(enable)
         widgets.conv_gbx.setEnabled(enable)
         widgets.output_gbx.setEnabled(enable)
         widgets.convert_bn.setEnabled(enable)

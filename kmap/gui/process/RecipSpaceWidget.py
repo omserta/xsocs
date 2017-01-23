@@ -35,8 +35,8 @@ from collections import namedtuple
 from silx.gui import qt as Qt
 
 from ..widgets.Containers import GroupBox
-from ..Widgets import (AdjustedLineEdit,
-                       AdjustedPushButton)
+from ..widgets.Buttons import FixedSizePushButon
+from ..widgets.Input import StyledLineEdit
 from ...process.qspace import RecipSpaceConverter
 
 _ETA_LOWER = u'\u03B7'
@@ -58,13 +58,13 @@ class ConversionParamsWidget(Qt.QWidget):
         h_layout = Qt.QHBoxLayout()
         layout.addLayout(h_layout, row, 1,
                          alignment=Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-        imgbin_h_edit = AdjustedLineEdit(5)
+        imgbin_h_edit = StyledLineEdit(nChar=5)
         imgbin_h_edit.setValidator(Qt.QIntValidator(imgbin_h_edit))
         imgbin_h_edit.setAlignment(Qt.Qt.AlignRight)
         imgbin_h_edit.setText(str(_DEFAULT_IMG_BIN[0]))
         h_layout.addWidget(imgbin_h_edit, alignment=Qt.Qt.AlignLeft)
         h_layout.addWidget(Qt.QLabel(' x '))
-        imgbin_v_edit = AdjustedLineEdit(5)
+        imgbin_v_edit = StyledLineEdit(nChar=5)
         imgbin_v_edit.setValidator(Qt.QIntValidator(imgbin_v_edit))
         imgbin_v_edit.setAlignment(Qt.Qt.AlignRight)
         imgbin_v_edit.setText(str(_DEFAULT_IMG_BIN[1]))
@@ -81,17 +81,17 @@ class ConversionParamsWidget(Qt.QWidget):
         h_layout = Qt.QHBoxLayout()
         layout.addLayout(h_layout, row, 1,
                          alignment=Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-        qsize_x_edit = AdjustedLineEdit(5)
+        qsize_x_edit = StyledLineEdit(nChar=5)
         qsize_x_edit.setValidator(Qt.QDoubleValidator(qsize_x_edit))
         qsize_x_edit.setAlignment(Qt.Qt.AlignRight)
         h_layout.addWidget(qsize_x_edit)
         h_layout.addWidget(Qt.QLabel(' x '))
-        qsize_y_edit = AdjustedLineEdit(5)
+        qsize_y_edit = StyledLineEdit(nChar=5)
         qsize_y_edit.setValidator(Qt.QDoubleValidator(qsize_y_edit))
         qsize_y_edit.setAlignment(Qt.Qt.AlignRight)
         h_layout.addWidget(qsize_y_edit)
         h_layout.addWidget(Qt.QLabel(' x '))
-        qsize_z_edit = AdjustedLineEdit(5)
+        qsize_z_edit = StyledLineEdit(nChar=5)
         qsize_z_edit.setValidator(Qt.QDoubleValidator(qsize_z_edit))
         qsize_z_edit.setAlignment(Qt.Qt.AlignRight)
         h_layout.addWidget(qsize_z_edit)
@@ -199,7 +199,7 @@ class RecipSpaceWidget(Qt.QDialog):
         h5_file_edit = Qt.QLineEdit()
         fm = h5_file_edit.fontMetrics()
         h5_file_edit.setMinimumWidth(fm.width(' ' * 100))
-        h5_file_bn = AdjustedPushButton('...')
+        h5_file_bn = FixedSizePushButon('...')
         layout.addWidget(lab,
                          stretch=0,
                          alignment=Qt.Qt.AlignLeft)
@@ -224,10 +224,10 @@ class RecipSpaceWidget(Qt.QDialog):
 
         line = 0
         label = Qt.QLabel('# Roi :')
-        xMinText = AdjustedLineEdit(width=5, read_only=True)
-        xMaxText = AdjustedLineEdit(width=5, read_only=True)
-        yMinText = AdjustedLineEdit(width=5, read_only=True)
-        yMaxText = AdjustedLineEdit(width=5, read_only=True)
+        xMinText = StyledLineEdit(nChar=5, readOnly=True)
+        xMaxText = StyledLineEdit(nChar=5, readOnly=True)
+        yMinText = StyledLineEdit(nChar=5, readOnly=True)
+        yMaxText = StyledLineEdit(nChar=5, readOnly=True)
         roi_layout = Qt.QHBoxLayout()
         roi_layout.addWidget(xMinText)
         roi_layout.addWidget(xMaxText)
@@ -238,7 +238,7 @@ class RecipSpaceWidget(Qt.QDialog):
 
         line += 1
         label = Qt.QLabel('# points :')
-        n_img_label = AdjustedLineEdit(width=16, read_only=True)
+        n_img_label = StyledLineEdit(nChar=16, readOnly=True)
         nImgLayout = Qt.QHBoxLayout()
         info_layout.addWidget(label, line, 0)
         info_layout.addLayout(nImgLayout, line, 1, alignment=Qt.Qt.AlignLeft)
@@ -247,7 +247,7 @@ class RecipSpaceWidget(Qt.QDialog):
 
         line += 1
         label = Qt.QLabel(u'# {0} :'.format(_ETA_LOWER))
-        n_angles_label = AdjustedLineEdit(5, read_only=True)
+        n_angles_label = StyledLineEdit(nChar=5, readOnly=True)
         info_layout.addWidget(label, line, 0)
         info_layout.addWidget(n_angles_label, line, 1,
                               alignment=Qt.Qt.AlignLeft)
@@ -279,7 +279,7 @@ class RecipSpaceWidget(Qt.QDialog):
         output_file_edit = Qt.QLineEdit()
         fm = output_file_edit.fontMetrics()
         output_file_edit.setMinimumWidth(fm.width(' ' * 100))
-        output_file_bn = AdjustedPushButton('...')
+        output_file_bn = FixedSizePushButon('...')
         layout.addWidget(lab,
                          stretch=0,
                          alignment=Qt.Qt.AlignLeft)

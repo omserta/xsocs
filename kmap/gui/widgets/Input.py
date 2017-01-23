@@ -40,10 +40,11 @@ class StyledLineEdit(Qt.QLineEdit):
 
     _padding = 2
 
-    def __init__(self, parent=None, nChar=None):
+    def __init__(self, parent=None, nChar=None, readOnly=False):
         super(StyledLineEdit, self).__init__(parent)
         self.__nChar = nChar
         self.setAlignment(Qt.Qt.AlignLeft)
+        self.setReadOnly(readOnly)
         self._updateStyleSheet()
 
     def setReadOnly(self, ro):
@@ -101,6 +102,15 @@ class StyledLineEdit(Qt.QLineEdit):
                                          min-height: {1}px;}}
                      """.format(width, height)
         self.setStyleSheet(sheet)
+
+    def event(self, ev):
+        # this has to be done so that the stylesheet is reapplied when the
+        # "enabled" property changes
+        # https://wiki.qt.io/Dynamic_Properties_and_Stylesheets
+        if ev.type() == Qt.QEvent.EnabledChange:
+            self.style().unpolish(self)
+            self.style().polish(self)
+        return super(StyledLineEdit, self).event(ev)
 
 
 class StyledLabel(Qt.QLabel):

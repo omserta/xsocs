@@ -37,9 +37,10 @@ from functools import partial
 from collections import namedtuple
 
 from ...util.id01_spec import Id01DataMerger
-from ..Widgets import (AcqParamsWidget,
-                       AdjustedPushButton)
+from ..widgets.AcqParamsWidget import AcqParamsWidget
+
 from ..widgets.Containers import GroupBox
+from ..widgets.Buttons import FixedSizePushButon
 
 from silx.gui import qt as Qt
 
@@ -165,7 +166,7 @@ class _ScansSelectDialog(Qt.QDialog):
         unselBn.clicked.connect(self.__unselectClicked)
         bnLayout.setColumnStretch(2, 1)
 
-        more_bn = AdjustedPushButton('More')
+        more_bn = FixedSizePushButon('More')
         bnLayout.addWidget(more_bn, 0, 3, Qt.Qt.AlignRight)
 
         bn_box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Ok |
@@ -469,7 +470,7 @@ class MergeWidget(Qt.QDialog):
         spec_file_edit = Qt.QLineEdit()
         fm = spec_file_edit.fontMetrics()
         spec_file_edit.setMinimumWidth(fm.width(' ' * 100))
-        spec_file_bn = AdjustedPushButton('...')
+        spec_file_bn = FixedSizePushButon('...')
         layout.addWidget(lab,
                          spec_row, label_col,
                          Qt.Qt.AlignLeft)
@@ -486,7 +487,7 @@ class MergeWidget(Qt.QDialog):
         img_dir_edit = Qt.QLineEdit()
         fm = img_dir_edit.fontMetrics()
         img_dir_edit.setMinimumWidth(fm.width(' ' * 100))
-        img_dir_bn = AdjustedPushButton('...')
+        img_dir_bn = FixedSizePushButon('...')
         layout.addWidget(lab,
                          img_path_row, label_col,
                          Qt.Qt.AlignLeft)
@@ -515,7 +516,7 @@ class MergeWidget(Qt.QDialog):
                                       Qt.QSizePolicy.Expanding))
 
         # last row : apply button
-        parse_bn = AdjustedPushButton('Parse file')
+        parse_bn = FixedSizePushButon('Parse file')
         layout.addWidget(parse_bn,
                          apply_bn_row, 0,
                          1, last_col - first_col,
@@ -540,7 +541,7 @@ class MergeWidget(Qt.QDialog):
         label = Qt.QLabel('<span style=" font-weight:600; color:#00916a;">'
                           'Matched scans</span>')
         label.setTextFormat(Qt.Qt.RichText)
-        edit_scans_bn = AdjustedPushButton('Edit')
+        edit_scans_bn = FixedSizePushButon('Edit')
         h_layout.addWidget(label)
         h_layout.addWidget(edit_scans_bn)
         scan_layout.addLayout(h_layout, 0, 0, 1, 2)
@@ -588,7 +589,7 @@ class MergeWidget(Qt.QDialog):
         h_layout = Qt.QHBoxLayout()
         label = Qt.QLabel('<span style=" font-weight:600; color:#ff6600;">'
                           'Other scans</span>')
-        other_scans_bn = AdjustedPushButton('View')
+        other_scans_bn = FixedSizePushButon('View')
         h_layout.addWidget(label)
         h_layout.addWidget(other_scans_bn)
 
@@ -633,7 +634,7 @@ class MergeWidget(Qt.QDialog):
         params_gbx = GroupBox("Acq. Parameters")
         grp_layout = Qt.QVBoxLayout(params_gbx)
 
-        acq_params_wid = AcqParamsWidget(highlight_change=False)
+        acq_params_wid = AcqParamsWidget()
         self.layout().addWidget(params_gbx,
                                 2, 0,
                                 Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
@@ -659,7 +660,7 @@ class MergeWidget(Qt.QDialog):
         master_edit.setMinimumWidth(fm.width(' ' * 50))
         h_layout = Qt.QHBoxLayout()
         layout.addLayout(h_layout, 0, 1, Qt.Qt.AlignLeft)
-        reset_bn = AdjustedPushButton('R')
+        reset_bn = FixedSizePushButon('R')
         layout.addWidget(lab,
                          0, 0,
                          Qt.Qt.AlignLeft)
@@ -677,7 +678,7 @@ class MergeWidget(Qt.QDialog):
         outdir_edit = Qt.QLineEdit()
         fm = outdir_edit.fontMetrics()
         outdir_edit.setMinimumWidth(fm.width(' ' * 100))
-        outdir_bn = AdjustedPushButton('...')
+        outdir_bn = FixedSizePushButon('...')
         layout.addWidget(lab,
                          1, 0,
                          Qt.Qt.AlignLeft)

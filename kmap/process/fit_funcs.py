@@ -101,4 +101,5 @@ def centroid(x, y, p):
     # TODO : throw exception if fit failed
     com = x.dot(y) / y.sum()
     idx = np.abs(x - com).argmin()
-    return [y[idx], com, np.nan]
+    i_max = y.max()
+    return [y[idx], com, i_max]

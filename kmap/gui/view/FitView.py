@@ -220,7 +220,7 @@ class FitView(Qt.QMainWindow):
 
         if process == 'gaussian':
             _initLeastSq(self.__plots, fitH5.filename, entry, process)
-        elif process == 'Centroid':
+        elif process == 'centroid':
             _initCentroid(self.__plots, fitH5.filename, entry, process)
 
     def __slotPointSelected(self, point):
@@ -276,7 +276,7 @@ class FitView(Qt.QMainWindow):
                              xAcqQX, xAcqQY, xAcqQZ,
                              yAcqQX, yAcqQY, yAcqQZ)
 
-            elif process == 'Centroid':
+            elif process == 'centroid':
                 _plotCentroid(self.__fitPlots, xIdx,
                               fitH5,
                               entry, process,
@@ -377,7 +377,7 @@ def _plotCentroid(plots, index, fitH5,
     # TODO : put all this in a toolbox, so it can be shared between
     # the plot and the fit functions
 
-    positions = fitH5.get_result(entry, process, 'position')
+    positions = fitH5.get_result(entry, process, 'C. of Mass')
 
     plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
     plots[0].addXMarker(positions.qx[index], legend='center of mass')
@@ -433,15 +433,18 @@ def _initCentroid(plots, fitH5Name, entry, process):
     # hard coded result name, this isn't satisfactory but I can't think
     # of any other way right now.
     qApp = Qt.qApp
-    # plots[0].setVisible(True)
+
     qApp.processEvents()
-    plots[0].plotFitResult(fitH5Name, entry, process, 'position', FitH5QAxis.qx_axis)
-    # plots[1].setVisible(True)
+    plots[0].plotFitResult(fitH5Name, entry,
+                           process, 'C. of Mass', FitH5QAxis.qx_axis)
+
     qApp.processEvents()
-    plots[1].plotFitResult(fitH5Name, entry, process, 'position', FitH5QAxis.qy_axis)
-    # plots[2].setVisible(True)
+    plots[1].plotFitResult(fitH5Name, entry,
+                           process, 'C. of Mass', FitH5QAxis.qy_axis)
+
     qApp.processEvents()
-    plots[2].plotFitResult(fitH5Name, entry, process, 'position', FitH5QAxis.qz_axis)
+    plots[2].plotFitResult(fitH5Name, entry,
+                           process, 'C. of Mass', FitH5QAxis.qz_axis)
 
 
 if __name__ == '__main__':

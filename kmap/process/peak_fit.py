@@ -376,34 +376,52 @@ class GaussianResults(FitSharedResults):
         return results
 
 
-# class CentroidResults(FitSharedResults):
-#     def __init__(self,
-#                  n_points=None,
-#                  shared_results=None,
-#                  shared_status=None):
-#         super(CentroidResults, self).__init__(n_points=n_points,
-#                                               n_params=2,
-#                                               shared_results=shared_results,
-#                                               shared_status=shared_status)
-#
-#     def fit_results(self):
-#         qx_results = self._npy_qx_results
-#         qy_results = self._npy_qy_results
-#         qz_results = self._npy_qz_results
-#
-#         qx_status = self._npy_qx_status
-#         qy_status = self._npy_qy_status
-#         qz_status = self._npy_qz_status
-#
-#         fit_name = 'Centroid'
-#         q_x_results = {'height': qx_results[:, 0].ravel(),
-#                        'position': qx_results[:, 1].ravel()}
-#         q_y_results = {'height': qy_results[:, 0].ravel(),
-#                        'position': qy_results[:, 1].ravel()}
-#         q_z_results = {'height': qz_results[:, 0].ravel(),
-#                        'position': qz_results[:, 1].ravel()}
-#
-#         return [(fit_name, q_x_results, q_y_results, q_z_results)]
+class CentroidResults(FitSharedResults):
+    def __init__(self,
+                 n_points=None,
+                 shared_results=None,
+                 shared_status=None):
+        super(CentroidResults, self).__init__(n_points=n_points,
+                                              n_params=3,
+                                              shared_results=shared_results,
+                                              shared_status=shared_status)
+
+    def fit_results(self, *args, **kwargs):
+        qx_results = self._npy_qx_results
+        qy_results = self._npy_qy_results
+        qz_results = self._npy_qz_results
+
+        qx_status = self._npy_qx_status
+        qy_status = self._npy_qy_status
+        qz_status = self._npy_qz_status
+
+        fit_name = 'Centroid'
+        results = FitResult(fit_name, *args, **kwargs)
+
+        results.add_qx_result('centroid', 'I(COM)', qx_results[:, 0].ravel())
+        results.add_qx_result('centroid', 'C. of Mass',
+                              qx_results[:, 1].ravel())
+        results.add_qx_result('centroid', 'maximum',
+                              qx_results[:, 2].ravel())
+        results.set_qx_status('centroid', qx_status)
+
+        results.add_qy_result('centroid', 'I(COM)', qy_results[:, 0].ravel())
+        results.add_qy_result('centroid',
+                              'C. of Mass',
+                              qy_results[:, 1].ravel())
+        results.add_qy_result('centroid', 'maximum',
+                              qy_results[:, 2].ravel())
+        results.set_qy_status('centroid', qy_status)
+
+        results.add_qz_result('centroid', 'I(COM)', qz_results[:, 0].ravel())
+        results.add_qz_result('centroid',
+                              'C. of Mass',
+                              qz_results[:, 1].ravel())
+        results.add_qz_result('centroid', 'maximum',
+                              qz_results[:, 2].ravel())
+        results.set_qz_status('centroid', qz_status)
+
+        return results
 
 
 def peak_fit(qspace_f,
@@ -433,13 +451,6 @@ def peak_fit(qspace_f,
     if fit_type not in FitTypes.ALLOWED:
         raise ValueError('Unknown fit type : {0}'.format(fit_type))
 
-    if fit_type == FitTypes.LEASTSQ:
-        fit_fn = gaussian_fit
-        n_params = 9
-    if fit_type == FitTypes.CENTROID:
-        fit_fn = centroid
-        n_params = 9
-
     with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
         with qspace_h5.qspace_dset_ctx() as dset:
             qdata_shape = dset.shape
@@ -460,7 +471,13 @@ def peak_fit(qspace_f,
         # # success = np.ndarray((n_indices,), dtype=np.bool)
         # # success[:] = True
 
-    shared_results = GaussianResults(n_points=n_indices)
+    if fit_type == FitTypes.LEASTSQ:
+        fit_fn = gaussian_fit
+        shared_results = GaussianResults(n_points=n_indices)
+    if fit_type == FitTypes.CENTROID:
+        fit_fn = centroid
+        shared_results = CentroidResults(n_points=n_indices)
+
 
     # with h5py.File(qspace_f, 'r') as qspace_h5:
     #

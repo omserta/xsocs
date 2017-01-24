@@ -377,7 +377,7 @@ def _plotCentroid(plots, index, fitH5,
     # TODO : put all this in a toolbox, so it can be shared between
     # the plot and the fit functions
 
-    positions = fitH5.get_result(entry, process, 'C. of Mass')
+    positions = fitH5.get_result(entry, process, 'COM')
 
     plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
     plots[0].addXMarker(positions.qx[index], legend='center of mass')
@@ -436,15 +436,15 @@ def _initCentroid(plots, fitH5Name, entry, process):
 
     qApp.processEvents()
     plots[0].plotFitResult(fitH5Name, entry,
-                           process, 'C. of Mass', FitH5QAxis.qx_axis)
+                           process, 'COM', FitH5QAxis.qx_axis)
 
     qApp.processEvents()
     plots[1].plotFitResult(fitH5Name, entry,
-                           process, 'C. of Mass', FitH5QAxis.qy_axis)
+                           process, 'COM', FitH5QAxis.qy_axis)
 
     qApp.processEvents()
     plots[2].plotFitResult(fitH5Name, entry,
-                           process, 'C. of Mass', FitH5QAxis.qz_axis)
+                           process, 'COM', FitH5QAxis.qz_axis)
 
 
 if __name__ == '__main__':

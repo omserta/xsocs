@@ -208,26 +208,26 @@ class CentroidResults(FitSharedResults):
         fit_name = 'Centroid'
         results = FitResult(fit_name, *args, **kwargs)
 
-        results.add_qx_result('centroid', 'I(COM)', qx_results[:, 0].ravel())
-        results.add_qx_result('centroid', 'C. of Mass',
+        results.add_qx_result('centroid', 'I', qx_results[:, 0].ravel())
+        results.add_qx_result('centroid', 'COM',
                               qx_results[:, 1].ravel())
-        results.add_qx_result('centroid', 'maximum',
+        results.add_qx_result('centroid', 'Max',
                               qx_results[:, 2].ravel())
         results.set_qx_status('centroid', qx_status)
 
-        results.add_qy_result('centroid', 'I(COM)', qy_results[:, 0].ravel())
+        results.add_qy_result('centroid', 'I', qy_results[:, 0].ravel())
         results.add_qy_result('centroid',
-                              'C. of Mass',
+                              'COM',
                               qy_results[:, 1].ravel())
-        results.add_qy_result('centroid', 'maximum',
+        results.add_qy_result('centroid', 'Max',
                               qy_results[:, 2].ravel())
         results.set_qy_status('centroid', qy_status)
 
-        results.add_qz_result('centroid', 'I(COM)', qz_results[:, 0].ravel())
+        results.add_qz_result('centroid', 'I', qz_results[:, 0].ravel())
         results.add_qz_result('centroid',
-                              'C. of Mass',
+                              'COM',
                               qz_results[:, 1].ravel())
-        results.add_qz_result('centroid', 'maximum',
+        results.add_qz_result('centroid', 'Max',
                               qz_results[:, 2].ravel())
         results.set_qz_status('centroid', qz_status)
 

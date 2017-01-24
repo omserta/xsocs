@@ -579,32 +579,50 @@ class XsocsPlot2D(PlotWindow):
         menu.addAction(action)
 
         # save to file action
-        action = self.getSaveAction()
+        try:
+            action = self.getSaveAction()
+        except AttributeError:
+            action = self.saveAction
         action.setIconVisibleInMenu(True)
         menu.addAction(action)
 
         # print action
-        action = self.getPrintAction()
+        try:
+            action = self.getPrintAction()
+        except AttributeError:
+            action = self.printAction
         action.setIconVisibleInMenu(True)
         menu.addAction(action)
 
         # screenshot action
-        action = self.getCopyAction()
+        try:
+            action = self.getCopyAction()
+        except AttributeError:
+            action = self.copyAction
         action.setIconVisibleInMenu(True)
         menu.addAction(action)
 
         # grid action
-        action = self.getGridAction()
+        try:
+            action = self.getGridAction()
+        except AttributeError:
+            action = self.gridAction
         action.setIconVisibleInMenu(True)
         menu.addAction(action)
 
         # crosshair action
-        action = self.getCrosshairAction()
+        try:
+            action = self.getCrosshairAction()
+        except AttributeError:
+            action = self.crosshairAction
         action.setIconVisibleInMenu(True)
         menu.addAction(action)
 
         # pan action
-        action = self.getPanWithArrowKeysAction()
+        try:
+            action = self.getPanWithArrowKeysAction()
+        except AttributeError:
+            action = self.panWithArrowKeysAction
         action.setIconVisibleInMenu(True)
         menu.addAction(action)
 

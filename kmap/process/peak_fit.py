@@ -33,7 +33,7 @@ __license__ = "MIT"
 import time
 import ctypes
 import multiprocessing as mp
-from collections import namedtuple, OrderedDict
+from threading import Thread
 import multiprocessing.sharedctypes as mp_sharedctypes
 
 import numpy as np
@@ -41,394 +41,12 @@ import numpy as np
 # from silx.math import curve_fit
 from ..io import QSpaceH5
 from .fit_funcs import gaussian_fit, centroid
+from .sharedresults import FitTypes, GaussianResults, CentroidResults
 
 disp_times = False
 
 
-class FitTypes(object):
-    ALLOWED = range(2)
-    LEASTSQ, CENTROID = ALLOWED
-
-
-class FitResult(object):
-    """
-    Fit results
-    """
-    _AXIS = QX_AXIS, QY_AXIS, QZ_AXIS = range(3)
-    _AXIS_NAMES = ('qx', 'qy', 'qz')
-
-    def __init__(self, entry,
-                 q_x, q_y, q_z,
-                 sample_x, sample_y):
-        super(FitResult, self).__init__()
-
-        self._entry = entry
-
-        self._sample_x = sample_x
-        self._sample_y = sample_y
-
-        self._q_x = q_x
-        self._q_y = q_y
-        self._q_z = q_z
-
-        self._processes = OrderedDict()
-
-    def processes(self):
-        """
-        Returns the process names
-        :return:
-        """
-        return self._processes.keys()
-
-    def params(self, process):
-        return self._get_process(process, create=False)['params'].keys()
-
-    def status(self, process, axis):
-        assert axis in self._AXIS
-
-        process = self._get_process(process, create=False)
-
-        return process['status'][self._AXIS_NAMES[axis]]
-
-    def qx_status(self, process):
-        """
-        Returns qx fit status the given process
-        :param process:
-        :param param: param name
-        :return:
-        """
-        return self.status(process, self.QX_AXIS)
-
-    def qy_status(self, process):
-        """
-        Returns qy fit status the given process
-        :param process:
-        :param param: param name
-        :return:
-        """
-        return self.status(process, self.QY_AXIS)
-
-    def qz_status(self, process):
-        """
-        Returns qz fit status the given process
-        :param process:
-        :param param: param name
-        :return:
-        """
-        return self.status(process, self.QZ_AXIS)
-
-    def results(self, process, param, axis=None):
-        """
-        Returns the fitted parameter results for a given process.
-        :param process: process name
-        :param param: param name
-        :param axis: if provided, returns only the result for the given axis
-        :return:
-        """
-
-        param = self._get_param(process, param, create=False)
-
-        if axis is not None:
-            assert axis in self._AXIS
-            return param[self._AXIS_NAMES[axis]]
-        return param
-
-    def qx_results(self, process, param):
-        """
-        Returns qx fit results for the given process
-        :param process:
-        :param param: param name
-        :return:
-        """
-        return self.results(process, param, axis=self.QX_AXIS)
-
-    def qy_results(self, process):
-        """
-        Returns qy fit results for the given process
-        :param process:
-        :param param: param name
-        :return:
-        """
-        return self.results(process, axis=self.QY_AXIS)
-
-    def qz_results(self, process):
-        """
-        Returns qz fit results for the given process
-        :param process:
-        :param param: param name
-        :return:
-        """
-        return self.results(process, axis=self.QZ_AXIS)
-
-    def add_qx_result(self, process, param, result):
-        self._add_axis_result(process, self.QX_AXIS, param, result)
-
-    def add_qy_result(self, process, param, result):
-        self._add_axis_result(process, self.QY_AXIS, param, result)
-
-    def add_qz_result(self, process, param, result):
-        self._add_axis_result(process, self.QZ_AXIS, param, result)
-
-    def _add_axis_result(self, process, axis, param, result):
-        assert axis in self._AXIS
-
-        param_data = self._get_param(process, param)
-        param_data[self._AXIS_NAMES[axis]] = result
-        
-    def set_qx_status(self, process, status):
-        self._set_axis_status(process, self.QX_AXIS, status)
-
-    def set_qy_status(self, process, status):
-        self._set_axis_status(process, self.QY_AXIS, status)
-
-    def set_qz_status(self, process, status):
-        self._set_axis_status(process, self.QZ_AXIS, status)
-
-    def _set_axis_status(self, process, axis, status):
-        assert axis in self._AXIS
-
-        _process = self._get_process(process)
-        statuses = _process['status']
-
-        statuses[self._AXIS_NAMES[axis]] = status
-
-    def _get_process(self, process, create=True):
-
-        if process not in self._processes:
-            if not create:
-                raise KeyError('Unknown process {0}.'.format(process))
-            status = OrderedDict([('qx_status', None),
-                                  ('qy_status', None),
-                                  ('qz_status', None)])
-            _process = OrderedDict([('params', OrderedDict()),
-                                    ('status', status)])
-            self._processes[process] = _process
-        else:
-            _process = self._processes[process]
-
-        return _process
-
-    def _get_param(self, process, param, create=True):
-        process = self._get_process(process, create=create)
-        params = process['params']
-
-        if param not in params:
-            if not create:
-                raise KeyError('Unknown param {0}.'.format(param))
-            _param = OrderedDict()
-            for axis in self._AXIS_NAMES:
-                _param[axis] = None
-            params[param] = _param
-        else:
-            _param = params[param]
-
-        return _param
-
-    entry = property(lambda self: self._entry)
-
-    sample_x = property(lambda self: self._sample_x)
-    sample_y = property(lambda self: self._sample_y)
-
-    q_x = property(lambda  self: self._q_x)
-    q_y = property(lambda  self: self._q_y)
-    q_z = property(lambda self: self._q_z)
-
-
-class FitSharedResults(object):
-    def __init__(self,
-                 n_points=None,
-                 n_params=None,
-                 shared_results=None,
-                 shared_status=None):
-        super(FitSharedResults, self).__init__()
-        assert n_points is not None, n_params is not None
-
-        self._shared_qx_results = None
-        self._shared_qy_results = None
-        self._shared_qz_results = None
-
-        self._shared_qx_status = None
-        self._shared_qy_status = None
-        self._shared_qz_status = None
-
-        self._npy_qx_results = None
-        self._npy_qy_results = None
-        self._npy_qz_results = None
-
-        self._npy_qx_status = None
-        self._npy_qy_status = None
-        self._npy_qz_status = None
-
-        self._n_points = n_points
-        self._n_params = n_params
-
-        self._init_shared_results(shared_results)
-        self._init_shared_status(shared_status)
-        self._init_npy_results()
-        self._init_npy_status()
-
-    def _init_shared_results(self, shared_results=None):
-        if shared_results is None:
-            self._shared_qx_results = mp_sharedctypes.RawArray(
-                ctypes.c_double, self._n_points * self._n_params)
-            self._shared_qy_results = mp_sharedctypes.RawArray(
-                ctypes.c_double, self._n_points * self._n_params)
-            self._shared_qz_results = mp_sharedctypes.RawArray(
-                ctypes.c_double, self._n_points * self._n_params)
-        else:
-            self._shared_qx_results = shared_results[0]
-            self._shared_qy_results = shared_results[1]
-            self._shared_qz_results = shared_results[2]
-
-    def _init_shared_status(self, shared_status=None):
-        if shared_status is None:
-            self._shared_qx_status = mp_sharedctypes.RawArray(
-                ctypes.c_bool, self._n_points)
-            self._shared_qy_status = mp_sharedctypes.RawArray(
-                ctypes.c_bool, self._n_points)
-            self._shared_qz_status = mp_sharedctypes.RawArray(
-                ctypes.c_bool, self._n_points)
-        else:
-            self._shared_qx_status = shared_status[0]
-            self._shared_qy_status = shared_status[1]
-            self._shared_qz_status = shared_status[2]
-
-    def _init_npy_results(self):
-        self._npy_qx_results = np.frombuffer(self._shared_qx_results)
-        self._npy_qx_results.shape = self._n_points, self._n_params
-        self._npy_qy_results = np.frombuffer(self._shared_qy_results)
-        self._npy_qy_results.shape = self._n_points, self._n_params
-        self._npy_qz_results = np.frombuffer(self._shared_qz_results)
-        self._npy_qz_results.shape = self._n_points, self._n_params
-
-    def _init_npy_status(self):
-        self._npy_qx_status = np.frombuffer(self._shared_qx_status,
-                                            dtype=bool)
-        self._npy_qy_status = np.frombuffer(self._shared_qy_status,
-                                            dtype=bool)
-        self._npy_qz_status = np.frombuffer(self._shared_qz_status,
-                                            dtype=bool)
-
-    def set_qx_results(self, idx, results, status):
-        self._npy_qx_results[idx] = results
-        self._npy_qx_status[idx] = status
-        
-    def set_qy_results(self, idx, results, status):
-        self._npy_qy_results[idx] = results
-        self._npy_qy_status[idx] = status
-        
-    def set_qz_results(self, idx, results, status):
-        self._npy_qz_results[idx] = results
-        self._npy_qz_status[idx] = status
-
-    def local_copy(self):
-        shared_results = (self._shared_qx_results,
-                          self._shared_qy_results,
-                          self._shared_qz_results)
-        shared_status = (self._shared_qx_status,
-                         self._shared_qy_status,
-                         self._shared_qz_status)
-        return FitSharedResults(n_points=self._n_points,
-                                n_params=self._n_params,
-                                shared_results=shared_results,
-                                shared_status=shared_status)
-
-    def fit_results(self, *args, **kwargs):
-        raise NotImplementedError('')
-
-
-class GaussianResults(FitSharedResults):
-    def __init__(self,
-                 n_points=None,
-                 shared_results=None,
-                 shared_status=None):
-        super(GaussianResults, self).__init__(n_points=n_points,
-                                              n_params=3,
-                                              shared_results=shared_results,
-                                              shared_status=shared_status)
-
-    def fit_results(self, *args, **kwargs):
-        qx_results = self._npy_qx_results
-        qy_results = self._npy_qy_results
-        qz_results = self._npy_qz_results
-
-        qx_status = self._npy_qx_status
-        qy_status = self._npy_qy_status
-        qz_status = self._npy_qz_status
-
-        fit_name = 'Gaussian'
-        results = FitResult(fit_name, *args, **kwargs)
-        results.add_qx_result('gaussian', 'intensity', qx_results[:, 0].ravel())
-        results.add_qx_result('gaussian', 'position', qx_results[:, 1].ravel())
-        results.add_qx_result('gaussian', 'width', qx_results[:, 2].ravel())
-        results.set_qx_status('gaussian', qx_status)
-
-        results.add_qy_result('gaussian', 'intensity', qy_results[:, 0].ravel())
-        results.add_qy_result('gaussian', 'position', qy_results[:, 1].ravel())
-        results.add_qy_result('gaussian', 'width', qy_results[:, 2].ravel())
-        results.set_qy_status('gaussian', qy_status)
-
-        results.add_qz_result('gaussian', 'intensity', qz_results[:, 0].ravel())
-        results.add_qz_result('gaussian', 'position', qz_results[:, 1].ravel())
-        results.add_qz_result('gaussian', 'width', qz_results[:, 2].ravel())
-        results.set_qz_status('gaussian', qz_status)
-
-        return results
-
-
-class CentroidResults(FitSharedResults):
-    def __init__(self,
-                 n_points=None,
-                 shared_results=None,
-                 shared_status=None):
-        super(CentroidResults, self).__init__(n_points=n_points,
-                                              n_params=3,
-                                              shared_results=shared_results,
-                                              shared_status=shared_status)
-
-    def fit_results(self, *args, **kwargs):
-        qx_results = self._npy_qx_results
-        qy_results = self._npy_qy_results
-        qz_results = self._npy_qz_results
-
-        qx_status = self._npy_qx_status
-        qy_status = self._npy_qy_status
-        qz_status = self._npy_qz_status
-
-        fit_name = 'Centroid'
-        results = FitResult(fit_name, *args, **kwargs)
-
-        results.add_qx_result('centroid', 'I(COM)', qx_results[:, 0].ravel())
-        results.add_qx_result('centroid', 'C. of Mass',
-                              qx_results[:, 1].ravel())
-        results.add_qx_result('centroid', 'maximum',
-                              qx_results[:, 2].ravel())
-        results.set_qx_status('centroid', qx_status)
-
-        results.add_qy_result('centroid', 'I(COM)', qy_results[:, 0].ravel())
-        results.add_qy_result('centroid',
-                              'C. of Mass',
-                              qy_results[:, 1].ravel())
-        results.add_qy_result('centroid', 'maximum',
-                              qy_results[:, 2].ravel())
-        results.set_qy_status('centroid', qy_status)
-
-        results.add_qz_result('centroid', 'I(COM)', qz_results[:, 0].ravel())
-        results.add_qz_result('centroid',
-                              'C. of Mass',
-                              qz_results[:, 1].ravel())
-        results.add_qz_result('centroid', 'maximum',
-                              qz_results[:, 2].ravel())
-        results.set_qz_status('centroid', qz_status)
-
-        return results
-
-
-def peak_fit(qspace_f,
-             fit_type=FitTypes.LEASTSQ,
-             indices=None,
-             n_proc=None,
-             roiIndices=None):
+class PeakFitter(Thread):
     """
     :param qspace_f: path to the HDF5 file containing the qspace cubes
     :type data_h5f: `str`
@@ -446,248 +64,262 @@ def peak_fit(qspace_f,
     :type n_proc: `int`
     """
 
-    t_total = time.time()
+    READY, RUNNING, DONE, ERROR, CANCELED = __STATUSES = range(5)
 
-    if fit_type not in FitTypes.ALLOWED:
-        raise ValueError('Unknown fit type : {0}'.format(fit_type))
+    def __init__(self,
+                 qspace_f,
+                 fit_type=FitTypes.LEASTSQ,
+                 indices=None,
+                 n_proc=None,
+                 roi_indices=None):
+        super(PeakFitter, self).__init__()
 
-    with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
-        with qspace_h5.qspace_dset_ctx() as dset:
-            qdata_shape = dset.shape
+        self.__results = None
+        self.__thread = None
+        self.__progress = 0
 
-        n_points = qdata_shape[0]
+        self.__status = self.READY
 
-        if indices is None:
-            indices = range(n_points)
+        self.__indices = None
+
+        self.__qspace_f = qspace_f
+        self.__fit_type = fit_type
+
+        if n_proc:
+            self.__n_proc = n_proc
+        else:
+            n_proc = self.__n_proc = mp.cpu_count()
+
+        self.__shared_progress = mp_sharedctypes.RawArray(ctypes.c_int32,
+                                                          n_proc)
+
+        if roi_indices is not None:
+            self.__roi_indices = roi_indices[:]
+        else:
+            self.__roi_indices = None
+
+        if fit_type not in FitTypes.ALLOWED:
+            self.__set_status(self.ERROR)
+            raise ValueError('Unknown fit type : {0}'.format(fit_type))
+
+        try:
+            with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
+                with qspace_h5.qspace_dset_ctx() as dset:
+                    qdata_shape = dset.shape
+
+                n_points = qdata_shape[0]
+
+                if indices is None:
+                    indices = range(n_points)
+                else:
+                    indices = indices[:]
+        except IOError:
+            self.__set_status(self.ERROR)
+            raise
+
+        self.__indices = indices
+
+    def __set_status(self, status):
+        assert status in self.__STATUSES
+        self.__status = status
+
+    status = property(lambda self: self.__status)
+
+    def peak_fit(self,
+                 blocking=True,
+                 callback=None):
+
+        if self.__thread and self.__thread.is_alive():
+            raise RuntimeError('A fit is already in progress.')
+
+        self.__results = None
+
+        if blocking:
+            return self.__peak_fit()
+        else:
+            thread = self.__thread = Thread(target=self.__peak_fit)
+            self.__callback = callback
+            thread.start()
+
+    def progress(self):
+        return (100.0 *
+                np.frombuffer(self.__shared_progress, dtype='int32').max() /
+                (len(self.__indices) - 1))
+
+    def __peak_fit(self):
+
+        self.__set_status(self.RUNNING)
+
+        qspace_f = self.__qspace_f
+        fit_type = self.__fit_type
+        indices = self.__indices
+        n_proc = self.__n_proc
+        roi_indices = self.__roi_indices
+        shared_progress = self.__shared_progress
+
+        t_total = time.time()
+
+        progress = np.frombuffer(shared_progress, dtype='int32')
+        progress[:] = 0
 
         n_indices = len(indices)
 
-        x_pos = qspace_h5.sample_x[indices]
-        y_pos = qspace_h5.sample_y[indices]
+        try:
+            with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
+                with qspace_h5.qspace_dset_ctx() as dset:
+                    x_pos = qspace_h5.sample_x[indices]
+                    y_pos = qspace_h5.sample_y[indices]
+        except IOError:
+            self.__set_status(self.ERROR)
+            raise
 
-        # shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
-        # # TODO : find something better
-        # shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
-        # # success = np.ndarray((n_indices,), dtype=np.bool)
-        # # success[:] = True
+            # shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
+            # # TODO : find something better
+            # shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
+            # # success = np.ndarray((n_indices,), dtype=np.bool)
+            # # success[:] = True
 
-    if fit_type == FitTypes.LEASTSQ:
-        fit_fn = gaussian_fit
-        shared_results = GaussianResults(n_points=n_indices)
-    if fit_type == FitTypes.CENTROID:
-        fit_fn = centroid
-        shared_results = CentroidResults(n_points=n_indices)
+        if fit_type == FitTypes.LEASTSQ:
+            fit_fn = gaussian_fit
+            shared_results = GaussianResults(n_points=n_indices)
+        if fit_type == FitTypes.CENTROID:
+            fit_fn = centroid
+            shared_results = CentroidResults(n_points=n_indices)
 
+        # with h5py.File(qspace_f, 'r') as qspace_h5:
+        #
+        #     q_x = qspace_h5['bins_edges/x'][:]
+        #     q_y = qspace_h5['bins_edges/y'][:]
+        #     q_z = qspace_h5['bins_edges/z'][:]
+        #     qdata = qspace_h5['data/qspace']
+        #
+        #     n_points = qdata.shape[0]
+        #
+        #     if indices is None:
+        #         indices = range(n_points)
+        #
+        #     n_indices = len(indices)
+        #
+        #     x_pos = qspace_h5['geom/x'][indices]
+        #     y_pos = qspace_h5['geom/y'][indices]
+        #
+        #     shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
+        #     # TODO : find something better
+        #     shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
+        #     success = np.ndarray((n_indices,), dtype=np.bool)
+        #     success[:] = True
+        #
+        #     # this has to be done otherwise h5py complains about not being
+        #     # able to open compressed datasets from other processes
+        #     del qdata
 
-    # with h5py.File(qspace_f, 'r') as qspace_h5:
-    #
-    #     q_x = qspace_h5['bins_edges/x'][:]
-    #     q_y = qspace_h5['bins_edges/y'][:]
-    #     q_z = qspace_h5['bins_edges/z'][:]
-    #     qdata = qspace_h5['data/qspace']
-    #
-    #     n_points = qdata.shape[0]
-    #
-    #     if indices is None:
-    #         indices = range(n_points)
-    #
-    #     n_indices = len(indices)
-    #
-    #     x_pos = qspace_h5['geom/x'][indices]
-    #     y_pos = qspace_h5['geom/y'][indices]
-    #
-    #     shared_res = mp_sharedctypes.RawArray(ctypes.c_double, n_indices * 9)
-    #     # TODO : find something better
-    #     shared_success = mp_sharedctypes.RawArray(ctypes.c_bool, n_indices)
-    #     success = np.ndarray((n_indices,), dtype=np.bool)
-    #     success[:] = True
-    #
-    #     # this has to be done otherwise h5py complains about not being
-    #     # able to open compressed datasets from other processes
-    #     del qdata
+        # results = np.ndarray((n_indices, 11), dtype=np.double)
+        # results[:, 0] = x_pos
+        # results[:, 1] = y_pos
 
-    # results = np.ndarray((n_indices, 11), dtype=np.double)
-    # results[:, 0] = x_pos
-    # results[:, 1] = y_pos
+        manager = mp.Manager()
 
-    manager = mp.Manager()
+        read_lock = manager.Lock()
+        idx_queue = manager.Queue()
 
-    read_lock = manager.Lock()
-    idx_queue = manager.Queue()
+        pool = mp.Pool(n_proc,
+                       initializer=_init_thread,
+                       initargs=(shared_results,
+                                 shared_progress,
+                                 fit_fn,
+                                 (n_indices, 9),
+                                 idx_queue,
+                                 qspace_f,
+                                 read_lock))
+                       # initargs=(shared_res,
+                       #           shared_success,
+                       #           fit_fn,
+                       #           (n_indices, 9),
+                       #           idx_queue,
+                       #           qspace_f,
+                       #           read_lock))
 
-    if n_proc is None:
-        n_proc = mp.cpu_count()
+        if disp_times:
+            class myTimes(object):
+                def __init__(self):
+                    self.t_read = 0.
+                    self.t_mask = 0.
+                    self.t_fit = 0.
+                    self.t_write = 0.
 
-    pool = mp.Pool(n_proc,
-                   initializer=_init_thread,
-                   initargs=(shared_results,
-                             fit_fn,
-                             (n_indices, 9),
-                             idx_queue,
-                             qspace_f,
-                             read_lock))
-                   # initargs=(shared_res,
-                   #           shared_success,
-                   #           fit_fn,
-                   #           (n_indices, 9),
-                   #           idx_queue,
-                   #           qspace_f,
-                   #           read_lock))
+                def update(self, arg):
+                    (t_read_, t_mask_, t_fit_, t_write_) = arg
+                    self.t_read += t_read_
+                    self.t_mask += t_mask_
+                    self.t_fit += t_fit_
+                    self.t_write += t_write_
 
-    if disp_times:
-        class myTimes(object):
-            def __init__(self):
-                self.t_read = 0.
-                self.t_mask = 0.
-                self.t_fit = 0.
-                self.t_write = 0.
+            res_times = myTimes()
+            callback = res_times.update
+        else:
+            callback = None
 
-            def update(self, arg):
-                (t_read_, t_mask_, t_fit_, t_write_) = arg
-                self.t_read += t_read_
-                self.t_mask += t_mask_
-                self.t_fit += t_fit_
-                self.t_write += t_write_
+        # creating the processes
+        res_list = []
+        for th_idx in range(n_proc):
+            arg_list = (th_idx, roi_indices)
+            res = pool.apply_async(_fit_process, args=arg_list, callback=callback)
+            res_list.append(res)
 
-        res_times = myTimes()
-        callback = res_times.update
-    else:
-        callback = None
+        # sending the image indices
+        for i_cube in indices:
+            idx_queue.put(i_cube)
 
-    # creating the processes
-    res_list = []
-    for th_idx in range(n_proc):
-        arg_list = (th_idx, roiIndices)
-        res = pool.apply_async(_fit_process, args=arg_list, callback=callback)
-        res_list.append(res)
+        # sending the None value to let the threads know that they should return
+        for th_idx in range(n_proc):
+            idx_queue.put(None)
 
-    # sending the image indices
-    for i_cube in indices:
-        idx_queue.put(i_cube)
+        pool.close()
+        pool.join()
 
-    # sending the None value to let the threads know that they should return
-    for th_idx in range(n_proc):
-        idx_queue.put(None)
+        t_total = time.time() - t_total
+        if disp_times:
+            print('Total : {0}.'.format(t_total))
+            print('Read {0}'.format(res_times.t_read))
+            print('Mask {0}'.format(res_times.t_mask))
+            print('Fit {0}'.format(res_times.t_fit))
+            print('Write {0}'.format(res_times.t_write))
 
-    pool.close()
-    pool.join()
+        with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
+            q_x = qspace_h5.qx
+            q_y = qspace_h5.qy
+            q_z = qspace_h5.qz
 
-    # fit_x = np.ndarray((n_indices, 3), dtype=np.float64)
-    # fit_y = np.ndarray((n_indices, 3), dtype=np.float64)
-    # fit_z = np.ndarray((n_indices, 3), dtype=np.float64)
+        if roi_indices is not None:
+            xSlice = slice(roi_indices[0][0], roi_indices[0][1], 1)
+            ySlice = slice(roi_indices[1][0], roi_indices[1][1], 1)
+            zSlice = slice(roi_indices[2][0], roi_indices[2][1], 1)
+            q_x = q_x[xSlice]
+            q_y = q_y[ySlice]
+            q_z = q_z[zSlice]
 
-    # results_np = np.frombuffer(shared_res)
-    # results_np.shape = n_indices, 9
-    # success = np.frombuffer(shared_success, dtype=bool)
+        fit_results = shared_results.fit_results(sample_x=x_pos,
+                                                 sample_y=y_pos,
+                                                 q_x=q_x,
+                                                 q_y=q_y,
+                                                 q_z=q_z)
 
-    # results_np = shared_results._shared_array
-    # success = shared_results._shared_status
-    # qx_results = shared_results._shared_qx_results
-    # qy_results = shared_results._shared_qy_results
-    # qz_results = shared_results._shared_qz_results
-    #
-    # qx_status = shared_results._shared_qx_status
-    # qy_status = shared_results._shared_qy_status
-    # qz_status = shared_results._shared_qz_status
-    
+        self.__results = fit_results
 
-    # results[:, 2:5] = results_np[:, 0:3]
-    # results[:, 5:8] = results_np[:, 3:6]
-    # results[:, 8:11] = results_np[:, 6:9]
+        self.__set_status(self.DONE)
 
-    t_total = time.time() - t_total
-    if disp_times:
-        print('Total : {0}.'.format(t_total))
-        print('Read {0}'.format(res_times.t_read))
-        print('Mask {0}'.format(res_times.t_mask))
-        print('Fit {0}'.format(res_times.t_fit))
-        print('Write {0}'.format(res_times.t_write))
-
-    # status = np.zeros(x_pos.shape)
-    # status[success] = 1
-
-    with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
-        q_x = qspace_h5.qx
-        q_y = qspace_h5.qy
-        q_z = qspace_h5.qz
-
-    if roiIndices is not None:
-        xSlice = slice(roiIndices[0][0], roiIndices[0][1], 1)
-        ySlice = slice(roiIndices[1][0], roiIndices[1][1], 1)
-        zSlice = slice(roiIndices[2][0], roiIndices[2][1], 1)
-        q_x = q_x[xSlice]
-        q_y = q_y[ySlice]
-        q_z = q_z[zSlice]
-
-    # TODO : REFACTOR/IMPROVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # if fit_type == FitTypes.LEASTSQ:
-    #     fit_name = 'LeastSq'
-    #     q_x_results = {'height': q_x_results[:, 0].ravel(),
-    #                    'position': q_x_results[:, 1].ravel(),
-    #                    'width': q_x_results[:, 2].ravel()}
-    #     q_y_results = {'height': q_y_results[:, 3].ravel(),
-    #                    'position': results_np[:, 4].ravel(),
-    #                    'width': results_np[:, 5].ravel()}
-    #     q_z_results = {'height': results_np[:, 6].ravel(),
-    #                    'position': results_np[:, 7].ravel(),
-    #                    'width': results_np[:, 8].ravel()}
-    # else:
-    #     fit_name = 'Centroid'
-    #     q_x_results = {'height': results_np[:, 0].ravel(),
-    #                    'position': results_np[:, 1].ravel()}
-    #     q_y_results = {'height': results_np[:, 3].ravel(),
-    #                    'position': results_np[:, 4].ravel()}
-    #     q_z_results = {'height': results_np[:, 6].ravel(),
-    #                    'position': results_np[:, 7].ravel()}
-
-    # # TODO : REFACTOR/IMPROVE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # if fit_type == FitTypes.LEASTSQ:
-    #     fit_name = 'LeastSq'
-    #     q_x_results = {'height': results_np[:, 0].ravel(),
-    #                    'position': results_np[:, 1].ravel(),
-    #                    'width': results_np[:, 2].ravel()}
-    #     q_y_results = {'height': results_np[:, 3].ravel(),
-    #                    'position': results_np[:, 4].ravel(),
-    #                    'width': results_np[:, 5].ravel()}
-    #     q_z_results = {'height': results_np[:, 6].ravel(),
-    #                    'position': results_np[:, 7].ravel(),
-    #                    'width': results_np[:, 8].ravel()}
-    # else:
-    #     fit_name = 'Centroid'
-    #     q_x_results = {'height': results_np[:, 0].ravel(),
-    #                    'position': results_np[:, 1].ravel()}
-    #     q_y_results = {'height': results_np[:, 3].ravel(),
-    #                    'position': results_np[:, 4].ravel()}
-    #     q_z_results = {'height': results_np[:, 6].ravel(),
-    #                    'position': results_np[:, 7].ravel()}
-
-    fit_results = shared_results.fit_results(sample_x=x_pos,
-                                             sample_y=y_pos,
-                                             q_x=q_x,
-                                             q_y=q_y,
-                                             q_z=q_z)
-
-    # fit_results = FitResult(sample_x=x_pos,
-    #                         sample_y=y_pos,
-    #                         q_x=q_x,
-    #                         q_y=q_y,
-    #                         q_z=q_z,
-    #                         q_x_results=q_x_results,
-    #                         q_y_results=q_y_results,
-    #                         q_z_results=q_z_results,
-    #                         status=status,
-    #                         fit_name=fit_name)
-    return fit_results
+        return fit_results
 
 
 def _init_thread(shared_res_,
+                 shared_prog_,
                  fit_fn_,
                  result_shape_,
                  idx_queue_,
                  qspace_f_,
                  read_lock_):
     global shared_res, \
-        shared_success, \
+        shared_progress, \
         fit_fn, \
         result_shape, \
         idx_queue, \
@@ -695,22 +327,12 @@ def _init_thread(shared_res_,
         read_lock
 
     shared_res = shared_res_
+    shared_progress = shared_prog_
     fit_fn = fit_fn_
     result_shape = result_shape_
     idx_queue = idx_queue_
     qspace_f = qspace_f_
     read_lock = read_lock_
-
-
-def _gauss_first_guess(x, y):
-    i_max = y.argmax()
-    y_max = y[i_max]
-    p1 = x[i_max]
-    i_fwhm = np.where(y >= y_max / 2.)[0]
-    fwhm = (x[1] - x[0]) * len(i_fwhm)
-    p2 = fwhm / np.sqrt(2 * np.log(2))  # 2.35482
-    p0 = y_max * np.sqrt(2 * np.pi) * p2
-    return [p0, p1, p2]
 
 
 def _fit_process(th_idx, roiIndices=None):
@@ -724,6 +346,7 @@ def _fit_process(th_idx, roiIndices=None):
         # results.shape = result_shape
         # success = np.frombuffer(shared_success, dtype=bool)
         l_shared_res = shared_res.local_copy()
+        progress = np.frombuffer(shared_progress, dtype='int32')
         # results = l_shared_res._shared_array
         # success = l_shared_res._shared_status
 
@@ -778,6 +401,8 @@ def _fit_process(th_idx, roiIndices=None):
 
             if i_cube is None:
                 break
+
+            progress[th_idx] = i_cube
 
             if i_cube % 100 == 0:
                 print(
@@ -900,3 +525,7 @@ def _fit_process(th_idx, roiIndices=None):
     times = (t_read, t_mask, t_fit, t_write)
     print('Thread {0} done ({1}).'.format(th_idx, times))
     return times
+
+
+if __name__ == '__main__':
+    pass

@@ -298,7 +298,7 @@ class FitH5(XsocsH5Base):
                     header_process.append(process)
                     header_list.append('status_' + axis)
 
-            header = ' '.join(header_process) + '\n' + ' '.join(header_list)
+            header = '; '.join(header_process) + '\n' + '; '.join(header_list)
 
             results = np.zeros((len(x), len(header_list)))
 
@@ -325,7 +325,8 @@ class FitH5(XsocsH5Base):
                        results,
                        fmt='%.10g',
                        header=header,
-                       comments='')
+                       comments='',
+                       delimiter='; ')
 
 
 class FitH5Writer(FitH5):

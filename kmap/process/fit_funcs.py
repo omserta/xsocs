@@ -103,3 +103,18 @@ def centroid(x, y, p):
     idx = np.abs(x - com).argmin()
     i_max = y.max()
     return [y[idx], com, i_max]
+
+
+def _gauss_first_guess(x, y):
+    i_max = y.argmax()
+    y_max = y[i_max]
+    p1 = x[i_max]
+    i_fwhm = np.where(y >= y_max / 2.)[0]
+    fwhm = (x[1] - x[0]) * len(i_fwhm)
+    p2 = fwhm / np.sqrt(2 * np.log(2))  # 2.35482
+    p0 = y_max * np.sqrt(2 * np.pi) * p2
+    return [p0, p1, p2]
+
+
+if __name__ == '__main__':
+    pass

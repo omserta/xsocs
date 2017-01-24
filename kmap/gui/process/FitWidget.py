@@ -37,7 +37,7 @@ from ...io.FitH5 import FitH5Writer, FitH5QAxis
 from ..widgets.Containers import GroupBox
 from ..widgets.Input import StyledLineEdit
 from ..widgets.FileChooser import FileChooser
-from ...process.peak_fit import peak_fit, FitTypes
+from ...process.peak_fit import PeakFitter, FitTypes
 
 
 class RangeWidget(Qt.QWidget):
@@ -178,9 +178,11 @@ class FitWidget(Qt.QDialog):
     def __onAccept(self):
         self.__fitFile = None
 
-        results = peak_fit(self.__qspaceFile,
-                           fit_type=self.__fitType,
-                           roiIndices=self.__roiIndices)
+        fitter = PeakFitter(self.__qspaceFile,
+                            fit_type=self.__fitType,
+                            roi_indices=self.__roiIndices)
+
+        results = fitter.peak_fit()
 
         with FitH5Writer(self.__selectedFile, mode='w') as fitH5:
             entry = results.entry

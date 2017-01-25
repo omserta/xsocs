@@ -113,15 +113,13 @@ class StyledLineEdit(Qt.QLineEdit):
         return super(StyledLineEdit, self).event(ev)
 
 
-class StyledLabel(Qt.QLabel):
+class FixedSizeLabel(Qt.QLabel):
     """
     Styled QLabel.
     """
 
-    _padding = 2
-
     def __init__(self, parent=None, nChar=None):
-        super(StyledLabel, self).__init__(parent)
+        super(FixedSizeLabel, self).__init__(parent)
         self.__nChar = nChar
         self.setAlignment(Qt.Qt.AlignLeft)
         self.setFrameStyle(Qt.QFrame.Panel | Qt.QFrame.Sunken)
@@ -141,17 +139,10 @@ class StyledLabel(Qt.QLabel):
         Sets the style sheet.
         :return:
         """
-        sheet = ''
 
         if self.__nChar is not None:
-            # There are two stylesheet units "em" and "xm" that I tried,
-            # but the results were not satisfactory.
             fm = self.fontMetrics()
-            width = fm.width('M') * self.__nChar
-            height = fm.height()
-            sheet += """StyledLabel{{ max-width: {0}px;
-                                                     min-width: {0}px;
-                                                     max-height: {1}px;
-                                                     min-height: {1}px;}}
-                                 """.format(width, height)
-        self.setStyleSheet(sheet)
+
+            # see QLabel::indent doc for the reason behind the width('x')/2
+            width = fm.width('M') * self.__nChar + (fm.width('x') / 2)
+            self.setFixedWidth(width)

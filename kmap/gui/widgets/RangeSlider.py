@@ -105,6 +105,7 @@ class RangeSlider(Qt.QWidget):
         :return:
         """
         if sliderRng is not None:
+            reset = self.__range is None
             if len(sliderRng) != 2:
                 raise ValueError('The slider range must be a 2-elements '
                                  'array, or None.')
@@ -113,7 +114,19 @@ class RangeSlider(Qt.QWidget):
                                  'max range.')
             self.__range = np.array(sliderRng, dtype=np.float)
         else:
+            reset = True
             self.__range = None
+
+        if reset:
+            self.resetSliderValues()
+
+    def resetSliderValues(self):
+        """
+        Sets the left and right slider values to the min and max of the range.
+        :return:
+        """
+        sRange = self.getRange()
+        self.setSliderValues(sRange[0], sRange[1])
 
     def setShowRangeBackground(self, show):
         """

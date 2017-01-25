@@ -53,6 +53,7 @@ class FixedSizePushButon(Qt.QPushButton):
         :param text:
         :return:
         """
+        super(FixedSizePushButon, self).setText(text)
         self._updateSize()
 
     def _updateSize(self):

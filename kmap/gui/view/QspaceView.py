@@ -29,6 +29,8 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
+import os
+
 import numpy as np
 from matplotlib import cm
 
@@ -40,44 +42,15 @@ from plot3d.ScalarFieldView import ScalarFieldView
 from plot3d.SFViewParamTree import TreeView as SFViewParamTree
 
 from ..model.TreeView import TreeView
-from ..widgets.Containers import GroupBox
-from ..widgets.RangeSlider import RangeSlider
-from ..widgets.Input import StyledLineEdit
 from ..widgets.XsocsPlot2D import XsocsPlot2D
+from ..process.FitWidget import FitWidget
 from ..project.XsocsH5Factory import h5NodeToProjectItem
+
+from ..Utils import nextFileName
 
 
 class QSpaceTree(TreeView):
     pass
-
-
-class RoiAxisWidget(Qt.QWidget):
-    sigSliderMoved = Qt.Signal(object)
-
-    slider = property(lambda self: self.__slider)
-
-    def __init__(self, label=None, **kwargs):
-        super(RoiAxisWidget, self).__init__(**kwargs)
-
-        layout = Qt.QGridLayout(self)
-        label = Qt.QLabel(label)
-        slider = self.__slider = RangeSlider()
-        leftEdit = self.__leftEdit = StyledLineEdit(nChar=7)
-        rightEdit = self.__rightEdit = StyledLineEdit(nChar=7)
-        leftEdit.setReadOnly(True)
-        rightEdit.setReadOnly(True)
-
-        layout.addWidget(label, 0, 0)
-        layout.addWidget(slider, 0, 1, 1, 2)
-        layout.addWidget(leftEdit, 1, 1)
-        layout.addWidget(rightEdit, 1, 2)
-
-        slider.sigSliderMoved.connect(self.__sliderMoved)
-        slider.sigSliderMoved.connect(self.sigSliderMoved)
-
-    def __sliderMoved(self, event):
-        self.__leftEdit.setText('{0:6g}'.format(event.left))
-        self.__rightEdit.setText('{0:6g}'.format(event.right))
 
 
 class PlotIntensityMap(XsocsPlot2D):
@@ -236,7 +209,7 @@ class CutPlanePlotWindow(PlotWidget):
 
 
 class QSpaceView(Qt.QMainWindow):
-    sigProcessApplied = Qt.Signal(object, object)
+    sigFitDone = Qt.Signal(object, object)
 
     plot = property(lambda self: self.__plotWindow)
 
@@ -245,11 +218,12 @@ class QSpaceView(Qt.QMainWindow):
                  model,
                  node,
                  **kwargs):
+
         super(QSpaceView, self).__init__(parent)
 
         self.setWindowTitle('[XSOCS] {0}'.format(node.h5Path))
 
-        item = h5NodeToProjectItem(node)
+        self.__projectItem = item = h5NodeToProjectItem(node)
 
         self.__qspaceH5 = item.qspaceH5
 
@@ -272,10 +246,9 @@ class QSpaceView(Qt.QMainWindow):
             self.__setPlotData(sampleX,
                                sampleY,
                                qspaceH5.qspace_sum)
-            qx = self.__qx = qspaceH5.qx
-            qy = self.__qy = qspaceH5.qy
-            qz = self.__qz = qspaceH5.qz
-
+            self.__qx = qspaceH5.qx
+            self.__qy = qspaceH5.qy
+            self.__qz = qspaceH5.qz
             firstX = sampleX[0]
             firstY = sampleY[1]
 
@@ -301,60 +274,35 @@ class QSpaceView(Qt.QMainWindow):
         view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
         view3d.getCutPlanes()[0].sigDataChanged.connect(self.__cutPlaneChanged)
 
-        # the widget containing :
-        # - the ROI sliders
-        # - the Fit button
-        # - the Plot3d param tree
-        controlWid = Qt.QWidget()
-        controlLayout = Qt.QVBoxLayout(controlWid)
-
-        roiWidget = GroupBox('Roi')
-        roiWidget.setCheckable(True)
-        roiWidget.setChecked(False)
-        roiWidget.toggled.connect(self.__roiGroupToggled)
-        layout = Qt.QVBoxLayout(roiWidget)
-
-        xRoiWid = self.__xRoiWid = RoiAxisWidget('X')
-        yRoiWid = self.__yRoiWid = RoiAxisWidget('Y')
-        zRoiWid = self.__zRoiWid = RoiAxisWidget('Z')
-        xRoiWid.slider.setRange([qx[0], qx[-1]])
-        yRoiWid.slider.setRange([qy[0], qy[-1]])
-        zRoiWid.slider.setRange([qz[0], qz[-1]])
-        xRoiWid.slider.setSliderValues(qx[0], qx[-1])
-        yRoiWid.slider.setSliderValues(qy[0], qy[-1])
-        zRoiWid.slider.setSliderValues(qz[0], qz[-1])
-        layout.addWidget(xRoiWid)
-        layout.addWidget(yRoiWid)
-        layout.addWidget(zRoiWid)
-
-        xRoiWid.sigSliderMoved.connect(self.__roiChanged)
-        yRoiWid.sigSliderMoved.connect(self.__roiChanged)
-        zRoiWid.sigSliderMoved.connect(self.__roiChanged)
-
-        icon = getQIcon('math-fit')
-        fitButton = Qt.QPushButton('Fit')
-        fitButton.setIcon(icon)
-        fitButton.setToolTip('Start fitting')
-        fitButton.clicked.connect(self.__roiApplied)
-
-        controlLayout.addWidget(roiWidget, alignment=Qt.Qt.AlignCenter)
-        controlLayout.addWidget(fitButton, alignment=Qt.Qt.AlignCenter)
-        controlLayout.addWidget(sfTree)
+        self.__fitWidget = fitWidget = FitWidget(self.__qspaceH5.filename)
+        fitWidget.roiWidget().sigRoiChanged.connect(self.__slotRoiChanged)
+        fitWidget.roiWidget().sigRoiToggled.connect(self.__slotRoiToggled)
+        fitWidget.sigProcessDone.connect(self.__slotFitProcessDone)
+        self.__nextFitFile()
+        fitDock = Qt.QDockWidget()
+        fitDock.setWindowTitle('Fit')
+        fitDock.setWidget(fitWidget)
+        features = fitDock.features() ^ Qt.QDockWidget.DockWidgetClosable
+        fitDock.setFeatures(features)
+        view3d.addDockWidget(Qt.Qt.RightDockWidgetArea, fitDock)
 
         sfDock = Qt.QDockWidget()
-        sfDock.setWidget(controlWid)
+        sfDock.setWindowTitle('Isosurface options')
+        sfDock.setWidget(sfTree)
         features = sfDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         sfDock.setFeatures(features)
-        view3d.addDockWidget(Qt.Qt.RightDockWidgetArea, sfDock)
+        # view3d.addDockWidget(Qt.Qt.RightDockWidgetArea, sfDock)
+        self.addDockWidget(Qt.Qt.LeftDockWidgetArea, sfDock)
+        # view3d.splitDockWidget(fitDock, sfDock, Qt.Qt.Vertical)
 
-        treeDock = Qt.QDockWidget(self)
-        tree = QSpaceTree(self, model=model)
-        index = node.index()
-        tree.setRootIndex(index)
-        treeDock.setWidget(tree)
-        features = treeDock.features() ^ Qt.QDockWidget.DockWidgetClosable
-        treeDock.setFeatures(features)
-        self.addDockWidget(Qt.Qt.LeftDockWidgetArea, treeDock)
+        # treeDock = Qt.QDockWidget(self)
+        # tree = QSpaceTree(self, model=model)
+        # index = node.index()
+        # tree.setRootIndex(index)
+        # treeDock.setWidget(tree)
+        # features = treeDock.features() ^ Qt.QDockWidget.DockWidgetClosable
+        # treeDock.setFeatures(features)
+        # self.addDockWidget(Qt.Qt.LeftDockWidgetArea, treeDock)
 
         planePlotDock = Qt.QDockWidget('Cut Plane', self)
         planePlotDock.setWidget(planePlotWindow)
@@ -362,13 +310,13 @@ class QSpaceView(Qt.QMainWindow):
         planePlotDock.setFeatures(features)
         planePlotDock.visibilityChanged.connect(
             self.__planePlotDockVisibilityChanged)
-        self.splitDockWidget(treeDock, planePlotDock, Qt.Qt.Vertical)
+        self.splitDockWidget(sfDock, planePlotDock, Qt.Qt.Vertical)
 
         roiPlotDock = Qt.QDockWidget('ROI Intensity', self)
         roiPlotDock.setWidget(roiPlotWindow)
         features = roiPlotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         roiPlotDock.setFeatures(features)
-        self.splitDockWidget(treeDock, roiPlotDock, Qt.Qt.Vertical)
+        self.splitDockWidget(sfDock, roiPlotDock, Qt.Qt.Vertical)
         self.tabifyDockWidget(planePlotDock, roiPlotDock)
 
         plotDock = Qt.QDockWidget('Intensity', self)
@@ -385,16 +333,6 @@ class QSpaceView(Qt.QMainWindow):
         self.__plotWindow.resetZoom()
         self.__roiPlotWindow.setPlotData(x, y, data)
         self.__roiPlotWindow.resetZoom()
-
-    def __roiApplied(self):
-        region = self.__view3d.getSelectedRegion()
-        if region:
-            zRoi, yRoi, xRoi = region.getArrayRange()
-            roi = [xRoi, yRoi, zRoi]
-        else:
-            roi = None
-
-        self.sigProcessApplied.emit(self.__node, roi)
 
     def selectPoint(self, x, y):
         self.__showIsoView(x, y)
@@ -451,11 +389,24 @@ class QSpaceView(Qt.QMainWindow):
             colors = cm.jet(np.arange(255))
             cmap = [Qt.QColor.fromRgbF(*c).rgba() for c in colors]
 
-            self.__xRoiWid.slider.setSliderProfile(x_sum, colormap=cmap)
-            self.__yRoiWid.slider.setSliderProfile(y_sum, colormap=cmap)
-            self.__zRoiWid.slider.setSliderProfile(z_sum, colormap=cmap)
+            roiWidget = self.__fitWidget.roiWidget()
+            roiWidget.xSlider().setSliderProfile(x_sum, colormap=cmap)
+            roiWidget.ySlider().setSliderProfile(y_sum, colormap=cmap)
+            roiWidget.zSlider().setSliderProfile(z_sum, colormap=cmap)
 
-    def __roiGroupToggled(self, on):
+    def __nextFitFile(self):
+        project = self.__projectItem.projectRoot()
+        xsocsFile = os.path.basename(project.xsocsFile)
+        xsocsPrefix = xsocsFile.rpartition('.')[0]
+        template = '{0}_fit_{{0:>04}}.h5'.format(xsocsPrefix)
+        output_f = nextFileName(project.workdir, template)
+        self.__fitWidget.setOutputFile(output_f)
+
+    def __slotFitProcessDone(self, event):
+        self.sigFitDone.emit(self.__node, event)
+        self.__nextFitFile()
+
+    def __slotRoiToggled(self, on):
         view3d = self.__view3d
         region = view3d.getSelectedRegion()
 
@@ -482,24 +433,24 @@ class QSpaceView(Qt.QMainWindow):
              [yLeft, yRight],
              [xLeft, xRight]) = ([None, None], [None, None], [None, None])
 
-        self.__xRoiWid.slider.setSliderValues(xLeft, xRight)
-        self.__yRoiWid.slider.setSliderValues(yLeft, yRight)
-        self.__zRoiWid.slider.setSliderValues(zLeft, zRight)
+        roiWidget = self.__fitWidget.roiWidget()
+        roiWidget.xSlider().setSliderValues(xLeft, xRight)
+        roiWidget.ySlider().setSliderValues(yLeft, yRight)
+        roiWidget.zSlider().setSliderValues(zLeft, zRight)
 
-    def __roiChanged(self, event):
-        sender = self.sender()
+    def __slotRoiChanged(self, event):
 
         region = self.__view3d.getSelectedRegion()
         if region is None:
             return
 
-        zRoi, yRoi, xRoi = region.getArrayRange()
-        if sender == self.__xRoiWid:
-            xRoi = event.leftIndex, event.rightIndex + 1
-        elif sender == self.__yRoiWid:
-            yRoi = event.leftIndex, event.rightIndex + 1
-        else:
-            zRoi = event.leftIndex, event.rightIndex + 1
+        xState = event['x']
+        yState = event['y']
+        zState = event['z']
+        xRoi = xState.leftIndex, xState.rightIndex + 1
+        yRoi = yState.leftIndex, yState.rightIndex + 1
+        zRoi = zState.leftIndex, zState.rightIndex + 1
+
         self.__view3d.setSelectedRegion(zrange=zRoi, yrange=yRoi, xrange_=xRoi)
 
     def __planePlotDockVisibilityChanged(self, visible):

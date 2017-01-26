@@ -49,7 +49,7 @@ from ..widgets.Containers import GroupBox
 from ..widgets.RangeSlider import RangeSlider
 from ..widgets.PointWidget import PointWidget
 from ...gui.icons import getQIcon as getKmapIcon
-from ..widgets.Input import StyledLineEdit, StyledLabel
+from ..widgets.Input import StyledLineEdit, FixedSizeLabel
 
 
 _defaultNColors = 256
@@ -600,7 +600,7 @@ class XsocsPlot2D(PlotWindow):
         except AttributeError:
             action = self.copyAction
         action.setIconVisibleInMenu(True)
-        menu.addAction(action)
+        menu.addAction(action   )
 
         # grid action
         try:

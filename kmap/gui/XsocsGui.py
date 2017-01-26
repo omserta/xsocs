@@ -226,33 +226,21 @@ class XsocsGui(Qt.QMainWindow):
                        size.height() * 0.6,
                        Qt.Qt.IgnoreAspectRatio)
             view.resize(size)
-            view.sigProcessApplied.connect(self.__qspaceRoiApplied)
+            view.sigFitDone.connect(self.__slotFitDone)
         view.show()
         if bringToFront:
             view.raise_()
         return view
 
-    def __qspaceRoiApplied(self, node, roi):
+    def __slotFitDone(self, node, fitFile):
         item = h5NodeToProjectItem(node)
-        xsocsFile = os.path.basename(self.__project.xsocsFile)
-        xsocsPrefix = xsocsFile.rpartition('.')[0]
-        template = '{0}_fit_{{0:>04}}.h5'.format(xsocsPrefix)
-        output_f = nextFileName(self.__project.workdir, template)
-        fitWidget = FitWidget(item.qspaceFile,
-                              output_f,
-                              roi,
-                              parent=self.sender())
-        fitWidget.exec_()
-        if fitWidget.status == FitWidget.StatusCompleted:
-            fitFile = fitWidget.fitFile
-            fitGroup = item.fitGroup()
-            fitItem = fitGroup.addFitFile(fitFile)
-            self.model().refresh()
-            index = self.tree.pathToIndex(fitItem.path)
-            if index.isValid():
-                self.tree.setCurrentIndex(index)
-                self.__showFit(index.data(ModelRoles.InternalDataRole))
-        fitWidget.deleteLater()
+        fitGroup = item.fitGroup()
+        fitItem = fitGroup.addFitFile(fitFile)
+        self.model().refresh()
+        index = self.tree.pathToIndex(fitItem.path)
+        if index.isValid():
+            self.tree.setCurrentIndex(index)
+            self.__showFit(index.data(ModelRoles.InternalDataRole))
 
     def __showFit(self, node):
         view = self.__fitViews.get(node)
@@ -318,7 +306,7 @@ class XsocsGui(Qt.QMainWindow):
         model.appendGroup(rootNode)
         self.__project = project
 
-        self.__showIntensity()
+        # self.__showIntensity()
 
         return True
 

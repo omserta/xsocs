@@ -39,7 +39,7 @@ from silx.gui import qt as Qt
 from ...gui.icons import getQIcon as getKmapIcon
 
 
-RangeSliderEvent = namedtuple('RangeSliderEvent', ['left', 'right',
+RangeSliderState = namedtuple('RangeSliderState', ['left', 'right',
                                                    'leftIndex', 'rightIndex'])
 
 
@@ -47,10 +47,12 @@ class RangeSlider(Qt.QWidget):
     _defaultMinimumHeight = 20
     _defaultMinimumSize = (50, 20)
     _defaultMaximumHeight = 20.
-    _defaultKeybordValueMove = 0.01
-    """
-    Move percentage when using the keyboard
-    """
+
+    _defaultKeybordValueMove = 1
+    """ Number of steps moved when using the arrow keys """
+
+    _defaultNSteps = 1000
+
     _sliderWidth = 10
     _pixmapVOffset = 7
 
@@ -65,6 +67,8 @@ class RangeSlider(Qt.QWidget):
         self.__hover = None
         self.__focus = None
         self.__range = None
+        self.__nSteps = self._defaultNSteps
+        self.__snap = False
 
         self.__sliderIcons = {'left': getKmapIcon('right_arrow'),
                               'right': getKmapIcon('left_arrow')}
@@ -88,10 +92,49 @@ class RangeSlider(Qt.QWidget):
 
         self.setSliderValues(None, None)
 
+    def setSliderResolution(self, nSteps):
+        """
+        Sets the slider resolution. Set to None to reset it to its default
+         value (1000).
+        :param nSteps:
+        :return:
+        """
+        if nSteps is None:
+            if self.__pixmap is None:
+                nSteps = self._defaultNSteps
+            else:
+                nSteps = self.__pixmap.width()
+        self.__nSteps = nSteps
+        self.update()
+
+    def getSliderResolution(self):
+        """
+        Returns the slider resolution.
+        :return:
+        """
+        return self.__nSteps
+
+    def setSnap(self, snap):
+        """
+        Tells the slider to snap to the grid.
+        See also : RangeSlider.setSliderResolution.
+        :param snap:
+        :return:
+        """
+        self.update()
+        self.__snap = snap
+
+    def isSnap(self):
+        """
+        Returns True if the slider snaps to the grid.
+        :return:
+        """
+        return self.__snap
+
     def getRange(self):
         if self.__range is None:
             if self.__pixmap is None:
-                sliderRange = [0., 100.]
+                sliderRange = [0., self.__nSteps]
             else:
                 sliderRange = [0., self.__pixmap.width() - 1.]
         else:
@@ -100,7 +143,8 @@ class RangeSlider(Qt.QWidget):
 
     def setRange(self, sliderRng):
         """
-        Set to None to reset (range will be 0 -> 100) or (0 -> profile length)
+        Set to None to reset (range will be 0 -> _defaultNSteps) or
+            (0 -> profile length)
         :param sliderRng:
         :return:
         """
@@ -125,8 +169,7 @@ class RangeSlider(Qt.QWidget):
         Sets the left and right slider values to the min and max of the range.
         :return:
         """
-        sRange = self.getRange()
-        self.setSliderValues(sRange[0], sRange[1])
+        self.setSliderValues(None, None)
 
     def setShowRangeBackground(self, show):
         """
@@ -208,13 +251,22 @@ class RangeSlider(Qt.QWidget):
         else:
             value = default
 
+        if self.__snap:
+            # snapping to the grid
+            sRange = sliderRange[1] - sliderRange[0]
+            step = np.floor(0.5 +
+                            (value - sliderRange[0]) *
+                            (self.__nSteps - 1) /
+                            sRange)
+            value = sliderRange[0] + step * (sRange / (self.__nSteps - 1))
+
         x = self.__valueToPos(value)
 
         moveMeth(x)
 
         if values[side] != value:
             notify = True
-            self.__values[side] = value
+            values[side] = value
         else:
             notify = False
 
@@ -228,14 +280,10 @@ class RangeSlider(Qt.QWidget):
             if right is None:
                 right = sliderRange[1]
 
-            # TODO : improve
-            if self.__pixmap:
-                leftIndex = self.__valueToIndex(left)
-                rightIndex = self.__valueToIndex(right)
-            else:
-                leftIndex = None
-                rightIndex = None
-            event = RangeSliderEvent(left=left,
+            leftIndex = self.__valueToIndex(left)
+            rightIndex = self.__valueToIndex(right)
+
+            event = RangeSliderState(left=left,
                                      right=right,
                                      leftIndex=leftIndex,
                                      rightIndex=rightIndex)
@@ -244,7 +292,25 @@ class RangeSlider(Qt.QWidget):
 
         return value
 
+    def getSliderState(self):
+        """
+        Returns the state of the slider : values and indices.
+        :return:
+        """
+        indices = self.getSliderIndices()
+        values = self.getSliderValues()
+        state = RangeSliderState(left=values[0],
+                                 right=values[1],
+                                 leftIndex=indices[0],
+                                 rightIndex=indices[1])
+        return state
+
     def __posToValue(self, x):
+        """
+        Returns the value corresponding the the given slider position.
+        :param x:
+        :return:
+        """
         sliderArea = self.__sliderRect()
         sliderRange = self.getRange()
 
@@ -255,6 +321,11 @@ class RangeSlider(Qt.QWidget):
         return value
 
     def __valueToPos(self, value):
+        """
+        Returns the slider position corresponding to the given value.
+        :param value:
+        :return:
+        """
         sliderArea = self.__sliderRect()
         sliderRange = self.getRange()
 
@@ -265,6 +336,11 @@ class RangeSlider(Qt.QWidget):
         return x
 
     def getSliderValue(self, side):
+        """
+        Returns the slider value.
+        :param side:
+        :return:
+        """
         value = self.__values[side]
         if value is None:
             sliderRange = self.getRange()
@@ -275,13 +351,32 @@ class RangeSlider(Qt.QWidget):
         return value
 
     def getSliderValues(self):
+        """
+        Returns the left and right slider values.
+        :return:
+        """
         return (self.getSliderValue('left'),
                 self.getSliderValue('right'))
 
     def getSliderIndex(self, side):
+        """
+        Returns the slider index
+            (i.e : the step the sliders is closest to,
+            between 0 and resolution - 1).
+            See also : RangeSlider.setResolution.
+        :param side:
+        :return:
+        """
         return self.__valueToIndex(self.getSliderValue(side))
 
     def getSliderIndices(self):
+        """
+        Returns the left and right slider index
+            (i.e : the step the slider is closest to,
+            between 0 and resolution - 1).
+            See also : RangeSlider.setResolution.
+        :return:
+        """
         return (self.getSliderIndex('left'),
                 self.getSliderIndex('right'))
 
@@ -289,7 +384,8 @@ class RangeSlider(Qt.QWidget):
         """
 
         :param side: 'left' or 'right'
-        :param value: float between 0. and 100. (leftmost to rightmost)
+        :param value: float between range min and range max.
+            (leftmost to rightmost)
         :return:
         """
         assert side in ('left', 'right')
@@ -368,7 +464,7 @@ class RangeSlider(Qt.QWidget):
                     event.modifiers() == Qt.Qt.NoModifier and
                     key in accepted):
             disp = (self._defaultKeybordValueMove *
-                    (sliderRange[1] - sliderRange[0]))
+                    (sliderRange[1] - sliderRange[0]) / (self.__nSteps - 1))
             move = ((key == Qt.Qt.Key_Left and
                      -1.0 * disp) or
                     disp)
@@ -377,7 +473,7 @@ class RangeSlider(Qt.QWidget):
 
         super(RangeSlider, self).keyPressEvent(event)
 
-    def setSliderPixmap(self, pixmap, resetSliders=None):
+    def setSliderPixmap(self, pixmap, resetSliders=None, snap=True):
         """
         Sets the pixmap displayed in the slider groove.
         None to unset.
@@ -386,6 +482,10 @@ class RangeSlider(Qt.QWidget):
         :param resetSliders: True to reset the slider positions to their
             extremes. If None the values positions will be reset if there
             was no previous pixmap.
+        :param snap: set to True to set the number of steps equal to the length
+            of the pixmap (equivalent to calling setNSteps).
+            If false, the number of steps will be unchanged, and snap will be
+            set to False.
         :return:
         """
         if pixmap is not None and pixmap.width() <= 1:
@@ -393,9 +493,16 @@ class RangeSlider(Qt.QWidget):
         self.__pixmap = pixmap
         if resetSliders:
             self.setSliderValues(None, None)
+        if snap and pixmap is not None:
+            self.setSliderResolution(pixmap.width())
+        self.setSnap(snap)
         self.update()
 
-    def setSliderProfile(self, profile, colormap=None, resetSliders=None):
+    def setSliderProfile(self,
+                         profile,
+                         colormap=None,
+                         resetSliders=None,
+                         snap=True):
         """
         Use the profile array to create a pixmap displayed in the slider
         groove.
@@ -405,6 +512,10 @@ class RangeSlider(Qt.QWidget):
         :param resetSliders: True to reset the slider positions to their
             extremes. If None the values positions will be reset if there
             was no previous profile.
+        :param snap: set to True to set the number of steps equal to the length
+            of the profile (equivalent to calling setNSteps and setSnap).
+            If false, the number of steps will be unchanged, and snap will be
+            set to False.
         :return:
         """
         if profile is None:
@@ -438,7 +549,9 @@ class RangeSlider(Qt.QWidget):
             qimage.setColorTable(colormap)
 
         qpixmap = Qt.QPixmap.fromImage(qimage)
-        self.setSliderPixmap(qpixmap, resetSliders=resetSliders)
+        self.setSliderPixmap(qpixmap,
+                             resetSliders=resetSliders,
+                             snap=snap)
 
     def paintEvent(self, event):
         painter = Qt.QPainter(self)

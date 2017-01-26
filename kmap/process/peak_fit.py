@@ -125,6 +125,8 @@ class PeakFitter(Thread):
 
     status = property(lambda self: self.__status)
 
+    results = property(lambda self: self.__results)
+
     def peak_fit(self,
                  blocking=True,
                  callback=None):
@@ -307,6 +309,9 @@ class PeakFitter(Thread):
         self.__results = fit_results
 
         self.__set_status(self.DONE)
+
+        if self.__callback:
+            self.__callback()
 
         return fit_results
 
@@ -523,7 +528,8 @@ def _fit_process(th_idx, roiIndices=None):
         print 'EX', ex
 
     times = (t_read, t_mask, t_fit, t_write)
-    print('Thread {0} done ({1}).'.format(th_idx, times))
+    if disp_times:
+        print('Thread {0} done ({1}).'.format(th_idx, times))
     return times
 
 

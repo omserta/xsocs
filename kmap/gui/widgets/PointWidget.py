@@ -30,7 +30,7 @@ __license__ = "MIT"
 __date__ = "15/09/2016"
 
 from silx.gui import qt as Qt
-from .Input import StyledLabel, StyledLineEdit
+from .Input import FixedSizeLabel, StyledLineEdit
 
 
 class PointWidget(Qt.QFrame):
@@ -50,9 +50,9 @@ class PointWidget(Qt.QFrame):
         xLabel = 'x'
         yLabel = 'y'
 
-        layout.addWidget(StyledLabel(xLabel, nChar=len(xLabel)))
+        layout.addWidget(FixedSizeLabel(xLabel, nChar=len(xLabel)))
         layout.addWidget(xEdit)
-        layout.addWidget(StyledLabel(yLabel, nChar=len(yLabel)))
+        layout.addWidget(FixedSizeLabel(yLabel, nChar=len(yLabel)))
         layout.addWidget(yEdit)
 
     def setPoint(self, x, y):

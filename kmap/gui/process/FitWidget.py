@@ -94,19 +94,21 @@ class Roi3DSelectorWidget(Qt.QWidget):
         :return:
         """
 
-        slider = self.sender()
-        if slider == self.__xRoiWid:
+        sender = self.sender()
+        if sender == self.__xRoiWid:
             xState = sliderEvt
             yState = self.__yRoiWid.slider().getSliderState()
             zState = self.__zRoiWid.slider().getSliderState()
-        elif slider == self.__yRoiWid:
+        elif sender == self.__yRoiWid:
             xState = self.__xRoiWid.slider().getSliderState()
             yState = sliderEvt
             zState = self.__zRoiWid.slider().getSliderState()
-        elif slider == self.__zRoiWid:
+        elif sender == self.__zRoiWid:
             xState = self.__xRoiWid.slider().getSliderState()
             yState = self.__yRoiWid.slider().getSliderState()
             zState = sliderEvt
+        elif sender == self.__grpBox:
+            return
         else:
             raise RuntimeError('Unknown sender.')
 

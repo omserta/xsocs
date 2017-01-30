@@ -195,6 +195,7 @@ class IntensityTree(TreeView):
                 self.setColumnHidden(col, True)
 
     def currentChanged(self, current, previous):
+        super(IntensityTree, self).currentChanged(current, previous)
         node = current.data(ModelRoles.InternalDataRole)
         if not node:
             return

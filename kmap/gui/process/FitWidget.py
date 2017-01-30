@@ -153,6 +153,11 @@ class FitWidget(Qt.QWidget):
     containing the results.
     """
 
+    sigProcessStarted = Qt.Signal()
+    """ Signal emitted when a fit is started. Argument is the name of the file
+    containing the results.
+    """
+
     FitTypes = OrderedDict([('LEASTSQ', FitTypes.LEASTSQ),
                             ('CENTROID', FitTypes.CENTROID)])
 
@@ -282,6 +287,7 @@ class FitWidget(Qt.QWidget):
         timer.timeout.connect(self.__slotProgTimer)
 
         try:
+            self.sigProcessStarted.emit()
             fitter.peak_fit(blocking=False, callback=self.__sigFitDone.emit)
             timer.start(self.__progressDelay)
         except Exception as ex:
@@ -289,6 +295,7 @@ class FitWidget(Qt.QWidget):
             self.__statusLabel.setText('ERROR')
             print('ERROR : {0}.'.format(ex))
             self.__lock(False)
+            self.sigProcessDone.emit(None)
 
     def __slotProgTimer(self):
         if self.__fitter:

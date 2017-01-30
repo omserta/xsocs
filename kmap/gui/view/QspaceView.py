@@ -209,6 +209,10 @@ class CutPlanePlotWindow(PlotWidget):
 
 
 class QSpaceView(Qt.QMainWindow):
+    """
+    Window displaying the 3D q space isosurfaces.
+    """
+
     sigFitDone = Qt.Signal(object, object)
 
     plot = property(lambda self: self.__plotWindow)
@@ -216,8 +220,13 @@ class QSpaceView(Qt.QMainWindow):
     def __init__(self,
                  parent,
                  model,
-                 node,
-                 **kwargs):
+                 node):
+        """
+
+        :param parent: parent widget
+        :param model: XsocsModel
+        :param node: QspaceItem node
+        """
 
         super(QSpaceView, self).__init__(parent)
 
@@ -277,6 +286,7 @@ class QSpaceView(Qt.QMainWindow):
         self.__fitWidget = fitWidget = FitWidget(self.__qspaceH5.filename)
         fitWidget.roiWidget().sigRoiChanged.connect(self.__slotRoiChanged)
         fitWidget.roiWidget().sigRoiToggled.connect(self.__slotRoiToggled)
+        fitWidget.sigProcessStarted.connect(self.__slotFitProcessStarted)
         fitWidget.sigProcessDone.connect(self.__slotFitProcessDone)
         self.__nextFitFile()
         fitDock = Qt.QDockWidget()
@@ -286,23 +296,16 @@ class QSpaceView(Qt.QMainWindow):
         fitDock.setFeatures(features)
         view3d.addDockWidget(Qt.Qt.RightDockWidgetArea, fitDock)
 
+        # widget that are to be disabled when the fit is running
+        self.__lockWidgets = lockWidgets = []
+
         sfDock = Qt.QDockWidget()
         sfDock.setWindowTitle('Isosurface options')
         sfDock.setWidget(sfTree)
         features = sfDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         sfDock.setFeatures(features)
-        # view3d.addDockWidget(Qt.Qt.RightDockWidgetArea, sfDock)
         self.addDockWidget(Qt.Qt.LeftDockWidgetArea, sfDock)
-        # view3d.splitDockWidget(fitDock, sfDock, Qt.Qt.Vertical)
-
-        # treeDock = Qt.QDockWidget(self)
-        # tree = QSpaceTree(self, model=model)
-        # index = node.index()
-        # tree.setRootIndex(index)
-        # treeDock.setWidget(tree)
-        # features = treeDock.features() ^ Qt.QDockWidget.DockWidgetClosable
-        # treeDock.setFeatures(features)
-        # self.addDockWidget(Qt.Qt.LeftDockWidgetArea, treeDock)
+        lockWidgets.append(sfDock)
 
         planePlotDock = Qt.QDockWidget('Cut Plane', self)
         planePlotDock.setWidget(planePlotWindow)
@@ -311,6 +314,7 @@ class QSpaceView(Qt.QMainWindow):
         planePlotDock.visibilityChanged.connect(
             self.__planePlotDockVisibilityChanged)
         self.splitDockWidget(sfDock, planePlotDock, Qt.Qt.Vertical)
+        lockWidgets.append(planePlotDock)
 
         roiPlotDock = Qt.QDockWidget('ROI Intensity', self)
         roiPlotDock.setWidget(roiPlotWindow)
@@ -318,26 +322,46 @@ class QSpaceView(Qt.QMainWindow):
         roiPlotDock.setFeatures(features)
         self.splitDockWidget(sfDock, roiPlotDock, Qt.Qt.Vertical)
         self.tabifyDockWidget(planePlotDock, roiPlotDock)
+        lockWidgets.append(roiPlotDock)
 
         plotDock = Qt.QDockWidget('Intensity', self)
         plotDock.setWidget(plotWindow)
         features = plotDock.features() ^ Qt.QDockWidget.DockWidgetClosable
         plotDock.setFeatures(features)
         self.tabifyDockWidget(roiPlotDock, plotDock)
+        lockWidgets.append(plotDock)
 
         self.__showIsoView(firstX, firstY)
 
-    # TODO : refactor this in a common base with RealSpaceViewWidget
     def __setPlotData(self, x, y, data):
+        """
+        Sets the intensity maps data.
+        :param x:
+        :param y:
+        :param data:
+        :return:
+        """
         self.__plotWindow.setPlotData(x, y, data)
         self.__plotWindow.resetZoom()
         self.__roiPlotWindow.setPlotData(x, y, data)
         self.__roiPlotWindow.resetZoom()
 
     def selectPoint(self, x, y):
+        """
+        Displays the q space closest to sample coordinates x and y.
+        :param x:
+        :param y:
+        :return:
+        """
         self.__showIsoView(x, y)
 
     def __pointSelected(self, point):
+        """
+        Slot called each time a point is selected on one of the intensity maps.
+        Displays the corresponding q space cube.
+        :param point:
+        :return:
+        """
         xIdx = point.xIdx
         x = point.x
         y = point.y
@@ -345,6 +369,16 @@ class QSpaceView(Qt.QMainWindow):
         self.__showIsoView(x, y, xIdx)
 
     def __showIsoView(self, x, y, idx=None):
+        """
+        Displays the q space closest to sample coordinates x and y.
+        If idx is provided, x and y are ignored. If idx is not provided, the
+        closest point to x and y is selected.
+        :param x: sample x coordinate of the point to select
+        :param y: sample y coordinate of the point to select
+        :param idx: index of the point to select in the array of sample
+        coordinates.
+        :return:
+        """
         isoView = self.__view3d
 
         if self.sender() == self.__roiPlotWindow:
@@ -395,6 +429,10 @@ class QSpaceView(Qt.QMainWindow):
             roiWidget.zSlider().setSliderProfile(z_sum, colormap=cmap)
 
     def __nextFitFile(self):
+        """
+        Temporary method that generated a new file name for the Fit results.
+        :return:
+        """
         project = self.__projectItem.projectRoot()
         xsocsFile = os.path.basename(project.xsocsFile)
         xsocsPrefix = xsocsFile.rpartition('.')[0]
@@ -402,11 +440,38 @@ class QSpaceView(Qt.QMainWindow):
         output_f = nextFileName(project.workdir, template)
         self.__fitWidget.setOutputFile(output_f)
 
+    def __slotFitProcessStarted(self):
+        """
+        Slot called when a fit is started. Locks all widgets that reads
+        the XsocsProject file. This is necessary because that file is
+        is opened in write mode when the fit is done, to write the fit result.
+        :return:
+        """
+        for widget in self.__lockWidgets:
+            widget.setEnabled(False)
+
     def __slotFitProcessDone(self, event):
-        self.sigFitDone.emit(self.__node, event)
-        self.__nextFitFile()
+        """
+        Slot called when the fit is done. Event is the name of the FitH5 file
+        that has been created.
+        Unlocks the widgets locked in __slotFitProcessStarted.
+        Emits QSpaceView.sigFitDone.
+        :param event:
+        :return:
+        """
+        if event is not None:
+            self.sigFitDone.emit(self.__node, event)
+            self.__nextFitFile()
+
+        for widget in self.__lockWidgets:
+            widget.setEnabled(True)
 
     def __slotRoiToggled(self, on):
+        """
+        Slot called when the Roi selection is enabled.
+        :param on:
+        :return:
+        """
         view3d = self.__view3d
         region = view3d.getSelectedRegion()
 
@@ -439,6 +504,11 @@ class QSpaceView(Qt.QMainWindow):
         roiWidget.zSlider().setSliderValues(zLeft, zRight)
 
     def __slotRoiChanged(self, event):
+        """
+        Slot called each time the ROI is modified
+        :param event:
+        :return:
+        """
 
         region = self.__view3d.getSelectedRegion()
         if region is None:

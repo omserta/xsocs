@@ -41,7 +41,7 @@ from .fitresults import FitResult
 
 class FitTypes(object):
     ALLOWED = range(2)
-    LEASTSQ, CENTROID = ALLOWED
+    GAUSSIAN, CENTROID = ALLOWED
 
 
 class FitSharedResults(object):

@@ -158,8 +158,8 @@ class FitWidget(Qt.QWidget):
     containing the results.
     """
 
-    FitTypes = OrderedDict([('LEASTSQ', FitTypes.LEASTSQ),
-                            ('CENTROID', FitTypes.CENTROID)])
+    FitTypes = OrderedDict([('Gaussian', FitTypes.GAUSSIAN),
+                            ('Centroid', FitTypes.CENTROID)])
 
     __sigFitDone = Qt.Signal()
 

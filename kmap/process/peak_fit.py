@@ -68,7 +68,7 @@ class PeakFitter(Thread):
 
     def __init__(self,
                  qspace_f,
-                 fit_type=FitTypes.LEASTSQ,
+                 fit_type=FitTypes.GAUSSIAN,
                  indices=None,
                  n_proc=None,
                  roi_indices=None):
@@ -181,7 +181,7 @@ class PeakFitter(Thread):
             # # success = np.ndarray((n_indices,), dtype=np.bool)
             # # success[:] = True
 
-        if fit_type == FitTypes.LEASTSQ:
+        if fit_type == FitTypes.GAUSSIAN:
             fit_fn = gaussian_fit
             shared_results = GaussianResults(n_points=n_indices)
         if fit_type == FitTypes.CENTROID:

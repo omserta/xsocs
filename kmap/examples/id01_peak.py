@@ -22,7 +22,7 @@ n_proc = None
 
 results, success = peak_fit.peak_fit(qspace_f,
                                      indices=indice,
-                                     fit_type=peak_fit.FitTypes.LEASTSQ,
+                                     fit_type=peak_fit.FitTypes.GAUSSIAN,
                                      n_proc=n_proc)
 
 with open(result_file, 'w+') as res_f:

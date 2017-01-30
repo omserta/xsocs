@@ -134,7 +134,8 @@ class ROIPlotIntensityMap(PlotIntensityMap):
 
             qapp = Qt.QApplication.instance()
             with self.__qspaceH5 as qspaceH5:
-                intensities = np.zeros((qspaceH5.qspace_sum.size,), dtype=np.float64)
+                intensities = np.zeros((qspaceH5.qspace_sum.size,),
+                                       dtype=np.float64)
                 progress.setRange(0, qspaceH5.qspace_sum.size - 1)
 
                 zslice, yslice, xslice = self.__roiSlices

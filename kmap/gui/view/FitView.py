@@ -86,7 +86,7 @@ class FitView(Qt.QMainWindow):
 
         tree = self.__tree = TreeView()
         tree.setModel(self.__model)
-        tree.setRootIndex(self.__model.index(0, 0, tree.rootIndex()))
+        # tree.setRootIndex(self.__model.index(0, 0, tree.rootIndex()))
         tree.setSelectionBehavior(Qt.QAbstractItemView.SelectItems)
         tree.header().setStretchLastSection(False)
         tree.setShowUniqueGroup(True)
@@ -193,6 +193,10 @@ class FitView(Qt.QMainWindow):
         """
         self.__initPlots()
         self.__startModel()
+        tree = self.__tree
+        root = self.__model.index(0, 0, tree.rootIndex())
+        tree.setRootIndex(self.__model.index(0, 0, root))
+        tree.expandAll()
 
     def __startModel(self):
         """
@@ -270,11 +274,11 @@ class FitView(Qt.QMainWindow):
             # TODO : refactor
             process = self.__process
             if process == 'gaussian':
-                _plotLeastSq(self.__fitPlots, xIdx,
-                             fitH5,
-                             entry, process,
-                             xAcqQX, xAcqQY, xAcqQZ,
-                             yAcqQX, yAcqQY, yAcqQZ)
+                _plotGaussian(self.__fitPlots, xIdx,
+                              fitH5,
+                              entry, process,
+                              xAcqQX, xAcqQY, xAcqQZ,
+                              yAcqQX, yAcqQY, yAcqQZ)
 
             elif process == 'centroid':
                 _plotCentroid(self.__fitPlots, xIdx,
@@ -289,12 +293,12 @@ class FitView(Qt.QMainWindow):
 
 # TODO : allow users to register plot functions associated with the kind
 # of process results that are being displayed
-def _plotLeastSq(plots, index, fitH5,
-                 entry, process,
-                 xAcqQX, xAcqQY, xAcqQZ,
-                 yAcqQX, yAcqQY, yAcqQZ):
+def _plotGaussian(plots, index, fitH5,
+                  entry, process,
+                  xAcqQX, xAcqQY, xAcqQZ,
+                  yAcqQX, yAcqQY, yAcqQZ):
     """
-    Plots the "leastsq" fit results
+    Plots the "Gaussian" fit results
     :param plots: plot widgets
     :param index: index of the selected point (in the results array)
     :param fitH5: instance of FitH5. This instance may be already opened by
@@ -360,17 +364,17 @@ def _plotCentroid(plots, index, fitH5,
                   yAcqQX, yAcqQY, yAcqQZ):
     """
     Plot the results from a "centroid" fit.
-    :param plots:
-    :param index:
-    :param fitH5:
-    :param entry:
-    :param process:
-    :param xAcqQX:
-    :param xAcqQY:
-    :param xAcqQZ:
-    :param yAcqQX:
-    :param yAcqQY:
-    :param yAcqQZ:
+    :param plots: the plot widgets
+    :param index: index of the sample point
+    :param fitH5: fitH5 file
+    :param entry: name of the entry in the fitH5
+    :param process: name of the process in the fitH5
+    :param xAcqQX: measured Qx data, x axis
+    :param xAcqQY: measured Qy data, x axis
+    :param xAcqQZ: measured Qz data, x axis
+    :param yAcqQX: measured Qx data, y axis
+    :param yAcqQY:measured Qy data, y axis
+    :param yAcqQZ:measured Qz data, y axis
     :return:
     """
 
@@ -395,10 +399,10 @@ def _plotCentroid(plots, index, fitH5,
 def _initLeastSq(plots, fitH5Name, entry, process):
     """
     Sets up the plots when the interface is shown for the first time.
-    :param plots:
-    :param fitH5Name:
-    :param entry:
-    :param process:
+    :param plots: the plot widgets
+    :param fitH5Name: fitH5 file name
+    :param entry: name of the entry in the fitH5
+    :param process: name of the process in the fitH5
     :return:
     """
     # hard coded result name, this isn't satisfactory but I can't think
@@ -424,10 +428,10 @@ def _initLeastSq(plots, fitH5Name, entry, process):
 def _initCentroid(plots, fitH5Name, entry, process):
     """
     Sets up the plots when the interface is shown for the first time.
-    :param plots:
-    :param fitH5Name:
-    :param entry:
-    :param process:
+    :param plots: the plot widgets
+    :param fitH5Name: fitH5 file name
+    :param entry: name of the entry in the fitH5
+    :param process: name of the process in the fitH5
     :return:
     """
     # hard coded result name, this isn't satisfactory but I can't think

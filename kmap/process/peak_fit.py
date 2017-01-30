@@ -42,6 +42,7 @@ import numpy as np
 from ..io import QSpaceH5
 from .fit_funcs import gaussian_fit, centroid
 from .sharedresults import FitTypes, GaussianResults, CentroidResults
+from .fitresults import FitStatus
 
 disp_times = False
 
@@ -265,7 +266,9 @@ class PeakFitter(Thread):
         res_list = []
         for th_idx in range(n_proc):
             arg_list = (th_idx, roi_indices)
-            res = pool.apply_async(_fit_process, args=arg_list, callback=callback)
+            res = pool.apply_async(_fit_process,
+                                   args=arg_list,
+                                   callback=callback)
             res_list.append(res)
 
         # sending the image indices
@@ -435,9 +438,9 @@ def _fit_process(th_idx, roiIndices=None):
 
             t0 = time.time()
 
-            success_x = True
-            success_y = True
-            success_z = True
+            success_x = FitStatus.OK
+            success_y = FitStatus.OK
+            success_z = FitStatus.OK
 
             z_sum = cube.sum(axis=0).sum(axis=0)
 
@@ -449,10 +452,10 @@ def _fit_process(th_idx, roiIndices=None):
                 fit_z = fit_fn(q_z, z_sum, z_0)
                 z_0 = fit_z
             except Exception as ex:
-                print('Z Failed', ex)
+                # print('Z Failed', ex)
                 z_0 = None
                 fit_z = [np.nan, np.nan, np.nan]
-                success_z = False
+                success_z = FitStatus.FAILED
 
             l_shared_res.set_qz_results(i_cube, fit_z, success_z)
 
@@ -470,10 +473,10 @@ def _fit_process(th_idx, roiIndices=None):
                 fit_y = fit_fn(q_y, y_sum, y_0)
                 y_0 = fit_y
             except Exception as ex:
-                print('Y Failed', ex, i_cube)
+                # print('Y Failed', ex, i_cube)
                 y_0 = None
                 fit_y = [np.nan, np.nan, np.nan]
-                success_y = False
+                success_y = FitStatus.FAILED
 
             l_shared_res.set_qy_results(i_cube, fit_y, success_y)
 
@@ -489,10 +492,10 @@ def _fit_process(th_idx, roiIndices=None):
                 fit_x = fit_fn(q_x, x_sum, x_0)
                 x_0 = fit_x
             except Exception as ex:
-                print('X Failed', ex)
+                # print('X Failed', ex)
                 x_0 = None
                 fit_x = [np.nan, np.nan, np.nan]
-                success_x = False
+                success_x = FitStatus.FAILED
 
             l_shared_res.set_qx_results(i_cube, fit_x, success_x)
 

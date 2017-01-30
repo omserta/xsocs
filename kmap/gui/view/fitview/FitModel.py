@@ -29,15 +29,16 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "01/01/2017"
 
-import numpy as np
-
 from silx.gui import qt as Qt
+
+import numpy as np
 
 from kmap.gui.model.Model import Model, RootNode
 from kmap.gui.project.Hdf5Nodes import H5File
 from kmap.gui.model.ModelDef import ModelRoles
 
 from kmap.io.FitH5 import FitH5, FitH5QAxis
+from ....process.peak_fit import FitStatus
 
 from ...widgets.XsocsPlot2D import XsocsPlot2D
 from ...project.Hdf5Nodes import H5Base, H5NodeClassDef
@@ -103,7 +104,30 @@ class FitEntryNode(H5Base):
             child = FitProcessNode(self.h5File, base + '/' + process)
             children.append(child)
 
+        statusNode = FitStatusNode(self.h5File, base)
+        children.append(statusNode)
+
         return children
+
+    def mimeData(self, column, stream):
+        # TODO : put column value in enum
+        if column == 1:
+            q_axis = FitH5QAxis.qx_axis
+        elif column == 2:
+            q_axis = FitH5QAxis.qy_axis
+        elif column == 3:
+            q_axis = FitH5QAxis.qz_axis
+        else:
+            raise ValueError('Unexpected column.')
+
+        h5file = self.h5File
+        entry = self.entry
+
+        stream.writeString(h5file)
+        stream.writeString(entry)
+        stream.writeInt(q_axis)
+
+        return True
 
 
 class FitProcessNode(FitEntryNode):
@@ -117,14 +141,102 @@ class FitProcessNode(FitEntryNode):
         entry = self.entry
         process = self.process
         children = []
-        print 'PATH', self.h5Path, self.entry, self.process
         with FitH5(self.h5File, mode='r') as h5f:
             results = h5f.get_result_names(entry, process)
         for result in results:
-            child = FitResultNode(self.h5File, base + '/' + result)
+            child = FitResultNode(self.h5File,
+                                  base + '/' + result)
             children.append(child)
 
         return children
+
+
+class FitStatusNode(FitEntryNode):
+    """
+    Preview of the points where the fit has failed.
+    """
+    def __init__(self, *args, **kwargs):
+        self.dragEnabledColumns = [False, True, True, True]
+        super(FitStatusNode, self).__init__(*args, **kwargs)
+        self.nodeName = 'Status'
+
+        self.__nErrors = [0, 0, 0]
+
+    def _setupNode(self):
+        width = 100
+        plot = PlotGrabber()
+        plot.setFixedSize(Qt.QSize(width, 100))
+        plot.toPixmap()
+
+        qApp = Qt.qApp
+        qApp.processEvents()
+
+        with FitH5(self.h5File) as fitH5:
+            x = fitH5.scan_x(self.entry)
+            y = fitH5.scan_y(self.entry)
+
+            status = fitH5.get_qx_status(self.entry)
+            errorPts = np.where(status != FitStatus.OK)[0]
+            self.__nErrors[0] = len(errorPts)
+            if len(errorPts) != 0:
+                plot.setPlotData(x[errorPts], y[errorPts], status[errorPts])
+                pixmap = plot.toPixmap()
+            else:
+                label = Qt.QLabel('No errors')
+                label.setFixedWidth(width)
+                label.setAlignment(Qt.Qt.AlignCenter)
+                label.setAttribute(Qt.Qt.WA_TranslucentBackground)
+                pixmap = Qt.QPixmap.grabWidget(label)
+            self.setData(1, pixmap, Qt.Qt.DecorationRole)
+            qApp.processEvents()
+
+            status = fitH5.get_qy_status(self.entry)
+            errorPts = np.where(status != FitStatus.OK)[0]
+            self.__nErrors[1] = len(errorPts)
+            if len(errorPts) != 0:
+                plot.setPlotData(x[errorPts], y[errorPts], status[errorPts])
+                pixmap = plot.toPixmap()
+            else:
+                label = Qt.QLabel('No errors')
+                label.setFixedWidth(width)
+                label.setAlignment(Qt.Qt.AlignCenter)
+                label.setAttribute(Qt.Qt.WA_TranslucentBackground)
+                pixmap = Qt.QPixmap.grabWidget(label)
+            self.setData(2, pixmap, Qt.Qt.DecorationRole)
+            qApp.processEvents()
+
+            status = fitH5.get_qz_status(self.entry)
+            errorPts = np.where(status != FitStatus.OK)[0]
+            self.__nErrors[2] = len(errorPts)
+            if len(errorPts) != 0:
+                plot.setPlotData(x[errorPts], y[errorPts], status[errorPts])
+                pixmap = plot.toPixmap()
+            else:
+                label = Qt.QLabel('No errors')
+                label.setFixedWidth(width)
+                label.setAlignment(Qt.Qt.AlignCenter)
+                label.setAttribute(Qt.Qt.WA_TranslucentBackground)
+                pixmap = Qt.QPixmap.grabWidget(label)
+            self.setData(3, pixmap, Qt.Qt.DecorationRole)
+            qApp.processEvents()
+
+    def _loadChildren(self):
+        return []
+
+    def mimeData(self, column, stream):
+
+        if column < 1 or column > 3:
+            return False
+
+        if self.__nErrors[column - 1] == 0:
+            return False
+
+        if not FitEntryNode.mimeData(self, column, stream):
+            return False
+
+        stream.writeString('status')
+
+        return True
 
 
 class FitResultNode(FitProcessNode):
@@ -176,6 +288,18 @@ class FitResultNode(FitProcessNode):
     def _loadChildren(self):
         return []
 
+    def mimeData(self, column, stream):
+        if not FitProcessNode.mimeData(self, column, stream):
+            return False
+
+        process = self.process
+        result = self.result
+        stream.writeString('result')
+        stream.writeString(process)
+        stream.writeString(result)
+
+        return True
+
 
 class FitRootNode(RootNode):
     """
@@ -195,36 +319,19 @@ class FitModel(Model):
         if len(indexes) > 1:
             raise ValueError('Drag&Drop of more than one item is not'
                              'supported yet.')
+
+        mimeData = Qt.QMimeData()
+
         index = indexes[0]
         node = index.data(ModelRoles.InternalDataRole)
 
-        if not isinstance(node, FitResultNode):
+        if not isinstance(node, (FitResultNode, FitStatusNode)):
             return super(Model, self).mimeData(indexes)
-
-        if index.column() == 1:
-            q_axis = FitH5QAxis.qx_axis
-        elif index.column() == 2:
-            q_axis = FitH5QAxis.qy_axis
-        elif index.column() == 3:
-            q_axis = FitH5QAxis.qz_axis
-        else:
-            raise ValueError('Unexpected column.')
-
-        h5file = node.h5File
-        entry = node.entry
-        process = node.process
-        result = node.result
 
         data = Qt.QByteArray()
         stream = Qt.QDataStream(data, Qt.QIODevice.WriteOnly)
-        stream.writeString(h5file)
-        stream.writeString(entry)
-        stream.writeString(process)
-        stream.writeString(result)
-        stream.writeInt(q_axis)
-
-        mimeData = Qt.QMimeData()
-        mimeData.setData('application/FitModel', data)
+        if node.mimeData(index.column(), stream):
+            mimeData.setData('application/FitModel', data)
 
         return mimeData
 

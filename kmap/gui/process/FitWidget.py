@@ -368,10 +368,6 @@ class FitWidget(Qt.QWidget):
                     zresult = results.results(process, param,
                                               results.QZ_AXIS)
 
-                    xstatus = results.qx_status(process)
-                    ystatus = results.qy_status(process)
-                    zstatus = results.qz_status(process)
-
                     fitH5.set_qx_result(entry,
                                         process,
                                         param,
@@ -387,15 +383,19 @@ class FitWidget(Qt.QWidget):
                                         param,
                                         zresult)
 
-                    fitH5.set_status(entry,
-                                     process,
-                                     FitH5QAxis.qx_axis,
-                                     xstatus)
-                    fitH5.set_status(entry,
-                                     process,
-                                     FitH5QAxis.qy_axis,
-                                     ystatus)
-                    fitH5.set_status(entry,
-                                     process,
-                                     FitH5QAxis.qz_axis,
-                                     zstatus)
+            xstatus = results.qx_status()
+            ystatus = results.qy_status()
+            zstatus = results.qz_status()
+
+            fitH5.set_status(entry,
+                             FitH5QAxis.qx_axis,
+                             xstatus)
+            fitH5.set_status(entry,
+                             FitH5QAxis.qy_axis,
+                             ystatus)
+            fitH5.set_status(entry,
+                             FitH5QAxis.qz_axis,
+                             zstatus)
+
+if __name__ == '__main__':
+    pass

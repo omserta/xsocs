@@ -33,6 +33,16 @@ __license__ = "MIT"
 
 from collections import OrderedDict
 
+import numpy as np
+
+
+class FitStatus(object):
+    """
+    Enum for the fit status
+    Starting at 1 for compatibility reasons.
+    """
+    OK, FAILED = range(1, 3)
+
 
 class FitResult(object):
     """
@@ -57,6 +67,12 @@ class FitResult(object):
 
         self._processes = OrderedDict()
 
+        n_pts = len(sample_x)
+
+        self._status = OrderedDict([('qx_status', np.zeros(n_pts)),
+                                    ('qy_status', np.zeros(n_pts)),
+                                    ('qz_status', np.zeros(n_pts))])
+
     def processes(self):
         """
         Returns the process names
@@ -67,36 +83,36 @@ class FitResult(object):
     def params(self, process):
         return self._get_process(process, create=False)['params'].keys()
 
-    def status(self, process, axis):
+    def status(self, axis):
+        """
+        Returns the status for the given axis.
+        :param axis:
+        :return:
+        """
         assert axis in self._AXIS
 
-        process = self._get_process(process, create=False)
+        return self._status[self._AXIS_NAMES[axis]][:]
 
-        return process['status'][self._AXIS_NAMES[axis]]
-
-    def qx_status(self, process):
+    def qx_status(self):
         """
-        Returns qx fit status the given process
-        :param process:
+        Returns qx fit status
         :return:
         """
-        return self.status(process, self.QX_AXIS)
+        return self.status(self.QX_AXIS)
 
-    def qy_status(self, process):
+    def qy_status(self):
         """
-        Returns qy fit status the given process
-        :param process:
+        Returns qy fit status
         :return:
         """
-        return self.status(process, self.QY_AXIS)
+        return self.status(self.QY_AXIS)
 
-    def qz_status(self, process):
+    def qz_status(self):
         """
-        Returns qz fit status the given process
-        :param process:
+        Returns qz fit status
         :return:
         """
-        return self.status(process, self.QZ_AXIS)
+        return self.status(self.QZ_AXIS)
 
     def results(self, process, param, axis=None):
         """
@@ -156,33 +172,26 @@ class FitResult(object):
         param_data = self._get_param(process, param)
         param_data[self._AXIS_NAMES[axis]] = result
 
-    def set_qx_status(self, process, status):
-        self._set_axis_status(process, self.QX_AXIS, status)
+    def set_qx_status(self, status):
+        self._set_axis_status(self.QX_AXIS, status)
 
-    def set_qy_status(self, process, status):
-        self._set_axis_status(process, self.QY_AXIS, status)
+    def set_qy_status(self, status):
+        self._set_axis_status(self.QY_AXIS, status)
 
-    def set_qz_status(self, process, status):
-        self._set_axis_status(process, self.QZ_AXIS, status)
+    def set_qz_status(self, status):
+        self._set_axis_status(self.QZ_AXIS, status)
 
-    def _set_axis_status(self, process, axis, status):
+    def _set_axis_status(self, axis, status):
         assert axis in self._AXIS
 
-        _process = self._get_process(process)
-        statuses = _process['status']
-
-        statuses[self._AXIS_NAMES[axis]] = status
+        self._status[self._AXIS_NAMES[axis]] = status
 
     def _get_process(self, process, create=True):
 
         if process not in self._processes:
             if not create:
                 raise KeyError('Unknown process {0}.'.format(process))
-            status = OrderedDict([('qx_status', None),
-                                  ('qy_status', None),
-                                  ('qz_status', None)])
-            _process = OrderedDict([('params', OrderedDict()),
-                                    ('status', status)])
+            _process = OrderedDict([('params', OrderedDict())])
             self._processes[process] = _process
         else:
             _process = self._processes[process]

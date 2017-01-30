@@ -59,16 +59,13 @@ class FitH5(XsocsH5Base):
     for that entry)
     - all arrays are 1D.
     """
-    # _axis_values = range(3)
-    # qx_axis, qy_axis, qz_axis = _axis_values
-    # axis_names = ('qx', 'qy', 'qz')
 
     title_path = '{entry}/title'
     start_time_path = '{entry}/start_time'
     end_time_path = '{entry}/end_time'
     date_path = '{entry}/{process}/date'
     qspace_axis_path = '{entry}/qspace_axis/{axis}'
-    status_path = '{entry}/{process}/status/{axis}'
+    status_path = '{entry}/status/{axis}'
     configuration_path = '{entry}/{process}/configuration'
     result_grp_path = '{entry}/{process}/results'
     result_path = '{entry}/{process}/results/{result}/{axis}'
@@ -126,7 +123,34 @@ class FitH5(XsocsH5Base):
         with self._get_file() as h5_file:
             return sorted(h5_file[results_path].keys())
 
-    def get_status(self, entry, process, axis):
+    def get_qx_status(self, entry):
+        """
+        Returns the Qx fit status for the given entry/process.
+        :param entry:
+        :param process:
+        :return:
+        """
+        return self.get_status(entry, FitH5QAxis.qx_axis)
+
+    def get_qy_status(self, entry):
+        """
+        Returns the Qy fit status for the given entry/process.
+        :param entry:
+        :param process:
+        :return:
+        """
+        return self.get_status(entry, FitH5QAxis.qy_axis)
+
+    def get_qz_status(self, entry):
+        """
+        Returns the Qz fit status for the given entry/process.
+        :param entry:
+        :param process:
+        :return:
+        """
+        return self.get_status(entry, FitH5QAxis.qz_axis)
+
+    def get_status(self, entry, axis):
         """
         Returns the fit status for the given entry/process/axis
         :param entry:
@@ -137,9 +161,25 @@ class FitH5(XsocsH5Base):
         """
         axis_name = FitH5QAxis.axis_name(axis)
         status_path = FitH5.status_path.format(entry=entry,
-                                               process=process,
                                                axis=axis_name)
-        return self._get_array_data(status_path)
+        status = self._get_array_data(status_path)
+
+        # 30 Jan 2017.
+        # This is kept for compatibility with previous versions
+        # TODO : remove this sometime...
+        if status is None:
+            # only one process was supported at the time
+            processes = self.processes(entry)
+            if len(processes) == 0:
+                return None
+            process = processes[0]
+            status_path = '{entry}/{process}/status/{axis}'
+            status = self._get_array_data(status_path.format(entry=entry,
+                                                             process=process,
+                                                             axis=axis_name))
+        return status
+
+
 
     def scan_x(self, entry):
         """
@@ -317,7 +357,6 @@ class FitH5(XsocsH5Base):
                         results[:, col_idx] = result
                         col_idx += 1
                     results[:, col_idx] = self.get_status(entry,
-                                                          process,
                                                           axis)
                     col_idx += 1
 
@@ -371,10 +410,9 @@ class FitH5Writer(FitH5):
     def set_title(self, entry, title):
         self._set_scalar_data(FitH5.title_path.format(entry), title)
 
-    def set_status(self, entry, process, axis, data):
+    def set_status(self, entry, axis, data):
         axis_name = FitH5QAxis.axis_name(axis)
         status_path = FitH5.status_path.format(entry=entry,
-                                               process=process,
                                                axis=axis_name)
         self._set_array_data(status_path, data)
 

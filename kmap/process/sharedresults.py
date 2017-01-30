@@ -93,11 +93,11 @@ class FitSharedResults(object):
     def _init_shared_status(self, shared_status=None):
         if shared_status is None:
             self._shared_qx_status = mp_sharedctypes.RawArray(
-                ctypes.c_bool, self._n_points)
+                ctypes.c_int8, self._n_points)
             self._shared_qy_status = mp_sharedctypes.RawArray(
-                ctypes.c_bool, self._n_points)
+                ctypes.c_int8, self._n_points)
             self._shared_qz_status = mp_sharedctypes.RawArray(
-                ctypes.c_bool, self._n_points)
+                ctypes.c_int8, self._n_points)
         else:
             self._shared_qx_status = shared_status[0]
             self._shared_qy_status = shared_status[1]
@@ -113,11 +113,11 @@ class FitSharedResults(object):
 
     def _init_npy_status(self):
         self._npy_qx_status = np.frombuffer(self._shared_qx_status,
-                                            dtype=bool)
+                                            dtype=np.int8)
         self._npy_qy_status = np.frombuffer(self._shared_qy_status,
-                                            dtype=bool)
+                                            dtype=np.int8)
         self._npy_qz_status = np.frombuffer(self._shared_qz_status,
-                                            dtype=bool)
+                                            dtype=np.int8)
 
     def set_qx_results(self, idx, results, status):
         self._npy_qx_results[idx] = results
@@ -171,17 +171,17 @@ class GaussianResults(FitSharedResults):
         results.add_qx_result('gaussian', 'intensity', qx_results[:, 0].ravel())
         results.add_qx_result('gaussian', 'position', qx_results[:, 1].ravel())
         results.add_qx_result('gaussian', 'width', qx_results[:, 2].ravel())
-        results.set_qx_status('gaussian', qx_status)
+        results.set_qx_status(qx_status)
 
         results.add_qy_result('gaussian', 'intensity', qy_results[:, 0].ravel())
         results.add_qy_result('gaussian', 'position', qy_results[:, 1].ravel())
         results.add_qy_result('gaussian', 'width', qy_results[:, 2].ravel())
-        results.set_qy_status('gaussian', qy_status)
+        results.set_qy_status(qy_status)
 
         results.add_qz_result('gaussian', 'intensity', qz_results[:, 0].ravel())
         results.add_qz_result('gaussian', 'position', qz_results[:, 1].ravel())
         results.add_qz_result('gaussian', 'width', qz_results[:, 2].ravel())
-        results.set_qz_status('gaussian', qz_status)
+        results.set_qz_status(qz_status)
 
         return results
 
@@ -213,7 +213,7 @@ class CentroidResults(FitSharedResults):
                               qx_results[:, 1].ravel())
         results.add_qx_result('centroid', 'Max',
                               qx_results[:, 2].ravel())
-        results.set_qx_status('centroid', qx_status)
+        results.set_qx_status(qx_status)
 
         results.add_qy_result('centroid', 'I', qy_results[:, 0].ravel())
         results.add_qy_result('centroid',
@@ -221,7 +221,7 @@ class CentroidResults(FitSharedResults):
                               qy_results[:, 1].ravel())
         results.add_qy_result('centroid', 'Max',
                               qy_results[:, 2].ravel())
-        results.set_qy_status('centroid', qy_status)
+        results.set_qy_status(qy_status)
 
         results.add_qz_result('centroid', 'I', qz_results[:, 0].ravel())
         results.add_qz_result('centroid',
@@ -229,7 +229,7 @@ class CentroidResults(FitSharedResults):
                               qz_results[:, 1].ravel())
         results.add_qz_result('centroid', 'Max',
                               qz_results[:, 2].ravel())
-        results.set_qz_status('centroid', qz_status)
+        results.set_qz_status(qz_status)
 
         return results
 

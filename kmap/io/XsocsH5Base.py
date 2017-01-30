@@ -50,7 +50,7 @@ class XsocsH5Base(object):
         # opening the file the first time
         # (creating it if necessary)
         # all subsequent access will use the mode 'r' or 'a'
-        with self._get_file() as h5_f:
+        with self._get_file():
             pass
 
         # setting the mode to append if mode was 'w' (so we don't erase it
@@ -137,8 +137,7 @@ class XsocsH5Base(object):
                 if dtype:
                     return h5_file[path].dtype
                 return h5_file[path][:]
-            except KeyError as ex:
-                print ex
+            except KeyError:
                 return None
 
     def _set_scalar_data(self, path, value):

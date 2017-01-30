@@ -29,9 +29,12 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
+import numpy as np
+
 from silx.gui import qt as Qt
 
 from kmap.io.FitH5 import FitH5, FitH5QAxis
+from ....process.fitresults import FitStatus
 
 from ...widgets.XsocsPlot2D import XsocsPlot2D
 
@@ -58,10 +61,16 @@ class DropPlotWidget(XsocsPlot2D):
         stream = Qt.QDataStream(qByteArray, Qt.QIODevice.ReadOnly)
         h5File = stream.readString()
         entry = stream.readString()
-        process = stream.readString()
-        result = stream.readString()
         q_axis = stream.readInt()
-        self.plotFitResult(h5File, entry, process, result, q_axis)
+
+        type = stream.readString()
+
+        if type == 'result':
+            process = stream.readString()
+            result = stream.readString()
+            self.plotFitResult(h5File, entry, process, result, q_axis)
+        elif type == 'status':
+            self.plotFitStatus(h5File, entry, q_axis)
 
     def dragEnterEvent(self, event):
         # super(DropWidget, self).dragEnterEvent(event)
@@ -81,7 +90,20 @@ class DropPlotWidget(XsocsPlot2D):
             scan_y = h5f.scan_y(entry)
 
         self.__legend = self.setPlotData(scan_x, scan_y, data)
-        self.setGraphTitle(result + '/' + FitH5QAxis.axis_names[q_axis])
+        self.setGraphTitle(result + '[' + FitH5QAxis.axis_names[q_axis] + ']')
+
+    def plotFitStatus(self, fitH5Name, entry, q_axis):
+        with FitH5(fitH5Name) as h5f:
+            data = h5f.get_status(entry, q_axis)
+            errorPts = np.where(data != FitStatus.OK)[0]
+            if len(errorPts) == 0:
+                return
+            scan_x = h5f.scan_x(entry)[errorPts]
+            scan_y = h5f.scan_y(entry)[errorPts]
+            data = data[errorPts]
+
+        self.__legend = self.setPlotData(scan_x, scan_y, data)
+        self.setGraphTitle('Errors[qx]' + FitH5QAxis.axis_names[q_axis])
 
 
 if __name__ == '__main__':

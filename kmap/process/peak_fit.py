@@ -40,7 +40,7 @@ import numpy as np
 
 # from silx.math import curve_fit
 from ..io import QSpaceH5
-from .fit_funcs import gaussian_fit, centroid
+from .fit_funcs import GaussianFitter, CentroidFitter
 from .sharedresults import FitTypes, GaussianResults, CentroidResults
 from .fitresults import FitStatus
 
@@ -78,6 +78,7 @@ class PeakFitter(Thread):
         self.__results = None
         self.__thread = None
         self.__progress = 0
+        self.__callback = None
 
         self.__status = self.READY
 
@@ -183,10 +184,10 @@ class PeakFitter(Thread):
             # # success[:] = True
 
         if fit_type == FitTypes.GAUSSIAN:
-            fit_fn = gaussian_fit
+            fit_class = GaussianFitter
             shared_results = GaussianResults(n_points=n_indices)
         if fit_type == FitTypes.CENTROID:
-            fit_fn = centroid
+            fit_class = CentroidFitter
             shared_results = CentroidResults(n_points=n_indices)
 
         # with h5py.File(qspace_f, 'r') as qspace_h5:
@@ -229,18 +230,11 @@ class PeakFitter(Thread):
                        initializer=_init_thread,
                        initargs=(shared_results,
                                  shared_progress,
-                                 fit_fn,
+                                 fit_class,
                                  (n_indices, 9),
                                  idx_queue,
                                  qspace_f,
                                  read_lock))
-                       # initargs=(shared_res,
-                       #           shared_success,
-                       #           fit_fn,
-                       #           (n_indices, 9),
-                       #           idx_queue,
-                       #           qspace_f,
-                       #           read_lock))
 
         if disp_times:
             class myTimes(object):
@@ -321,14 +315,14 @@ class PeakFitter(Thread):
 
 def _init_thread(shared_res_,
                  shared_prog_,
-                 fit_fn_,
+                 fit_class_,
                  result_shape_,
                  idx_queue_,
                  qspace_f_,
                  read_lock_):
     global shared_res, \
         shared_progress, \
-        fit_fn, \
+        fit_class, \
         result_shape, \
         idx_queue, \
         qspace_f, \
@@ -336,7 +330,7 @@ def _init_thread(shared_res_,
 
     shared_res = shared_res_
     shared_progress = shared_prog_
-    fit_fn = fit_fn_
+    fit_class = fit_class_
     result_shape = result_shape_
     idx_queue = idx_queue_
     qspace_f = qspace_f_
@@ -350,13 +344,8 @@ def _fit_process(th_idx, roiIndices=None):
         t_fit = 0.
         t_mask = 0.
 
-        # results = np.frombuffer(shared_res)
-        # results.shape = result_shape
-        # success = np.frombuffer(shared_success, dtype=bool)
         l_shared_res = shared_res.local_copy()
         progress = np.frombuffer(shared_progress, dtype='int32')
-        # results = l_shared_res._shared_array
-        # success = l_shared_res._shared_status
 
         qspace_h5 = QSpaceH5.QSpaceH5(qspace_f)
 
@@ -368,15 +357,7 @@ def _fit_process(th_idx, roiIndices=None):
 
         # TODO : timeout to check if it has been canceled
         # read_lock.acquire()
-        # with h5py.File(qspace_f, 'r') as qspace_h5:
-        #     q_x = qspace_h5['bins_edges/x'][:]
-        #     q_y = qspace_h5['bins_edges/y'][:]
-        #     q_z = qspace_h5['bins_edges/z'][:]
-        #     q_shape = qspace_h5['data/qspace'].shape
-        #     q_dtype = qspace_h5['data/qspace'].dtype
-        #     mask = np.where(qspace_h5['histo'][:] > 0)
-        #     weights = qspace_h5['histo'][:][mask]
-        with qspace_h5 as qspace_h5:
+        with qspace_h5:
             q_x = qspace_h5.qx
             q_y = qspace_h5.qy
             q_z = qspace_h5.qz
@@ -395,13 +376,10 @@ def _fit_process(th_idx, roiIndices=None):
             weights = histo[mask]
 
         # read_lock.release()
-        # print weights.max(), min(weights)
         read_cube = np.ascontiguousarray(np.zeros(q_shape[1:]),
                                          dtype=q_dtype)
 
-        x_0 = None
-        y_0 = None
-        z_0 = None
+        fitter = fit_class(q_x, q_y, q_z, l_shared_res)
 
         while True:
             # TODO : timeout
@@ -417,10 +395,6 @@ def _fit_process(th_idx, roiIndices=None):
                 'Processing cube {0}/{1}.'.format(i_cube, result_shape[0]))
 
             t0 = time.time()
-            # with h5py.File(qspace_f, 'r') as qspace_h5:
-            #     qspace_h5['data/qspace'].read_direct(cube,
-            #                                     source_sel=np.s_[i_cube],
-            #                                     dest_sel=None)
             with qspace_h5.qspace_dset_ctx() as dset:
                 dset.read_direct(read_cube,
                                  source_sel=np.s_[i_cube],
@@ -438,97 +412,21 @@ def _fit_process(th_idx, roiIndices=None):
 
             t0 = time.time()
 
-            success_x = FitStatus.OK
-            success_y = FitStatus.OK
-            success_z = FitStatus.OK
-
             z_sum = cube.sum(axis=0).sum(axis=0)
-
-            # if z_0 is None:
-            # z_0 = _gauss_first_guess(q_z, z_sum)
-            z_0 = [1.0, q_z.mean(), 1.0]
-
-            try:
-                fit_z = fit_fn(q_z, z_sum, z_0)
-                z_0 = fit_z
-            except Exception as ex:
-                # print('Z Failed', ex)
-                z_0 = None
-                fit_z = [np.nan, np.nan, np.nan]
-                success_z = FitStatus.FAILED
-
-            l_shared_res.set_qz_results(i_cube, fit_z, success_z)
-
-            z_sum = 0
-
             cube_sum_z = cube.sum(axis=2)
-
             y_sum = cube_sum_z.sum(axis=0)
-
-            # if y_0 is None:
-            # y_0 = _gauss_first_guess(q_y, y_sum)
-            y_0 = [1.0, q_y.mean(), 1.0]
-
-            try:
-                fit_y = fit_fn(q_y, y_sum, y_0)
-                y_0 = fit_y
-            except Exception as ex:
-                # print('Y Failed', ex, i_cube)
-                y_0 = None
-                fit_y = [np.nan, np.nan, np.nan]
-                success_y = FitStatus.FAILED
-
-            l_shared_res.set_qy_results(i_cube, fit_y, success_y)
-
-            y_sum = 0
-
             x_sum = cube_sum_z.sum(axis=1)
 
-            # if x_0 is None:
-            # x_0 = _gauss_first_guess(q_x, x_sum)
-            x_0 = [1.0, q_x.mean(), 1.0]
-
-            try:
-                fit_x = fit_fn(q_x, x_sum, x_0)
-                x_0 = fit_x
-            except Exception as ex:
-                # print('X Failed', ex)
-                x_0 = None
-                fit_x = [np.nan, np.nan, np.nan]
-                success_x = FitStatus.FAILED
-
-            l_shared_res.set_qx_results(i_cube, fit_x, success_x)
-
-            x_sum = 0
+            fitter.fit(i_cube, x_sum, y_sum, z_sum)
 
             t_fit += time.time() - t0
 
             t0 = time.time()
 
-            # success[i_cube] = True
-            #
-            # if success_x:
-            #     results[i_cube, 0:3] = fit_x
-            # else:
-            #     results[i_cube, 0:3] = np.nan
-            #     success[i_cube] = False
-            #
-            # if success_y:
-            #     results[i_cube, 3:6] = fit_y
-            # else:
-            #     results[i_cube, 3:6] = np.nan
-            #     success[i_cube] = False
-            #
-            # if success_z:
-            #     results[i_cube, 6:9] = fit_z
-            # else:
-            #     results[i_cube, 6:9] = np.nan
-            #     success[i_cube] = False
-
             t_write = time.time() - t0
 
     except Exception as ex:
-        print 'EX', ex
+        print('EX', ex)
 
     times = (t_read, t_mask, t_fit, t_write)
     if disp_times:

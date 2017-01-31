@@ -67,11 +67,13 @@ class FitResult(object):
 
         self._processes = OrderedDict()
 
-        n_pts = len(sample_x)
+        self._n_pts = n_pts = len(sample_x)
 
         self._status = OrderedDict([('qx_status', np.zeros(n_pts)),
                                     ('qy_status', np.zeros(n_pts)),
                                     ('qz_status', np.zeros(n_pts))])
+
+        self._infos = OrderedDict()
 
     def processes(self):
         """
@@ -171,6 +173,64 @@ class FitResult(object):
 
         param_data = self._get_param(process, param)
         param_data[self._AXIS_NAMES[axis]] = result
+
+    def add_qx_info(self, name, data):
+        """
+        Add other misc. plottable info (e.g : chi2, ...) associated with the
+        fit along the qx axis.
+        data must be an array with the same number of elements
+        :param name:
+        :param axis:
+        :param data:
+        :return:
+        """
+        self._add_info(name, self.QX_AXIS, data)
+
+    def add_qy_info(self, name, data):
+        """
+        Add other misc. plottable info (e.g : chi2, ...) associated with the
+        fit along the qy axis.
+        data must be an array with the same number of elements
+        :param name:
+        :param axis:
+        :param data:
+        :return:
+        """
+        self._add_info(name, self.QY_AXIS, data)
+
+    def add_qz_info(self, name, data):
+        """
+        Add other misc. plottable info (e.g : chi2, ...) associated with the
+        fit along the qz axis.
+        data must be an array with the same number of elements
+        :param name:
+        :param axis:
+        :param data:
+        :return:
+        """
+        self._add_info(name, self.QZ_AXIS, data)
+
+    def _add_info(self, name, axis, data):
+        """
+        Add other misc. plottable info (e.g : chi2, ...) associated with the
+        fit along the given axis.
+        data must be an array with the same number of elements
+        :param name:
+        :param axis:
+        :param data:
+        :return:
+        """
+        assert axis in self._AXIS
+
+        infos = self._infos
+
+        if name not in infos:
+            info = OrderedDict([('qx', None), ('qy', None), ('qz', None)])
+            infos[name] = info
+        else:
+            info = infos[name]
+
+        info[self._AXIS_NAMES[axis]] = data
 
     def set_qx_status(self, status):
         self._set_axis_status(self.QX_AXIS, status)

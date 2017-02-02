@@ -47,7 +47,11 @@ class TreeView(Qt.QTreeView):
         # TODO : investigate
         self.expanded.connect(self.__expanded, Qt.Qt.QueuedConnection)
         self.collapsed.connect(self.__collapsed)
-        self.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
+
+        if int(Qt.qVersion().split('.')[0]) <= 4:
+            self.header().setResizeMode(Qt.QHeaderView.ResizeToContents)
+        else:
+            self.header().setSectionResizeMode(Qt.QHeaderView.ResizeToContents)
         self.__showUniqueGroup = False
         self.__userRoot = False
         # self.setSelectionBehavior(Qt.QAbstractItemView.SelectRows)

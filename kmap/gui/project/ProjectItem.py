@@ -143,7 +143,7 @@ class ProjectItem(XsocsH5Base):
         children = []
         with self._get_file() as h5f:
             try:
-                keys = h5f[self.path].keys()
+                keys = list(h5f[self.path].keys())
             except AttributeError:
                 return []
         pathTpl = self.path.rstrip('/') + '/{0}'

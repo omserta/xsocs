@@ -44,7 +44,24 @@ from ...widgets.XsocsPlot2D import XsocsPlot2D
 from ...project.Hdf5Nodes import H5Base, H5NodeClassDef
 
 
+def _grabWidget(widget):
+    """
+    Grabs a widget and returns a pixmap.
+    :param widget:
+    :return:
+    """
+
+    if int(Qt.qVersion().split('.')[0]) <= 4:
+        pixmap = Qt.QPixmap.grabWidget(widget)
+    else:
+        pixmap = widget.grab()
+    return pixmap
+
+
 class PlotGrabber(XsocsPlot2D):
+    """
+    XsocsPlot2D that can be converted to a pixmap.
+    """
     persistent = True
 
     def __init__(self, *args, **kwargs):
@@ -61,7 +78,13 @@ class PlotGrabber(XsocsPlot2D):
         self.setPointWidgetVisible(False)
 
     def toPixmap(self):
-        return Qt.QPixmap.grabWidget(self)
+        """
+        Returns a pixmap of the widget.
+        :return:
+        """
+        return _grabWidget(self)
+
+
 
 
 @H5NodeClassDef('FitH5')
@@ -186,7 +209,7 @@ class FitStatusNode(FitEntryNode):
                 label.setFixedWidth(width)
                 label.setAlignment(Qt.Qt.AlignCenter)
                 label.setAttribute(Qt.Qt.WA_TranslucentBackground)
-                pixmap = Qt.QPixmap.grabWidget(label)
+                pixmap = _grabWidget(label)
             self.setData(1, pixmap, Qt.Qt.DecorationRole)
             qApp.processEvents()
 
@@ -201,7 +224,7 @@ class FitStatusNode(FitEntryNode):
                 label.setFixedWidth(width)
                 label.setAlignment(Qt.Qt.AlignCenter)
                 label.setAttribute(Qt.Qt.WA_TranslucentBackground)
-                pixmap = Qt.QPixmap.grabWidget(label)
+                pixmap = _grabWidget(label)
             self.setData(2, pixmap, Qt.Qt.DecorationRole)
             qApp.processEvents()
 
@@ -216,7 +239,7 @@ class FitStatusNode(FitEntryNode):
                 label.setFixedWidth(width)
                 label.setAlignment(Qt.Qt.AlignCenter)
                 label.setAttribute(Qt.Qt.WA_TranslucentBackground)
-                pixmap = Qt.QPixmap.grabWidget(label)
+                pixmap = _grabWidget(label)
             self.setData(3, pixmap, Qt.Qt.DecorationRole)
             qApp.processEvents()
 

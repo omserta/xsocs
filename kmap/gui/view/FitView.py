@@ -53,7 +53,6 @@ class FitView(Qt.QMainWindow):
                  parent,
                  model,
                  node,
-                 qspaceNode,
                  **kwargs):
         super(FitView, self).__init__(parent)
 
@@ -63,7 +62,9 @@ class FitView(Qt.QMainWindow):
 
         item = h5NodeToProjectItem(node)
         fitH5 = self.__fitH5 = item.fitH5
-        qspaceItem = h5NodeToProjectItem(qspaceNode)
+
+        # TODO : this parent().parent() thing is ugly...
+        qspaceItem = h5NodeToProjectItem(node.parent().parent())
 
         self.__qspaceH5 = qspaceItem.qspaceH5
         self.__node = node
@@ -165,8 +166,6 @@ class FitView(Qt.QMainWindow):
 
         self.setCentralWidget(centralWid)
 
-        self.__sigInitPlots.connect(self.__firstInit, Qt.Qt.QueuedConnection)
-
     def getFitNode(self):
         return self.__node
 
@@ -186,22 +185,33 @@ class FitView(Qt.QMainWindow):
         super(FitView, self).showEvent(event)
         if self.__firstShow:
             self.__firstShow = False
-            self.__sigInitPlots.emit()
+            self.__firstInit()
+            # self.__sigInitPlots.emit()
 
     def __firstInit(self):
         """
-        Called asynchronously the first time the window is shown.
-        This allows us to show the window even though it is not completely
-        ready yet (so that the user doesn't have to wait for too long
-        before seeing some results).
+        Called the first time the window is shown.
         :return:
         """
+        initDiag = Qt.QProgressDialog('Setting up fit view.', 'cc', 0, 100,
+                                      parent=self.parent())
+        initDiag.setWindowTitle('Please wait...')
+        initDiag.setCancelButton(None)
+        initDiag.setAttribute(Qt.Qt.WA_DeleteOnClose)
+        initDiag.show()
+        initDiag.setValue(10)
         self.__initPlots()
+        initDiag.setValue(40)
         self.__startModel()
+        initDiag.setValue(70)
         tree = self.__tree
         root = self.__model.index(0, 0, tree.rootIndex())
         tree.setRootIndex(self.__model.index(0, 0, root))
+        initDiag.setValue(90)
         tree.expandAll()
+        initDiag.setValue(100)
+        initDiag.accept()
+        initDiag.close()
 
     def __startModel(self):
         """

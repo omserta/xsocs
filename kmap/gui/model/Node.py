@@ -355,6 +355,11 @@ class Node(object):
         self._connect()
 
     def _setupNode(self):
+        """
+        Called each time the subject or the branchName change, or the node
+        is started, only if the subject is set and the node is started.
+        :return:
+        """
         pass
 
     def _getDepth(self):

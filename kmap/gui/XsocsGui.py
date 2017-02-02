@@ -38,14 +38,11 @@ from .widgets.Wizard import XsocsWizard
 from .widgets.ProjectChooser import ProjectChooserDialog
 
 from .view.FitView import FitView
-from .view.QspaceView import QSpaceView
-from .view.IntensityView import IntensityView
 
 from .model.TreeView import TreeView
 from .model.ModelDef import ModelRoles
 from .model.Model import Model, RootNode
 
-from .process.FitWidget import FitWidget
 from .process.RecipSpaceWidget import RecipSpaceWidget
 
 from .project.FitGroup import FitItem
@@ -53,6 +50,9 @@ from .project.QSpaceGroup import QSpaceItem
 from .project.XsocsProject import XsocsProject
 from .project.IntensityGroup import IntensityGroup
 from .project.Hdf5Nodes import setH5NodeFactory, H5File
+from .project.ProjectNodes import (IntensityGroupNode,
+                                   QSpaceItemNode,
+                                   FitItemNode)
 from .project.XsocsH5Factory import XsocsH5Factory, h5NodeToProjectItem
 
 
@@ -141,13 +141,13 @@ class XsocsGui(Qt.QMainWindow):
         """
         tree = ProjectTree()
         tree.setShowUniqueGroup(False)
-        tree.sigDelegateEvent.connect(self.__viewEvent)
+        tree.sigDelegateEvent.connect(self.__slotViewEvent)
         model = ProjectModel(parent=tree)
         model.startModel()
         tree.setModel(model)
         self.setCentralWidget(tree)
 
-    def __viewEvent(self, node, event):
+    def __slotViewEvent(self, node, event):
         projectItem = h5NodeToProjectItem(node)
         if projectItem is None:
             raise ValueError('Unknwown event for node {0} : {1}.'
@@ -167,28 +167,23 @@ class XsocsGui(Qt.QMainWindow):
                        ''.format(projectItem, event))
 
     def __showIntensity(self, node=None):
-        if self.__project is None:
+        if node is None:
+            intensityGroup = self.__project.intensityGroup()
+            index = self.tree.pathToIndex(intensityGroup.path)
+            node = index.data(ModelRoles.InternalDataRole)
+        elif not isinstance(node, IntensityGroupNode):
             return
-        view = self.__intensityView
-        if not view:
-            if node is None:
-                intensityGroup = self.__project.intensityGroup()
-                index = self.tree.pathToIndex(intensityGroup.path)
-                node = index.data(ModelRoles.InternalDataRole)
 
-            # TODO : log if node is None
-            self.__intensityView = view = IntensityView(self,
-                                                        model=node.model,
-                                                        node=node)
-            screen = Qt.QApplication.desktop()
-            size = screen.availableGeometry(view).size()
-            size.scale(size.width() * 0.6,
-                       size.height() * 0.6,
-                       Qt.Qt.IgnoreAspectRatio)
-            view.resize(size)
-            view.sigProcessApplied.connect(self.__intensityRoiApplied)
+        view = node.getView(self)
         view.show()
+        view.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
         view.raise_()
+        # screen = Qt.QApplication.desktop()
+        #     size = screen.availableGeometry(view).size()
+        #     size.scale(size.width() * 0.6,
+        #                size.height() * 0.6,
+        #                Qt.Qt.IgnoreAspectRatio)
+        #     view.resize(size)
 
     def __intensityRoiApplied(self, event):
         xsocsFile = os.path.basename(self.__project.xsocsFile)
@@ -216,18 +211,11 @@ class XsocsGui(Qt.QMainWindow):
     tree = property(lambda self: self.centralWidget())
 
     def __showQSpace(self, node, bringToFront=True):
-        view = self.__qspaceViews.get(node)
-        if not view:
-            view = QSpaceView(self, model=node.model, node=node)
-            self.__qspaceViews[node] = view
-            screen = Qt.QApplication.desktop()
-            size = screen.availableGeometry(view).size()
-            size.scale(size.width() * 0.6,
-                       size.height() * 0.6,
-                       Qt.Qt.IgnoreAspectRatio)
-            view.resize(size)
-            view.sigFitDone.connect(self.__slotFitDone)
+        if not isinstance(node, QSpaceItemNode):
+            return
+        view = node.getView(self)
         view.show()
+        view.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
         if bringToFront:
             view.raise_()
         return view
@@ -243,28 +231,19 @@ class XsocsGui(Qt.QMainWindow):
             self.__showFit(index.data(ModelRoles.InternalDataRole))
 
     def __showFit(self, node):
-        view = self.__fitViews.get(node)
-        if not view:
-            # TODO : unmaintainable and FUGLY!!!!! node.parent().parent()
-            view = FitView(self, node.model, node, node.parent().parent())
-            self.__fitViews[node] = view
-            view.sigPointSelected.connect(self.__fitViewPointSelected)
+        if not isinstance(node, FitItemNode):
+            return
+        view = node.getView(self)
+        view.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
+        view.sigPointSelected.connect(self.__fitViewPointSelected)
         view.show()
-        return view
 
     def __fitViewPointSelected(self, point):
         sender = self.sender()
         if not isinstance(sender, FitView):
             return
-        views = list(self.__fitViews.values())
-        try:
-            viewIdx = views.index(sender)
-        except ValueError:
-            # TODO
-            return
-        fitNode = list(self.__fitViews.keys())[viewIdx]
 
-        qspaceNode = fitNode.parent().parent()
+        qspaceNode = sender.getFitNode().parent().parent()
         qspaceView = self.__showQSpace(qspaceNode, bringToFront=False)
         qspaceView.selectPoint(point.x, point.y)
 

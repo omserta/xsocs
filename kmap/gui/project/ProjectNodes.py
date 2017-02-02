@@ -30,6 +30,7 @@ __license__ = "MIT"
 __date__ = "01/11/2016"
 
 import os
+import weakref
 
 from silx.gui import qt as Qt, icons
 
@@ -39,6 +40,10 @@ from ..model.NodeEditor import EditorMixin
 from .IntensityGroup import IntensityItem
 from .XsocsH5Factory import h5NodeToProjectItem
 from .Hdf5Nodes import H5GroupNode, H5NodeClassDef, H5DatasetNode
+
+from ..view.FitView import FitView
+from ..view.QspaceView import QSpaceView
+from ..view.IntensityView import IntensityView
 
 
 class ScatterPlotButton(EditorMixin, Qt.QWidget):
@@ -93,6 +98,26 @@ class QSpaceButton(EditorMixin, Qt.QWidget):
 class IntensityGroupNode(H5GroupNode):
     editors = ScatterPlotButton
 
+    def __init__(self, *args, **kwargs):
+        super(IntensityGroupNode, self).__init__(*args, **kwargs)
+
+        self.__viewWidget = None
+
+    def getView(self, parent=None):
+        """
+        Returns a IntensityView for this item's data.
+        :param parent:
+        :return:
+        """
+
+        view = self.__viewWidget
+        if view is None or view() is None:
+            view = weakref.ref(IntensityView(parent,
+                                              self.model,
+                                              self))
+            self.__viewWidget = view
+        return view()
+
     # def _loadChildren(self):
     #     return []
 
@@ -113,6 +138,24 @@ class IntensityNode(H5DatasetNode):
                 attribute=('XsocsClass', 'QSpaceItem'))
 class QSpaceItemNode(H5GroupNode):
     editors = QSpaceButton
+
+    def __init__(self, *args, **kwargs):
+        super(QSpaceItemNode, self).__init__(*args, **kwargs)
+        self.__viewWidget = None
+
+    def getView(self, parent=None):
+        """
+        Returns a QSpaceView for this item's data.
+        :param parent:
+        :return:
+        """
+        view = self.__viewWidget
+        if view is None or view() is None:
+            view = weakref.ref(QSpaceView(parent,
+                                          self.model,
+                                          self))
+            self.__viewWidget = view
+        return view()
 
 
 class FitButton(EditorMixin, Qt.QWidget):
@@ -139,7 +182,6 @@ class FitButton(EditorMixin, Qt.QWidget):
         layout.addStretch(1)
 
     def __clicked(self):
-        # node = self.node
         event = {'event': 'fit'}
         self.notifyView(event)
 
@@ -171,3 +213,25 @@ class FitItemNode(H5GroupNode):
 
     def _loadChildren(self):
         return []
+
+    def __init__(self, *args, **kwargs):
+        super(FitItemNode, self).__init__(*args, **kwargs)
+        self.__viewWidget = None
+
+    def getView(self, parent=None):
+        """
+        Returns a FitView for this item's data.
+        :param parent:
+        :return:
+        """
+        view = self.__viewWidget
+        if view is None or view() is None:
+            view = weakref.ref(FitView(parent,
+                                       self.model,
+                                       self))
+            self.__viewWidget = view
+        return view()
+
+
+if __name__ == '__main__':
+    pass

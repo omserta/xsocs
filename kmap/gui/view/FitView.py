@@ -64,7 +64,9 @@ class FitView(Qt.QMainWindow):
         item = h5NodeToProjectItem(node)
         fitH5 = self.__fitH5 = item.fitH5
         qspaceItem = h5NodeToProjectItem(qspaceNode)
+
         self.__qspaceH5 = qspaceItem.qspaceH5
+        self.__node = node
 
         with fitH5:
             # only one entry per file supposed right now
@@ -164,6 +166,9 @@ class FitView(Qt.QMainWindow):
         self.setCentralWidget(centralWid)
 
         self.__sigInitPlots.connect(self.__firstInit, Qt.Qt.QueuedConnection)
+
+    def getFitNode(self):
+        return self.__node
 
     def showEvent(self, event):
         """

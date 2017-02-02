@@ -256,18 +256,17 @@ class XsocsGui(Qt.QMainWindow):
         sender = self.sender()
         if not isinstance(sender, FitView):
             return
-        views = self.__fitViews.values()
+        views = list(self.__fitViews.values())
         try:
             viewIdx = views.index(sender)
         except ValueError:
             # TODO
             return
-        fitNode = self.__fitViews.keys()[viewIdx]
+        fitNode = list(self.__fitViews.keys())[viewIdx]
 
         qspaceNode = fitNode.parent().parent()
         qspaceView = self.__showQSpace(qspaceNode, bringToFront=False)
         qspaceView.selectPoint(point.x, point.y)
-
 
     def model(self):
         return self.tree.model()

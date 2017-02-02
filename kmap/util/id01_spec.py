@@ -332,9 +332,9 @@ class Id01DataMerger(object):
         self.__check_parsed()
 
         if scan_ids is None:
-            scan_ids = self.__matched_scans.keys()
+            scan_ids = list(self.__matched_scans.keys())
 
-        if not isinstance(scan_ids, (list, tuple, xrange)):
+        if not isinstance(scan_ids, (list, tuple)):
             scan_ids = [scan_ids]
 
         scan_ids = set(scan_ids)

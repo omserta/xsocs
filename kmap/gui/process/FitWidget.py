@@ -190,7 +190,7 @@ class FitWidget(Qt.QWidget):
 
         fitLayout = Qt.QHBoxLayout()
         self.__fitTypeCb = fitTypeCb = Qt.QComboBox()
-        fitTypeCb.addItems(FitWidget.FitTypes.keys())
+        fitTypeCb.addItems(list(FitWidget.FitTypes.keys()))
         fitTypeCb.setCurrentIndex(0)
         fitLayout.addWidget(Qt.QLabel('Fit :'))
         fitLayout.addWidget(fitTypeCb)

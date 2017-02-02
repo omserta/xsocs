@@ -477,7 +477,7 @@ class ImageRoiManager(qt.QObject):
         return optionActions
 
     def _selectAll(self, checked):
-        print self._plot.getGraphXLimits(), self._plot.getGraphYLimits()
+        pass
 
     def _clearRois(self, checked):
         self.clear()
@@ -507,7 +507,7 @@ class ImageRoiManager(qt.QObject):
                 # TODO : to raise or not to raise?
                 pass
 
-    rois = property(lambda self: self._rois.keys())
+    rois = property(lambda self: list(self._rois.keys()))
 
     def showRois(self, show):
         # TODO : name param to tell that we only want to toggle
@@ -522,7 +522,8 @@ class ImageRoiManager(qt.QObject):
             if self.sender() != action:
                 action.setChecked(show)
 
-        {roi.setVisible(show) for roi in self._rois.values()}
+        for roi in self._rois.values():
+            roi.setVisible(show)
 
     def allowMultipleSelections(self, allow):
 

@@ -123,8 +123,8 @@ class FitEntryNode(H5Base):
         h5file = self.h5File
         entry = self.entry
 
-        stream.writeString(h5file)
-        stream.writeString(entry)
+        stream.writeQString(h5file)
+        stream.writeQString(entry)
         stream.writeInt(q_axis)
 
         return True
@@ -234,7 +234,7 @@ class FitStatusNode(FitEntryNode):
         if not FitEntryNode.mimeData(self, column, stream):
             return False
 
-        stream.writeString('status')
+        stream.writeQString('status')
 
         return True
 
@@ -294,9 +294,9 @@ class FitResultNode(FitProcessNode):
 
         process = self.process
         result = self.result
-        stream.writeString('result')
-        stream.writeString(process)
-        stream.writeString(result)
+        stream.writeQString('result')
+        stream.writeQString(process)
+        stream.writeQString(result)
 
         return True
 

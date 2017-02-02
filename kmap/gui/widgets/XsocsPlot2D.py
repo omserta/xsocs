@@ -491,7 +491,8 @@ class XsocsPlot2D(PlotWindow):
 
         pointDock = self.__pointWidget = DoublePointDock()
 
-        features = Qt.QDockWidget.DockWidgetVerticalTitleBar | Qt.QDockWidget.DockWidgetClosable
+        features = (Qt.QDockWidget.DockWidgetVerticalTitleBar |
+                    Qt.QDockWidget.DockWidgetClosable)
         pointDock.setFeatures(features)
         pointDock.sizeHint = lambda: Qt.QSize()
         self.addDockWidget(Qt.Qt.BottomDockWidgetArea, pointDock)

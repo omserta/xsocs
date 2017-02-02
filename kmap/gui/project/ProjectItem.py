@@ -62,7 +62,7 @@ def projectItemFactory(h5File, h5Path, mode=None):
         # For some reason attrs.get sometimes fails,
         # using "in" seems a bit more robust.
         if 'XsocsClass' in attrs:
-            xsocsClass = attrs['XsocsClass']
+            xsocsClass = attrs['XsocsClass'].decode()
             klass = getItemClass(xsocsClass)
         del attrs
 

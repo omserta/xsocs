@@ -59,15 +59,15 @@ class DropPlotWidget(XsocsPlot2D):
             return super(DropPlotWidget, self).dropEvent(event)
         qByteArray = mimeData.data('application/FitModel')
         stream = Qt.QDataStream(qByteArray, Qt.QIODevice.ReadOnly)
-        h5File = stream.readString()
-        entry = stream.readString()
+        h5File = stream.readQString()
+        entry = stream.readQString()
         q_axis = stream.readInt()
 
-        type = stream.readString()
+        type = stream.readQString()
 
         if type == 'result':
-            process = stream.readString()
-            result = stream.readString()
+            process = stream.readQString()
+            result = stream.readQString()
             self.plotFitResult(h5File, entry, process, result, q_axis)
         elif type == 'status':
             self.plotFitStatus(h5File, entry, q_axis)

@@ -76,8 +76,9 @@ class XsocsH5(XsocsH5Base):
             # when there is no attribute NX_class (should return the default
             # None)
             self.__entries = sorted([key for key in h5_file
-                                     if ('NX_class' in h5_file[key].attrs and
-                                         h5_file[key].attrs['NX_class'] == 'NXentry')])  # noqa
+                if ('NX_class' in h5_file[key].attrs and
+                    h5_file[key].attrs[
+                        'NX_class'].decode() == 'NXentry')])
 
     def entries(self):
         if self.__entries is None:
@@ -158,8 +159,8 @@ class XsocsH5(XsocsH5Base):
     def scan_positions(self, entry):
         path = self.measurement_tpl.format(entry)
         params = self.scan_params(entry)
-        m0 = '/adc{0}'.format(params['motor_0'][-1].upper())
-        m1 = '/adc{0}'.format(params['motor_1'][-1].upper())
+        m0 = '/adc{0}'.format(params['motor_0'].decode()[-1].upper())
+        m1 = '/adc{0}'.format(params['motor_1'].decode()[-1].upper())
         n_0 = params['motor_0_steps']
         n_1 = params['motor_1_steps']
 

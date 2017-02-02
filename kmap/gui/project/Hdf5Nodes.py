@@ -52,7 +52,7 @@ def getNodeClass(nodeType, attrs=None):
         for key, value in attrs.items():
             info = _registeredAttributes.get(key)
             if info:
-                klass = info.get(value)
+                klass = info.get(value.decode())
                 if klass:
                     break
     if not klass:
@@ -160,7 +160,6 @@ class H5Base(Node):
 
         super(H5Base, self).__init__(subject=self, **kwargs)
 
-        self.setData(h5File, Qt.Qt.ToolTipRole)
         self.setData(ModelColumns.NameColumn, os.path.basename(self.h5Path))
 
     @staticmethod

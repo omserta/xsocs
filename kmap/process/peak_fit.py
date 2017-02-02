@@ -96,7 +96,7 @@ class PeakFitter(Thread):
                                                           n_proc)
 
         if roi_indices is not None:
-            self.__roi_indices = roi_indices[:]
+            self.__roi_indices = np.array(roi_indices[:])
         else:
             self.__roi_indices = None
 
@@ -119,7 +119,7 @@ class PeakFitter(Thread):
             self.__set_status(self.ERROR)
             raise
 
-        self.__indices = indices
+        self.__indices = np.array(indices)
 
     def __set_status(self, status):
         assert status in self.__STATUSES
@@ -170,7 +170,7 @@ class PeakFitter(Thread):
 
         try:
             with QSpaceH5.QSpaceH5(qspace_f) as qspace_h5:
-                with qspace_h5.qspace_dset_ctx() as dset:
+                with qspace_h5:
                     x_pos = qspace_h5.sample_x[indices]
                     y_pos = qspace_h5.sample_y[indices]
         except IOError:

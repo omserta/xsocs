@@ -94,7 +94,7 @@ class FitH5(XsocsH5Base):
             return sorted([key for key in h5_file
                            if ('NX_class' in h5_file[key].attrs and
                                h5_file[key].attrs[
-                                   'NX_class'] == 'NXentry')])
+                                   'NX_class'].decode() == 'NXentry')])
 
     def processes(self, entry):
         """
@@ -107,7 +107,7 @@ class FitH5(XsocsH5Base):
             processes = sorted([key for key in entry_grp
                                 if ('NX_class' in entry_grp[key].attrs and
                                     entry_grp[key].attrs[
-                                        'NX_class'] == 'NXprocess')])
+                                        'NX_class'].decode() == 'NXprocess')])
         return processes
 
     def get_result_names(self, entry, process):

@@ -177,6 +177,7 @@ class XsocsGui(Qt.QMainWindow):
         view = node.getView(self)
         view.show()
         view.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
+        view.sigProcessApplied.connect(self.__intensityRoiApplied)
         view.raise_()
         # screen = Qt.QApplication.desktop()
         #     size = screen.availableGeometry(view).size()
@@ -214,6 +215,7 @@ class XsocsGui(Qt.QMainWindow):
         if not isinstance(node, QSpaceItemNode):
             return
         view = node.getView(self)
+        view.sigFitDone.connect(self.__slotFitDone)
         view.show()
         view.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
         if bringToFront:

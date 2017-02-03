@@ -366,7 +366,7 @@ def _fit_process(th_idx, roiIndices=None):
                 q_dtype = dset.dtype
             histo = qspace_h5.histo
 
-            if roiIndices:
+            if roiIndices is not None:
                 q_x = q_x[xSlice]
                 q_y = q_y[ySlice]
                 q_z = q_z[zSlice]
@@ -383,16 +383,18 @@ def _fit_process(th_idx, roiIndices=None):
 
         while True:
             # TODO : timeout
-            i_cube = idx_queue.get()
+            next = idx_queue.get()
 
-            if i_cube is None:
+            if next is None:
                 break
 
-            progress[th_idx] = i_cube
+            i_fit, i_cube = next
+
+            progress[th_idx] = i_fit
 
             if i_cube % 100 == 0:
                 print(
-                'Processing cube {0}/{1}.'.format(i_cube, result_shape[0]))
+                'Processing cube {0}/{1}.'.format(i_fit, result_shape[0]))
 
             t0 = time.time()
             with qspace_h5.qspace_dset_ctx() as dset:
@@ -401,7 +403,7 @@ def _fit_process(th_idx, roiIndices=None):
                                  dest_sel=None)
             t_read += time.time() - t0
 
-            if roiIndices:
+            if roiIndices is not None:
                 cube = read_cube[xSlice, ySlice, zSlice]
             else:
                 cube = read_cube

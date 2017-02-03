@@ -192,6 +192,7 @@ class FitButton(EditorMixin, Qt.QWidget):
         itemBasename += '.txt'
         dialog = Qt.QFileDialog(self, 'Export fit results.')
         dialog.setFileMode(Qt.QFileDialog.AnyFile)
+        dialog.setAcceptMode(Qt.QFileDialog.AcceptSave)
         dialog.selectFile(os.path.join(workdir, itemBasename))
         if dialog.exec_():
             csvPath = dialog.selectedFiles()[0]

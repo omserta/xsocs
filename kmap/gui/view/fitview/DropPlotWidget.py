@@ -89,6 +89,16 @@ class DropPlotWidget(XsocsPlot2D):
             scan_x = h5f.scan_x(entry)
             scan_y = h5f.scan_y(entry)
 
+        xBorder = np.array([scan_x.min(), scan_x.max()])
+        yBorder = np.array([scan_y.min(), scan_y.max()])
+        self.addCurve(xBorder,
+                      yBorder,
+                      linestyle=' ',
+                      symbol='.',
+                      color='white',
+                      legend='__border',
+                      z=-1)
+
         self.__legend = self.setPlotData(scan_x, scan_y, data)
         self.setGraphTitle(result + '[' + FitH5QAxis.axis_names[q_axis] + ']')
 

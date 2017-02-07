@@ -284,9 +284,19 @@ class FitResultNode(FitProcessNode):
             x = fitH5.scan_x(self.entry)
             y = fitH5.scan_y(self.entry)
 
+            xBorder = np.array([x.min(), x.max()])
+            yBorder = np.array([y.min(), y.max()])
+
             data = fitH5.get_qx_result(self.entry,
                                        self.process,
                                        self.result)
+            plot.addCurve(xBorder,
+                          yBorder,
+                          linestyle=' ',
+                          symbol='.',
+                          color='white',
+                          legend='__border',
+                          z=-1)
             plot.setPlotData(x, y, data)
             pixmap = plot.toPixmap()
             self.setData(1, pixmap, Qt.Qt.DecorationRole)
@@ -295,6 +305,13 @@ class FitResultNode(FitProcessNode):
             data = fitH5.get_qy_result(self.entry,
                                        self.process,
                                        self.result)
+            plot.addCurve(xBorder,
+                          yBorder,
+                          linestyle=' ',
+                          symbol='.',
+                          color='white',
+                          legend='__border',
+                          z=-1)
             plot.setPlotData(x, y, data)
             pixmap = plot.toPixmap()
             self.setData(2, pixmap, Qt.Qt.DecorationRole)
@@ -303,7 +320,15 @@ class FitResultNode(FitProcessNode):
             data = fitH5.get_qz_result(self.entry,
                                        self.process,
                                        self.result)
+            plot.addCurve(xBorder,
+                          yBorder,
+                          linestyle=' ',
+                          symbol='.',
+                          color='white',
+                          legend='__border',
+                          z=-1)
             plot.setPlotData(x, y, data)
+
             pixmap = plot.toPixmap()
             self.setData(3, pixmap, Qt.Qt.DecorationRole)
             qApp.processEvents()

@@ -684,22 +684,36 @@ class XsocsPlot2D(PlotWindow):
     def __displayMousePosition(self, x, y):
         self.__pointWidget.mousePoint.setPoint(x, y)
 
-    def __onPlotSignal(self, event):
+    def __slotPlotSignal(self, event):
         if self.__pointSelectionEnabled or self.__showSelectedCoordinates:
             if event['event'] == 'mouseClicked':
                 x, y = event['x'], event['y']
                 self.selectPoint(x, y)
 
-                curves = self.getAllCurves(just_legend=True)
-                if not curves:
-                    xIdx = None
-                    yIdx = None
+                curve = None
+                indices = None
+                xIdx = None
+                yIdx = None
+
+                values = self.__values
+                if values:
+                    # TODO : support more than one 2d scatter plot?
+                    curve = list(values.keys())[0]
+                    indices = values[curve][2]
                 else:
-                    curveX, curveY = self.getCurve(curves[0])[0:2]
-                    xIdx = ((curveX - x) ** 2 + (curveY - y) ** 2).argmin()
-                    yIdx = xIdx
-                    x = curveX[xIdx]
-                    y = curveY[xIdx]
+                    curves = self.getAllCurves(just_legend=True)
+                    if curves:
+                        curve = curve[0]
+
+                if curve:
+                    curveX, curveY = self.getCurve(curve)[0:2]
+                    dataIdx = ((curveX - x) ** 2 + (curveY - y) ** 2).argmin()
+                    x = curveX[dataIdx]
+                    y = curveY[dataIdx]
+                    if indices is not None:
+                        xIdx = yIdx = indices[dataIdx]
+                    else:
+                        xIdx = yIdx = dataIdx
 
                 point = XsocsPlot2DPoint(x=x, y=y, xIdx=xIdx, yIdx=yIdx)
 
@@ -805,9 +819,9 @@ class XsocsPlot2D(PlotWindow):
 
         if currentState != newState:
             if newState:
-                self.sigPlotSignal.connect(self.__onPlotSignal)
+                self.sigPlotSignal.connect(self.__slotPlotSignal)
             else:
-                self.sigPlotSignal.disconnect(self.__onPlotSignal)
+                self.sigPlotSignal.disconnect(self.__slotPlotSignal)
             self.__sigPlotConnected = newState
 
     def __save2DTriggered(self):
@@ -1004,6 +1018,7 @@ class XsocsPlot2D(PlotWindow):
                     linestyle='',
                     resetzoom=True,
                     colormap=None,
+                    dataIndices=None,
                     **kwargs):
 
         colors = None
@@ -1012,11 +1027,18 @@ class XsocsPlot2D(PlotWindow):
         # if values is not None and self.__values:
         #     raise ValueError('XsocsPlot2D only supports one 2D scatter plot.')
 
+        if dataIndices is None:
+            dataIndices = np.arange(len(x))
+
+        if dataIndices.shape != x.shape:
+            raise ValueError('<dataIndices> must have the same shape as <x>')
+
         finite = np.isfinite(values)
 
         x = x[finite]
         y = y[finite]
         values = values[finite]
+        dataIndices = dataIndices[finite]
 
         if colormap is None:
             colormap = XsocsPlot2DColormap(colormap=cm.jet,
@@ -1040,7 +1062,7 @@ class XsocsPlot2D(PlotWindow):
                                  **kwargs)
 
         if values is not None:
-            self.__values[legend] = [values, colormap]
+            self.__values[legend] = [values, colormap, dataIndices]
 
         if len(self.__values) > 0:
             self.__colormapBn.setDisabled(False)

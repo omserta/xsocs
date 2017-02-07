@@ -40,8 +40,9 @@ import numpy as np
 
 # from silx.math import curve_fit
 from ..io import QSpaceH5
-from .fit_funcs import GaussianFitter, CentroidFitter
-from .sharedresults import FitTypes, GaussianResults, CentroidResults
+from .fit_funcs import GaussianFitter, CentroidFitter, SilxFitter
+from .sharedresults import (FitTypes, GaussianResults,
+                            CentroidResults, SilxResults)
 from .fitresults import FitStatus
 
 disp_times = False
@@ -70,6 +71,7 @@ class PeakFitter(Thread):
     def __init__(self,
                  qspace_f,
                  fit_type=FitTypes.GAUSSIAN,
+                 n_peaks=1,
                  indices=None,
                  n_proc=None,
                  roi_indices=None):
@@ -86,6 +88,7 @@ class PeakFitter(Thread):
 
         self.__qspace_f = qspace_f
         self.__fit_type = fit_type
+        self.__n_peaks = n_peaks
 
         if n_proc:
             self.__n_proc = n_proc
@@ -160,6 +163,7 @@ class PeakFitter(Thread):
         n_proc = self.__n_proc
         roi_indices = self.__roi_indices
         shared_progress = self.__shared_progress
+        n_peaks = self.__n_peaks
 
         t_total = time.time()
 
@@ -185,10 +189,17 @@ class PeakFitter(Thread):
 
         if fit_type == FitTypes.GAUSSIAN:
             fit_class = GaussianFitter
-            shared_results = GaussianResults(n_points=n_indices)
-        if fit_type == FitTypes.CENTROID:
+            n_peaks = n_peaks if n_peaks >= 1 else 1
+            shared_results = GaussianResults(n_points=n_indices,
+                                             n_peaks=n_peaks)
+        elif fit_type == FitTypes.CENTROID:
             fit_class = CentroidFitter
             shared_results = CentroidResults(n_points=n_indices)
+        elif fit_type == FitTypes.SILX:
+            fit_class = SilxFitter
+            n_peaks = n_peaks if n_peaks >= 1 else 1
+            shared_results = SilxResults(n_points=n_indices,
+                                         n_peaks=n_peaks)
 
         # with h5py.File(qspace_f, 'r') as qspace_h5:
         #
@@ -266,8 +277,8 @@ class PeakFitter(Thread):
             res_list.append(res)
 
         # sending the image indices
-        for i_cube in indices:
-            idx_queue.put(i_cube)
+        for i_fit, i_cube in enumerate(indices):
+            idx_queue.put([i_fit, i_cube])
 
         # sending the None value to let the threads know that they should return
         for th_idx in range(n_proc):
@@ -419,7 +430,7 @@ def _fit_process(th_idx, roiIndices=None):
             y_sum = cube_sum_z.sum(axis=0)
             x_sum = cube_sum_z.sum(axis=1)
 
-            fitter.fit(i_cube, x_sum, y_sum, z_sum)
+            fitter.fit(i_fit, i_cube, x_sum, y_sum, z_sum)
 
             t_fit += time.time() - t0
 

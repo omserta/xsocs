@@ -112,7 +112,8 @@ class DropPlotWidget(XsocsPlot2D):
             scan_y = h5f.scan_y(entry)[errorPts]
             data = data[errorPts]
 
-        self.__legend = self.setPlotData(scan_x, scan_y, data)
+        self.__legend = self.setPlotData(scan_x, scan_y,
+                                         data, dataIndices=errorPts)
         self.setGraphTitle('Errors[qx]' + FitH5QAxis.axis_names[q_axis])
 
 

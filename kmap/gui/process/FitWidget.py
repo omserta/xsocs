@@ -160,6 +160,8 @@ class FitWidget(Qt.QWidget):
 
     FitTypes = OrderedDict([('Gaussian', FitTypes.GAUSSIAN),
                             ('Centroid', FitTypes.CENTROID)])
+        # ,
+        #                     ('Silx', FitTypes.SILX)])
 
     __sigFitDone = Qt.Signal()
 
@@ -175,6 +177,8 @@ class FitWidget(Qt.QWidget):
         self.__progTimer = None
 
         self.__outputFile = None
+
+        self.__nPeaks = 1
 
         layout = Qt.QGridLayout(self)
 
@@ -194,7 +198,18 @@ class FitWidget(Qt.QWidget):
         fitTypeCb.setCurrentIndex(0)
         fitLayout.addWidget(Qt.QLabel('Fit :'))
         fitLayout.addWidget(fitTypeCb)
-        layout.addLayout(fitLayout, 2, 0, alignment=Qt.Qt.AlignLeft)
+        fitTypeCb.currentIndexChanged[str].connect(
+            self.__slotCurrentTextChanged)
+
+        self.__nPeaksSpinBox = spinbox = Qt.QSpinBox()
+        # layout.addLayout(fitLayout, 2, 0, alignment=Qt.Qt.AlignLeft)
+        # spinbox.setMinimum(1)
+        # spinbox.setMaximum(20)
+        # spinbox.setValue(self.__nPeaks)
+        # spinbox.setToolTip('Max. number of expected peaks.')
+        # spinbox.valueChanged.connect(self.__slotValueChanged)
+        # fitLayout.addWidget(spinbox)
+        # fitLayout.addWidget(Qt.QLabel('peak(s)'))
 
         runLayout = Qt.QHBoxLayout()
         self.__runButton = runButton = Qt.QPushButton('Run')
@@ -261,6 +276,19 @@ class FitWidget(Qt.QWidget):
             self.__fileEdit.clear()
         self.__runButton.setEnabled(outputFile is not None)
 
+    def __slotValueChanged(self, value):
+        self.__nPeaks = value
+
+    def __slotCurrentTextChanged(self, text):
+        blocked = self.__nPeaksSpinBox.blockSignals(True)
+        if text in ('Gaussian', 'Silx'):
+            self.__nPeaksSpinBox.setEnabled(True)
+            self.__nPeaksSpinBox.setValue(self.__nPeaks)
+        else:
+            self.__nPeaksSpinBox.setEnabled(False)
+            self.__nPeaksSpinBox.setValue(1)
+        self.__nPeaksSpinBox.blockSignals(blocked)
+
     def __slotRunClicked(self):
 
         # TODO : put some safeguards
@@ -279,7 +307,8 @@ class FitWidget(Qt.QWidget):
 
         self.__fitter = fitter = PeakFitter(self.__qspaceH5.filename,
                                             fit_type=fitType,
-                                            roi_indices=roiIndices)
+                                            roi_indices=roiIndices,
+                                            n_peaks=self.__nPeaks)
         self.__statusLabel.setText('Running...')
 
         self.__progTimer = timer = Qt.QTimer()

@@ -41,7 +41,7 @@ class FitStatus(object):
     Enum for the fit status
     Starting at 1 for compatibility reasons.
     """
-    OK, FAILED = range(1, 3)
+    UNKNOWN, OK, FAILED = range(0, 3)
 
 
 class FitResult(object):
@@ -180,7 +180,6 @@ class FitResult(object):
         fit along the qx axis.
         data must be an array with the same number of elements
         :param name:
-        :param axis:
         :param data:
         :return:
         """
@@ -192,7 +191,6 @@ class FitResult(object):
         fit along the qy axis.
         data must be an array with the same number of elements
         :param name:
-        :param axis:
         :param data:
         :return:
         """
@@ -204,7 +202,6 @@ class FitResult(object):
         fit along the qz axis.
         data must be an array with the same number of elements
         :param name:
-        :param axis:
         :param data:
         :return:
         """

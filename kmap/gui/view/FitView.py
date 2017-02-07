@@ -43,6 +43,7 @@ from kmap.gui.model.TreeView import TreeView
 from .fitview.FitModel import FitModel, FitH5Node
 from .fitview.DropPlotWidget import DropPlotWidget
 
+from.fitview.ResultPlot import plotCentroid, plotGaussian, plotSilx
 
 class FitView(Qt.QMainWindow):
     sigPointSelected = Qt.Signal(object)
@@ -71,9 +72,7 @@ class FitView(Qt.QMainWindow):
 
         with fitH5:
             # only one entry per file supposed right now
-            # only one process per entry supposed right now
             self.__entry = fitH5.entries()[0]
-            self.__process = fitH5.processes(self.__entry)[0]
 
         centralWid = Qt.QWidget()
         layout = Qt.QGridLayout(centralWid)
@@ -237,9 +236,9 @@ class FitView(Qt.QMainWindow):
                 if processes:
                     process = processes[0]
 
-        if process == 'gaussian':
-            _initLeastSq(self.__plots, fitH5.filename, entry, process)
-        elif process == 'centroid':
+        if entry in ('Gaussian', 'SilxFit'):
+            _initGaussian(self.__plots, fitH5.filename, entry, process)
+        elif process == 'Centroid':
             _initCentroid(self.__plots, fitH5.filename, entry, process)
 
     def __slotPointSelected(self, point):
@@ -252,6 +251,7 @@ class FitView(Qt.QMainWindow):
         for plot in self.__plots:
             if plot != sender:
                 plot.selectPoint(point.x, point.y)
+
         self.__plotFitResults(point.xIdx)
         self.sigPointSelected.emit(point)
 
@@ -287,131 +287,28 @@ class FitView(Qt.QMainWindow):
                 plot.clearMarkers()
 
             # TODO : refactor
-            process = self.__process
-            if process == 'gaussian':
-                _plotGaussian(self.__fitPlots, xIdx,
-                              fitH5,
-                              entry, process,
-                              xAcqQX, xAcqQY, xAcqQZ,
-                              yAcqQX, yAcqQY, yAcqQZ)
+            if entry == 'Gaussian':
+                plotGaussian(self.__fitPlots, xIdx,
+                             fitH5, entry,
+                             xAcqQX, xAcqQY, xAcqQZ,
+                             yAcqQX, yAcqQY, yAcqQZ)
 
-            elif process == 'centroid':
-                _plotCentroid(self.__fitPlots, xIdx,
-                              fitH5,
-                              entry, process,
-                              xAcqQX, xAcqQY, xAcqQZ,
-                              yAcqQX, yAcqQY, yAcqQZ)
+            elif entry == 'Centroid':
+                plotCentroid(self.__fitPlots, xIdx,
+                             fitH5, entry,
+                             xAcqQX, xAcqQY, xAcqQZ,
+                             yAcqQX, yAcqQY, yAcqQZ)
+            elif entry == 'SilxFit':
+                plotSilx(self.__fitPlots, xIdx,
+                             fitH5, entry,
+                             xAcqQX, xAcqQY, xAcqQZ,
+                             yAcqQX, yAcqQY, yAcqQZ)
             else:
                 # TODO : popup
-                raise ValueError('Unknown process {0}.'.format(process))
+                raise ValueError('Unknown entry {0}.'.format(entry))
 
 
-# TODO : allow users to register plot functions associated with the kind
-# of process results that are being displayed
-def _plotGaussian(plots, index, fitH5,
-                  entry, process,
-                  xAcqQX, xAcqQY, xAcqQZ,
-                  yAcqQX, yAcqQY, yAcqQZ):
-    """
-    Plots the "Gaussian" fit results
-    :param plots: plot widgets
-    :param index: index of the selected point (in the results array)
-    :param fitH5: instance of FitH5. This instance may be already opened by
-        the caller.
-    :param entry: name of the entry to plot
-    :param process: name of the process
-    :param xData: x axis values of the fitted data
-    :param acqX: x axis values of the acquired data
-    :param acqY: y axis values of the acquired data
-    :return:
-    """
-
-    # TODO : put all this in a toolbox, so it can be shared between
-    # the plot and the fit functions
-    _const_inv_2_pi_ = np.sqrt(2 * np.pi)
-    _gauss_fn = lambda p, pos: (
-        p[0] * (1. / (_const_inv_2_pi_ * p[2])) *
-        np.exp(-0.5 * ((pos - p[1]) / p[2]) ** 2))
-
-    with fitH5:
-        xFitQX = fitH5.get_qx(entry)
-        xFitQY = fitH5.get_qy(entry)
-        xFitQZ = fitH5.get_qz(entry)
-
-        heights = fitH5.get_result(entry, process, 'intensity')
-        positions = fitH5.get_result(entry, process, 'position')
-        widths = fitH5.get_result(entry, process, 'width')
-
-        h_x = heights.qx[index]
-        p_x = positions.qx[index]
-        w_x = widths.qx[index]
-
-        h_y = heights.qy[index]
-        p_y = positions.qy[index]
-        w_y = widths.qy[index]
-
-        h_z = heights.qz[index]
-        p_z = positions.qz[index]
-        w_z = widths.qz[index]
-
-    params = [h_x, p_x, w_x]
-    fitted = _gauss_fn(params, xFitQX)
-    plots[0].addCurve(xFitQX, fitted, legend='QX LSQ gauss. fit')
-    plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
-    plots[0].setGraphTitle('QX / LSQ')
-
-    params = [h_y, p_y, w_y]
-    fitted = _gauss_fn(params, xFitQY)
-    plots[1].addCurve(xFitQY, fitted, legend='QY LSQ gauss. fit')
-    plots[1].addCurve(xAcqQY, yAcqQY, legend='measured')
-    plots[1].setGraphTitle('QY / LSQ')
-
-    params = [h_z, p_z, w_z]
-    fitted = _gauss_fn(params, xFitQZ)
-    plots[2].addCurve(xFitQZ, fitted, legend='QZ LSQ gauss. fit')
-    plots[2].addCurve(xAcqQZ, yAcqQZ, legend='measured')
-    plots[2].setGraphTitle('QZ / LSQ')
-
-
-def _plotCentroid(plots, index, fitH5,
-                  entry, process,
-                  xAcqQX, xAcqQY, xAcqQZ,
-                  yAcqQX, yAcqQY, yAcqQZ):
-    """
-    Plot the results from a "centroid" fit.
-    :param plots: the plot widgets
-    :param index: index of the sample point
-    :param fitH5: fitH5 file
-    :param entry: name of the entry in the fitH5
-    :param process: name of the process in the fitH5
-    :param xAcqQX: measured Qx data, x axis
-    :param xAcqQY: measured Qy data, x axis
-    :param xAcqQZ: measured Qz data, x axis
-    :param yAcqQX: measured Qx data, y axis
-    :param yAcqQY:measured Qy data, y axis
-    :param yAcqQZ:measured Qz data, y axis
-    :return:
-    """
-
-    # TODO : put all this in a toolbox, so it can be shared between
-    # the plot and the fit functions
-
-    positions = fitH5.get_result(entry, process, 'COM')
-
-    plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
-    plots[0].addXMarker(positions.qx[index], legend='center of mass')
-    plots[0].setGraphTitle('QX center of mass')
-
-    plots[1].addCurve(xAcqQY, yAcqQY, legend='measured')
-    plots[1].addXMarker(positions.qy[index], legend='center of mass')
-    plots[1].setGraphTitle('QY center of mass')
-
-    plots[2].addCurve(xAcqQZ, yAcqQZ, legend='measured')
-    plots[2].addXMarker(positions.qz[index], legend='center of mass')
-    plots[2].setGraphTitle('QZ center of mass')
-
-
-def _initLeastSq(plots, fitH5Name, entry, process):
+def _initGaussian(plots, fitH5Name, entry, process):
     """
     Sets up the plots when the interface is shown for the first time.
     :param plots: the plot widgets

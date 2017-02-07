@@ -50,7 +50,7 @@ except ImportError:
     from distutils.command.build_ext import build_ext
     from distutils.command.sdist import sdist
 
-PROJECT = "kmap"
+PROJECT = "xsocs"
 cmdclass = {}
 
 
@@ -430,7 +430,7 @@ setup_requires = ["numpy"]
 setup_kwargs.update(
                     name=PROJECT,
                     version=get_version(),
-                    url="http://gitlab.esrf.fr/kmap/kmap",
+                    url="http://gitlab.esrf.fr/xsocs/xsocs",
                     author="data analysis unit",
                     author_email="silx@esrf.fr",
                     classifiers=classifiers,
@@ -439,7 +439,7 @@ setup_kwargs.update(
                     install_requires=install_requires,
                     setup_requires=setup_requires,
                     cmdclass=cmdclass,
-                    package_data={'kmap.resources': [
+                    package_data={'xsocs.resources': [
                         # Add here all resources files
                         'gui/icons/*.png',
                         ]},

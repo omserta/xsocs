@@ -102,12 +102,12 @@ def upgrade_project(name, repo):
 
 
 if args.upgrade:
-    upgrade_project("kmap", "git://gitlab.esrf.fr/kmap/kmap.git")
+    upgrade_project("xsocs", "git://gitlab.esrf.fr/xsocs/xsocs.git")
     upgrade_project("plot3d", "git://gitlab.esrf.fr/tvincent/plot3d.git")
     sys.exit()
 
 
-# Add local install of xrayutilities, kmap and plot3d
+# Add local install of xrayutilities, xsocs and plot3d
 # Build command for xrayutilities:
 # PYTHONPATH=/scisoft/xsocs/lib/python2.7/site-packages ; python setup.py --without-openmp install --prefix=/scisoft/xsocs/
 
@@ -116,6 +116,6 @@ script_dir = os.path.dirname(__file__)
 site.addsitedir(os.path.join(script_dir, 'lib', 'python2.7', 'site-packages'))
 
 # Start application
-from kmap.gui import xsocs_main
+from xsocs.gui import xsocs_main
 
 xsocs_main(projectH5File=args.project)

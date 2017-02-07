@@ -188,8 +188,6 @@ class CutPlanePlotWindow(PlotWidget):
 
         self.__resetZoomAction = PlotActions.ResetZoomAction(parent=self, plot=self)
         toolbar.addAction(self.__resetZoomAction)
-        self.__colormapAction = PlotActions.ColormapAction(parent=self, plot=self)
-        toolbar.addAction(self.__colormapAction)
         toolbar.addWidget(PlotToolButtons.AspectToolButton(
             parent=self, plot=self))
         toolbar.addWidget(PlotToolButtons.YAxisOriginToolButton(
@@ -282,6 +280,7 @@ class QSpaceView(Qt.QMainWindow):
         # Store the cut plane signals connection state
         self.__connectedToCutPlane = True
         view3d.getCutPlanes()[0].sigPlaneChanged.connect(self.__cutPlaneChanged)
+        view3d.getCutPlanes()[0].sigColormapChanged.connect(self.__cutPlaneChanged)
         view3d.getCutPlanes()[0].sigDataChanged.connect(self.__cutPlaneChanged)
 
         self.__fitWidget = fitWidget = FitWidget(self.__qspaceH5.filename)
@@ -530,12 +529,14 @@ class QSpaceView(Qt.QMainWindow):
             if not self.__connectedToCutPlane:  # Prevent multiple connect
                 self.__connectedToCutPlane = True
                 cutPlane.sigPlaneChanged.connect(self.__cutPlaneChanged)
+                cutPlane.sigColormapChanged.connect(self.__cutPlaneChanged)
                 cutPlane.sigDataChanged.connect(self.__cutPlaneChanged)
                 self.__cutPlaneChanged()  # To sync
         else:
             if self.__connectedToCutPlane:  # Prevent multiple disconnect
                 self.__connectedToCutPlane = False
                 cutPlane.sigPlaneChanged.disconnect(self.__cutPlaneChanged)
+                cutPlane.sigColormapChanged.connect(self.__cutPlaneChanged)
                 cutPlane.sigDataChanged.disconnect(self.__cutPlaneChanged)
 
     def __cutPlaneChanged(self):
@@ -549,9 +550,21 @@ class QSpaceView(Qt.QMainWindow):
                 title = (planeImage.getNormalLabel() +
                          ' = %f' % planeImage.getPosition())
                 self.__planePlotWindow.setGraphTitle(title)
+
+                colormap = plane.getColormap()
+                vmin, vmax = plane.getColormapEffectiveRange()
+                plotColormap = {
+                    'name': colormap.getName(),
+                    'normalization': colormap.getNorm(),
+                    'autoscale': colormap.isAutoscale(),
+                    'vmin': vmin,
+                    'vmax': vmax
+                }
+
                 self.__planePlotWindow.addImage(
                     planeImage.getData(copy=False),
                     legend='cutting plane',
+                    colormap=plotColormap,
                     origin=planeImage.getTranslation(),
                     scale=planeImage.getScale(),
                     resetzoom=True)

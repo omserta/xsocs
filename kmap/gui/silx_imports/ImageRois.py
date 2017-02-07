@@ -130,10 +130,12 @@ class RoiItemBase(qt.QObject):
 
     def _remove(self, handles=True, shape=True):
         if handles:
-            {self._plot.removeMarker(item) for item in self._handles}
+            for item in self._handles:
+                self._plot.removeMarker(item)
         if shape:
             self._plot.removeItem(self._name)
-            {self._plot.removeItem(item) for item in self._items}
+            for item in self._items:
+                self._plot.removeItem(item)
 
     def _interactiveModeChanged(self, source):
         if source is not self or source is not self.parent():
@@ -545,7 +547,8 @@ class ImageRoiManager(qt.QObject):
 
     def _editRois(self):
         # TODO : should we call stop first?
-        {item.edit(True) for item in self._rois.values()}
+        for item in self._rois.values():
+            item.edit(True)
 
     def _startRoi(self):
         """
@@ -556,7 +559,8 @@ class ImageRoiManager(qt.QObject):
 
         self._stopRoi()
 
-        {item.edit(False) for item in self._rois.values()}
+        for item in self._rois.values():
+            item.edit(False)
         self.showRois(True)
 
         klass = self._klassInfos[self._currentKlass]
@@ -677,11 +681,13 @@ class ImageRoiManager(qt.QObject):
 
         toolBar = qt.QToolBar('Roi')
         # toolBar.addWidget(qt.QLabel('Roi'))
-        {toolBar.addAction(action) for action in keepRoiActions}
+        for action in keepRoiActions:
+            toolBar.addAction(action)
 
         toolBar.addSeparator()
 
-        {toolBar.addAction(action) for action in keepOptionActions}
+        for action in keepOptionActions:
+            toolBar.addAction(action)
 
         return toolBar
 
@@ -790,8 +796,8 @@ class RectRoiItem(RoiItemBase):
         # function to get data in the _xData, _yData, ... arrays.
         # this only works because we re not adding or removing vertices
         # when editing
-        {self._registerHandle(corner, (xcoords[i], ycoords[i]))
-         for i, corner in enumerate(corners)}
+        for i, corner in enumerate(corners):
+            self._registerHandle(corner, (xcoords[i], ycoords[i]))
         self._registerHandle(center, self.center)
 
     def _handleMoved(self, name, x, y, index):
@@ -800,9 +806,8 @@ class RectRoiItem(RoiItemBase):
             c_x, c_y = self.center
             self._xData += x - c_x
             self._yData += y - c_y
-            {self._setHandleData(corner,
-                                 (self._xData[i], self._yData[i]))
-             for i, corner in enumerate(self._corners)}
+            for i, corner in enumerate(self._corners):
+                self._setHandleData(corner, (self._xData[i], self._yData[i]))
         else:
             # see the comment about the index value
             # (in the finished method)
@@ -829,9 +834,9 @@ class RectRoiItem(RoiItemBase):
             self._yData[index] = y
 
             self._setHandleData(self._center, self.center)
-            {self._setHandleData(self._corners[i],
-                                 (self._xData[i], self._yData[i]))
-             for i in (v_op, h_op)}
+            for i in (v_op, h_op):
+                self._setHandleData(self._corners[i],
+                                    (self._xData[i], self._yData[i]))
 
         self._updateSides()
 

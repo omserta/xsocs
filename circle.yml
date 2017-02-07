@@ -33,20 +33,20 @@ dependencies:
         - cp dist/*.tar.gz $CIRCLE_ARTIFACTS
 
         # Install generated wheel and its dependencies
-        - pip install --upgrade --pre --find-links dist/ kmap
+        - pip install --upgrade --pre --find-links dist/ xsocs
 
     post:
         # Clean-up
         - python setup.py clean --all
 
-        # Uninstall kmap before caching
+        # Uninstall xsocs before caching
         # Hack to avoid caching installed package
-        - pip uninstall --yes kmap
+        - pip uninstall --yes xsocs
 
 test:
     pre:
         # Install generated wheel
-        - pip install --pre --find-links dist/ kmap
+        - pip install --pre --find-links dist/ xsocs
 
     override:
         # Print Python info

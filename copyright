@@ -1,10 +1,10 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: kmap
-Source: https://github.com/kmap-project
+Upstream-Name: xsocs
+Source: https://github.com/xsocs-project
 
 Files: *
 Copyright: 2015-2016 European Synchrotron Radiation Facility
-           Data analysis unit (kmap@esrf.fr) 
+           Data analysis unit (xsocs@esrf.fr)
 License: MIT
 
 License: MIT

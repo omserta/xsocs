@@ -1,5 +1,5 @@
 
-kmap
+xsocs
 ====
 
 TBD
@@ -9,8 +9,8 @@ Installation
 
 The latest development version can be obtained from the git repository::
 
-    git clone git://gitlab.esrf.fr:kmap/kmap.git
-    cd kmap
+    git clone git://gitlab.esrf.fr:xsocs/xsocs.git
+    cd xsocs
 
 And then install::
     pip install . [--user]
@@ -50,7 +50,7 @@ Testing
 License
 -------
 
-The source code of kmap is licensed under the MIT and LGPL licenses.
+The source code of xsocs is licensed under the MIT and LGPL licenses.
 See the `copyright file TBD`_ for details.
 
 .. |Travis Status| image:: TBD

@@ -38,8 +38,8 @@ from matplotlib import cm
 from silx.gui import qt as Qt
 from silx.gui.plot import PlotActions, PlotToolButtons, PlotWidget
 from silx.gui.icons import getQIcon
-from plot3d.ScalarFieldView import ScalarFieldView
-from plot3d.SFViewParamTree import TreeView as SFViewParamTree
+from silx.gui.plot3d.ScalarFieldView import ScalarFieldView
+from silx.gui.plot3d.SFViewParamTree import TreeView as SFViewParamTree
 
 from ..model.TreeView import TreeView
 from ..widgets.XsocsPlot2D import XsocsPlot2D

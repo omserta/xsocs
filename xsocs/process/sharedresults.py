@@ -252,21 +252,21 @@ class SilxResults(FitSharedResults):
 
             i_start = i_peak * 3
 
-            results.add_qx_result(peak_name, 'intensity',
+            results.add_qx_result(peak_name, 'area',
                                   qx_results[:, i_start].ravel())
             results.add_qx_result(peak_name, 'position',
                                   qx_results[:, i_start + 1].ravel())
             results.add_qx_result(peak_name, 'fwhm',
                                   qx_results[:, i_start + 2].ravel())
 
-            results.add_qy_result(peak_name, 'intensity',
+            results.add_qy_result(peak_name, 'area',
                                   qy_results[:, i_start].ravel())
             results.add_qy_result(peak_name, 'position',
                                   qy_results[:, i_start + 1].ravel())
             results.add_qy_result(peak_name, 'fwhm',
                                   qy_results[:, i_start + 2].ravel())
 
-            results.add_qz_result(peak_name, 'intensity',
+            results.add_qz_result(peak_name, 'area',
                                   qz_results[:, i_start].ravel())
             results.add_qz_result(peak_name, 'position',
                                   qz_results[:, i_start + 1].ravel())

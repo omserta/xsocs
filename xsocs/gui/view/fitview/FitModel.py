@@ -40,7 +40,7 @@ from ...project.Hdf5Nodes import H5File
 from ...project.Hdf5Nodes import H5Base, H5NodeClassDef
 
 from ....io.FitH5 import FitH5, FitH5QAxis
-from ....process.peak_fit import FitStatus
+from ....process.fitresults import FitStatus
 
 from ...widgets.XsocsPlot2D import XsocsPlot2D
 

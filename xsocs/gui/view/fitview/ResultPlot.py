@@ -125,13 +125,13 @@ def plotGaussian(plots, index, fitH5,
                     sumZ += fitted
 
         if sumX is not None:
-            plots[0].addCurve(xAcqQX, sumX, legend='Sum')
+            plots[0].addCurve(xFitQX, sumX, legend='Sum')
 
         if sumY is not None:
-            plots[1].addCurve(xAcqQY, sumY, legend='Sum')
+            plots[1].addCurve(xFitQY, sumY, legend='Sum')
 
         if sumZ is not None:
-            plots[2].addCurve(xAcqQZ, sumZ, legend='Sum')
+            plots[2].addCurve(xFitQZ, sumZ, legend='Sum')
 
 
 # TODO : allow users to register plot functions associated with the kind

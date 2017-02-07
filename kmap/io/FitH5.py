@@ -385,9 +385,9 @@ class FitH5Writer(FitH5):
         with self._get_file() as h5_file:
 
             processes = self.processes(entry)
-            if len(processes) > 0:
-                raise ValueError('FitH5 doesnt support multiple processes '
-                                 'yet.')
+            if process in processes:
+                raise ValueError('Process <{0}> already exists.'
+                                 ''.format(process))
 
             if entry not in h5_file:
                 self.create_entry(entry)

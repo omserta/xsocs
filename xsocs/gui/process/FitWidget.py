@@ -159,8 +159,9 @@ class FitWidget(Qt.QWidget):
     """
 
     FitTypes = OrderedDict([('Gaussian', FitTypes.GAUSSIAN),
-                            ('Centroid', FitTypes.CENTROID),
-                            ('Silx', FitTypes.SILX)])
+                            ('Centroid', FitTypes.CENTROID)])\
+        # ,
+        #                     ('Silx', FitTypes.SILX)])
 
     __sigFitDone = Qt.Signal()
 
@@ -203,13 +204,13 @@ class FitWidget(Qt.QWidget):
         layout.addLayout(fitLayout, 2, 0, alignment=Qt.Qt.AlignLeft)
 
         self.__nPeaksSpinBox = spinbox = Qt.QSpinBox()
-        spinbox.setMinimum(1)
-        spinbox.setMaximum(20)
-        spinbox.setValue(self.__nPeaks)
-        spinbox.setToolTip('Max. number of expected peaks.')
-        spinbox.valueChanged.connect(self.__slotValueChanged)
-        fitLayout.addWidget(spinbox)
-        fitLayout.addWidget(Qt.QLabel('peak(s)'))
+        # spinbox.setMinimum(1)
+        # spinbox.setMaximum(20)
+        # spinbox.setValue(self.__nPeaks)
+        # spinbox.setToolTip('Max. number of expected peaks.')
+        # spinbox.valueChanged.connect(self.__slotValueChanged)
+        # fitLayout.addWidget(spinbox)
+        # fitLayout.addWidget(Qt.QLabel('peak(s)'))
 
         runLayout = Qt.QHBoxLayout()
         self.__runButton = runButton = Qt.QPushButton('Run')

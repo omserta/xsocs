@@ -34,12 +34,13 @@ import time
 import shutil
 from types import MethodType
 from functools import partial
-from collections import namedtuple
 
 from ...util.id01_spec import Id01DataMerger
 from ..widgets.AcqParamsWidget import AcqParamsWidget
 
+from ..widgets.Input import StyledLineEdit
 from ..widgets.Containers import GroupBox
+from ..widgets.FileChooser import FileChooser
 from ..widgets.Buttons import FixedSizePushButon
 
 from silx.gui import qt as Qt
@@ -51,6 +52,13 @@ _HELP_WIDGET_STYLE = """
                 background-color: qradialgradient(spread:reflect, cx:0.5, cy:0.5, radius:1, fx:0.5, fy:0.5, stop:0 rgba(0, 0, 255, 255), stop:1 rgba(255, 255, 255, 255));
                 color: rgb(255, 255, 255);
             }"""  # noqa
+
+
+def _vLine(*args, **kwargs):
+    vLine = Qt.QFrame(*args, **kwargs)
+    vLine.setFrameShape(Qt.QFrame.VLine)
+    vLine.setFrameShadow(Qt.QFrame.Sunken)
+    return vLine
 
 
 def _create_tmp_dir():
@@ -431,33 +439,65 @@ class _MergeProcessDialog(Qt.QDialog):
 
 class MergeWidget(Qt.QDialog):
 
+    _versions = {'padding': [4, 5],
+                 'offset': [-1, 0]}
+    _defaultVersion = 1
+
     __sigParseDone = Qt.Signal()
 
     def __init__(self,
                  spec_file=None,
                  img_dir=None,
-                 spec_version=None,
+                 spec_version=1,
                  output_dir=None,
                  tmp_dir=None,
                  **kwargs):
-        super(Qt.QWidget, self).__init__(**kwargs)
+        super(MergeWidget, self).__init__(**kwargs)
+
         Qt.QGridLayout(self)
 
         # ################
         # input QGroupBox
         # ################
 
-        input_gbx = GroupBox("Input")
-        layout = Qt.QGridLayout(input_gbx)
-        self.layout().addWidget(input_gbx,
+        if spec_file is not None:
+            specFile = spec_file
+        else:
+            specFile = ''
+
+        if img_dir is not None:
+            imgDir = img_dir
+        else:
+            imgDir = ''
+
+        if spec_version is not None:
+            specVersion = spec_version
+        else:
+            specVersion = self._defaultVersion
+
+        if output_dir is not None:
+            outputDir = output_dir
+        else:
+            outputDir = ''
+
+        # parameters
+        self.__input = {'specfile': specFile,
+                        'imgdir': imgDir,
+                        'version': specVersion,
+                        'padding': None,
+                        'offset': None}
+
+        self.__output = {'outdir': outputDir,
+                         'prefix': ''}
+
+        inputGbx = GroupBox("Input")
+        layout = Qt.QGridLayout(inputGbx)
+        self.layout().addWidget(inputGbx,
                                 0, 0,
-                                Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
+                                Qt.Qt.AlignTop)
 
         first_col = 0
-        label_col = first_col
-        line_edit_col = 1
         file_bn_col = 4
-        vers_help_col = 2
         last_col = file_bn_col + 1
 
         spec_row = 0
@@ -466,58 +506,60 @@ class MergeWidget(Qt.QDialog):
         apply_bn_row = 3
 
         # spec file input
-        lab = Qt.QLabel('Spec file :')
-        spec_file_edit = Qt.QLineEdit()
-        fm = spec_file_edit.fontMetrics()
-        spec_file_edit.setMinimumWidth(fm.width(' ' * 100))
-        spec_file_bn = FixedSizePushButon('...')
-        layout.addWidget(lab,
-                         spec_row, label_col,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(spec_file_edit,
-                         spec_row, line_edit_col,
-                         1, file_bn_col - line_edit_col,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(spec_file_bn,
-                         spec_row, file_bn_col,
-                         Qt.Qt.AlignLeft)
+        specFileChooser = FileChooser(fileMode=Qt.QFileDialog.ExistingFile,
+                                      noLabel=True)
+        specFileChooser.lineEdit.setText(specFile)
+        specFileChooser.sigSelectionChanged.connect(self.__slotSpecFileChanged)
+        layout.addWidget(Qt.QLabel('Spec file :'), spec_row, 0)
+        layout.addWidget(specFileChooser, spec_row, 1)
 
         # image folder input
-        lab = Qt.QLabel('Img folder :')
-        img_dir_edit = Qt.QLineEdit()
-        fm = img_dir_edit.fontMetrics()
-        img_dir_edit.setMinimumWidth(fm.width(' ' * 100))
-        img_dir_bn = FixedSizePushButon('...')
-        layout.addWidget(lab,
-                         img_path_row, label_col,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(img_dir_edit,
-                         img_path_row, line_edit_col,
-                         1, file_bn_col - line_edit_col,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(img_dir_bn,
-                         img_path_row, file_bn_col,
-                         Qt.Qt.AlignLeft)
+        imgDirChooser = FileChooser(fileMode=Qt.QFileDialog.Directory,
+                                    noLabel=True)
+        imgDirChooser.lineEdit.setText(imgDir)
+        imgDirChooser.sigSelectionChanged.connect(self.__slotImgDirChanged)
+        layout.addWidget(Qt.QLabel('Img dir. :'), img_path_row, 0)
+        layout.addWidget(imgDirChooser, img_path_row, 1)
 
         # version selection
+        optionLayout = Qt.QHBoxLayout()
+        optionLayout.addStretch(1)
+
         lab = Qt.QLabel('Version :')
-        version_cbx = Qt.QComboBox()
-        version_cbx.addItem('0')
-        version_cbx.addItem('1')
-        version_cbx.setCurrentIndex(1)
-        layout.addWidget(lab,
-                         version_row, label_col,
+        self.__versionCBx = versionCBx = Qt.QComboBox()
+
+        for version in range(len(self._versions)):
+            versionCBx.addItem(str(version))
+        versionCBx.addItem('')
+        optionLayout.addWidget(lab, Qt.Qt.AlignLeft)
+        optionLayout.addWidget(versionCBx, Qt.Qt.AlignLeft)
+
+        # filename padding for the nextNr counter
+        self.__padSpinBox = padSpinBox = Qt.QSpinBox()
+        optionLayout.addWidget(_vLine())
+        optionLayout.addWidget(Qt.QLabel('nextNr padding:'))
+        optionLayout.addWidget(padSpinBox, Qt.Qt.AlignLeft)
+        padSpinBox.valueChanged[int].connect(self.__slotPaddingValueChanged)
+
+        # filename offset for the nextNr counter
+        self.__nextNrSpinBox = nextNrSpinBox = Qt.QSpinBox()
+        nextNrSpinBox.setMinimum(-100)
+        nextNrSpinBox.setMaximum(100)
+        optionLayout.addWidget(_vLine())
+        optionLayout.addWidget(Qt.QLabel('nextNr offset:'))
+        optionLayout.addWidget(nextNrSpinBox, Qt.Qt.AlignLeft)
+        nextNrSpinBox.valueChanged[int].connect(self.__slotNextNrValueChanged)
+
+        optionLayout.addStretch(100)
+        layout.addLayout(optionLayout, version_row, 0,
+                         1, layout.columnCount(),
                          Qt.Qt.AlignLeft)
-        layout.addWidget(version_cbx,
-                         version_row, line_edit_col,
-                         Qt.Qt.AlignLeft)
-        layout.addItem(Qt.QSpacerItem(0, 0,
-                                      Qt.QSizePolicy.Expanding,
-                                      Qt.QSizePolicy.Expanding))
 
         # last row : apply button
-        parse_bn = FixedSizePushButon('Parse file')
-        layout.addWidget(parse_bn,
+        self.__parseBn = parseBn = FixedSizePushButon('Parse file')
+        parseBn.clicked.connect(self.__slotParseBnClicked,
+                                Qt.Qt.QueuedConnection)
+        layout.addWidget(parseBn,
                          apply_bn_row, 0,
                          1, last_col - first_col,
                          Qt.Qt.AlignHCenter)
@@ -525,244 +567,188 @@ class MergeWidget(Qt.QDialog):
         # ################
         # scans + edf QGroupBox
         # ################
-        scans_gbx = GroupBox("Spec + EDF")
-        grp_layout = Qt.QHBoxLayout(scans_gbx)
-        self.layout().addWidget(scans_gbx,
+        self.__scansGbx = scansGbx = GroupBox("Spec + EDF")
+        grpLayout = Qt.QHBoxLayout(scansGbx)
+        self.layout().addWidget(scansGbx,
                                 1, 0,
                                 Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
 
         # ===========
         # valid scans
         # ===========
-        scan_layout = Qt.QGridLayout()
-        grp_layout.addLayout(scan_layout)
+        scanLayout = Qt.QGridLayout()
+        grpLayout.addLayout(scanLayout)
 
-        h_layout = Qt.QHBoxLayout()
+        hLayout = Qt.QHBoxLayout()
         label = Qt.QLabel('<span style=" font-weight:600; color:#00916a;">'
                           'Matched scans</span>')
         label.setTextFormat(Qt.Qt.RichText)
-        edit_scans_bn = FixedSizePushButon('Edit')
-        h_layout.addWidget(label)
-        h_layout.addWidget(edit_scans_bn)
-        scan_layout.addLayout(h_layout, 0, 0, 1, 2)
+        editScansBn = FixedSizePushButon('Edit')
+        editScansBn.clicked.connect(self.__slotEditScansClicked)
+        hLayout.addWidget(label)
+        hLayout.addWidget(editScansBn)
+        scanLayout.addLayout(hLayout, 0, 0, 1, 2)
 
         label = Qt.QLabel('Total :')
-        total_scans_edit = Qt.QLineEdit('0')
-        total_scans_edit.setReadOnly(True)
-        fm = total_scans_edit.fontMetrics()
+        self.__totalScansEdit = totalScansEdit = Qt.QLineEdit('0')
+        totalScansEdit.setReadOnly(True)
+        fm = totalScansEdit.fontMetrics()
         width = (fm.boundingRect('0123456').width() +
                  fm.boundingRect('00').width())
-        total_scans_edit.setMaximumWidth(width)
-        total_scans_edit.setAlignment(Qt.Qt.AlignRight)
+        totalScansEdit.setMaximumWidth(width)
+        totalScansEdit.setAlignment(Qt.Qt.AlignRight)
 
-        scan_layout.addWidget(label, 1, 0, Qt.Qt.AlignLeft)
-        scan_layout.addWidget(total_scans_edit, 1, 1, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(label, 1, 0, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(totalScansEdit, 1, 1, Qt.Qt.AlignLeft)
 
         # ====
 
         label = Qt.QLabel('Selected :')
-        selected_scans_edit = Qt.QLineEdit('0')
-        selected_scans_edit.setReadOnly(True)
-        fm = selected_scans_edit.fontMetrics()
+        self.__selectedScansEdit = selectedScansEdit = Qt.QLineEdit('0')
+        selectedScansEdit.setReadOnly(True)
+        fm = selectedScansEdit.fontMetrics()
         width = (fm.boundingRect('0123456').width() +
                  fm.boundingRect('00').width())
-        selected_scans_edit.setMaximumWidth(width)
-        selected_scans_edit.setAlignment(Qt.Qt.AlignRight)
+        selectedScansEdit.setMaximumWidth(width)
+        selectedScansEdit.setAlignment(Qt.Qt.AlignRight)
 
-        scan_layout.addWidget(label, 2, 0, Qt.Qt.AlignLeft)
-        scan_layout.addWidget(selected_scans_edit, 2, 1, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(label, 2, 0, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(selectedScansEdit, 2, 1, Qt.Qt.AlignLeft)
 
         # ===
 
-        v_line = Qt.QFrame()
-        v_line.setFrameShape(Qt.QFrame.VLine)
-        v_line.setFrameShadow(Qt.QFrame.Sunken)
-        grp_layout.addWidget(v_line)
+        grpLayout.addWidget(_vLine())
 
         # ===========
         # "other" scans
         # ===========
 
-        scan_layout = Qt.QGridLayout()
-        grp_layout.addLayout(scan_layout)
+        scanLayout = Qt.QGridLayout()
+        grpLayout.addLayout(scanLayout)
 
-        h_layout = Qt.QHBoxLayout()
+        hLayout = Qt.QHBoxLayout()
         label = Qt.QLabel('<span style=" font-weight:600; color:#ff6600;">'
                           'Other scans</span>')
-        other_scans_bn = FixedSizePushButon('View')
-        h_layout.addWidget(label)
-        h_layout.addWidget(other_scans_bn)
+        otherScansBn = FixedSizePushButon('View')
+        otherScansBn.clicked.connect(self.__slotOtherScansClicked)
+        hLayout.addWidget(label)
+        hLayout.addWidget(otherScansBn)
 
-        scan_layout.addLayout(h_layout, 0, 0, 1, 2)
+        scanLayout.addLayout(hLayout, 0, 0, 1, 2)
 
         label = Qt.QLabel('No match :')
-        no_match_scans_edit = Qt.QLineEdit('0')
-        no_match_scans_edit.setReadOnly(True)
-        fm = no_match_scans_edit.fontMetrics()
+        self.__noMatchScansEdit = noMatchScansEdit = Qt.QLineEdit('0')
+        noMatchScansEdit.setReadOnly(True)
+        fm = noMatchScansEdit.fontMetrics()
         width = (fm.boundingRect('0123456').width() +
                  fm.boundingRect('00').width())
-        no_match_scans_edit.setMaximumWidth(width)
-        no_match_scans_edit.setAlignment(Qt.Qt.AlignRight)
+        noMatchScansEdit.setMaximumWidth(width)
+        noMatchScansEdit.setAlignment(Qt.Qt.AlignRight)
 
-        scan_layout.addWidget(label, 1, 0, Qt.Qt.AlignLeft)
-        scan_layout.addWidget(no_match_scans_edit, 1, 1, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(label, 1, 0, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(noMatchScansEdit, 1, 1, Qt.Qt.AlignLeft)
 
         # ====
 
         label = Qt.QLabel('No img info :')
-        no_img_info_edit = Qt.QLineEdit('0')
-        no_img_info_edit.setReadOnly(True)
-        fm = no_img_info_edit.fontMetrics()
+        self.__noImgInfoEdit = noImgInfoEdit = Qt.QLineEdit('0')
+        noImgInfoEdit.setReadOnly(True)
+        fm = noImgInfoEdit.fontMetrics()
         width = (fm.boundingRect('0123456').width() +
                  fm.boundingRect('00').width())
-        no_img_info_edit.setMaximumWidth(width)
-        no_img_info_edit.setAlignment(Qt.Qt.AlignRight)
+        noImgInfoEdit.setMaximumWidth(width)
+        noImgInfoEdit.setAlignment(Qt.Qt.AlignRight)
 
-        scan_layout.addWidget(label, 2, 0, Qt.Qt.AlignLeft)
-        scan_layout.addWidget(no_img_info_edit, 2, 1, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(label, 2, 0, Qt.Qt.AlignLeft)
+        scanLayout.addWidget(noImgInfoEdit, 2, 1, Qt.Qt.AlignLeft)
 
         # ===
 
-        v_line = Qt.QFrame()
-        v_line.setFrameShape(Qt.QFrame.VLine)
-        v_line.setFrameShadow(Qt.QFrame.Sunken)
-        grp_layout.addWidget(v_line)
+        grpLayout.addWidget(_vLine())
 
         # ################
         # parameters
         # ################
-        params_gbx = GroupBox("Acq. Parameters")
-        grp_layout = Qt.QVBoxLayout(params_gbx)
+        self.__acqParamsGbx = acqParamsGbx = GroupBox("Acq. Parameters")
+        grpLayout = Qt.QVBoxLayout(acqParamsGbx)
 
-        acq_params_wid = AcqParamsWidget()
-        self.layout().addWidget(params_gbx,
+        self.__acqParamWid = acqParamWid = AcqParamsWidget()
+        self.layout().addWidget(acqParamsGbx,
                                 2, 0,
                                 Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
-        grp_layout.addWidget(acq_params_wid)
+        grpLayout.addWidget(acqParamWid)
 
         # ################
         # output options
         # ################
 
-        output_gbx = GroupBox("Output")
-        layout = Qt.QGridLayout(output_gbx)
-        self.layout().addWidget(output_gbx,
+        self.__outputGbx = outputGbx = GroupBox("Output")
+        layout = Qt.QGridLayout(outputGbx)
+        self.layout().addWidget(outputGbx,
                                 3, 0,
-                                Qt.Qt.AlignLeft | Qt.Qt.AlignTop)
+                                Qt.Qt.AlignTop)
 
         # ===========
         # master
         # ===========
 
         lab = Qt.QLabel('Prefix :')
-        master_edit = Qt.QLineEdit()
-        fm = master_edit.fontMetrics()
-        master_edit.setMinimumWidth(fm.width(' ' * 50))
-        h_layout = Qt.QHBoxLayout()
-        layout.addLayout(h_layout, 0, 1, Qt.Qt.AlignLeft)
-        reset_bn = FixedSizePushButon('R')
+        self.__prefixEdit = prefixEdit = StyledLineEdit(nChar=20)
+        prefixEdit.textChanged.connect(self.__slotPrefixChanged)
+        hLayout = Qt.QHBoxLayout()
+        layout.addLayout(hLayout, 0, 1, Qt.Qt.AlignLeft)
+        resetPrefixBn = Qt.QToolButton()
+        icon = Qt.qApp.style().standardIcon(Qt.QStyle.SP_BrowserReload)
+        resetPrefixBn.setIcon(icon)
+        resetPrefixBn.clicked.connect(self.__slotResetPrefixClicked)
         layout.addWidget(lab,
                          0, 0,
                          Qt.Qt.AlignLeft)
-        sp = master_edit.sizePolicy()
+        sp = prefixEdit.sizePolicy()
         sp.setHorizontalPolicy(Qt.QSizePolicy.Maximum)
-        master_edit.setSizePolicy(sp)
-        h_layout.addWidget(master_edit, Qt.Qt.AlignLeft)
-        h_layout.addWidget(reset_bn, Qt.Qt.AlignLeft)
+        prefixEdit.setSizePolicy(sp)
+        hLayout.addWidget(prefixEdit, Qt.Qt.AlignLeft)
+        hLayout.addWidget(resetPrefixBn, Qt.Qt.AlignLeft)
 
         # ===========
         # output folder
         # ===========
 
-        lab = Qt.QLabel('Output directory :')
-        outdir_edit = Qt.QLineEdit()
-        fm = outdir_edit.fontMetrics()
-        outdir_edit.setMinimumWidth(fm.width(' ' * 100))
-        outdir_bn = FixedSizePushButon('...')
-        layout.addWidget(lab,
-                         1, 0,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(outdir_edit,
-                         1, 1,
-                         Qt.Qt.AlignLeft)
-        layout.addWidget(outdir_bn,
-                         1, 2,
-                         Qt.Qt.AlignLeft)
+        outDirChooser = FileChooser(fileMode=Qt.QFileDialog.Directory,
+                                    noLabel=True)
+        outDirChooser.lineEdit.setText(outputDir)
+        imgDirChooser.sigSelectionChanged.connect(self.__slotOutDirChanged)
+        layout.addWidget(Qt.QLabel('Output directory :'), 1, 0)
+        layout.addWidget(outDirChooser, 1, 1)
 
         # ################
         # merge button
         # ################
 
-        merge_bn = Qt.QPushButton('Merge')
-        cancel_bn = Qt.QPushButton('Cancel')
-        h_layout = Qt.QHBoxLayout()
-        self.layout().addLayout(h_layout,
+        self.__mergeBn = mergeBn = Qt.QPushButton('Merge')
+        cancelBn = Qt.QPushButton('Cancel')
+        hLayout = Qt.QHBoxLayout()
+        self.layout().addLayout(hLayout,
                                 4, 0,
                                 1, 1,
                                 Qt.Qt.AlignHCenter | Qt.Qt.AlignTop)
-        h_layout.addWidget(merge_bn)
-        h_layout.addWidget(cancel_bn)
+        hLayout.addWidget(mergeBn)
+        hLayout.addWidget(cancelBn)
+        mergeBn.clicked.connect(self.__slotMergeBnClicked)
+        cancelBn.clicked.connect(self.reject)
 
         # #################
         # setting initial state
         # #################
 
-        scans_gbx.setEnabled(False)
-        params_gbx.setEnabled(False)
-        output_gbx.setEnabled(False)
-        merge_bn.setEnabled(False)
-        parse_bn.setEnabled(False)
+        # scansGbx.setEnabled(False)
+        # acqParamsGbx.setEnabled(False)
+        # outputGbx.setEnabled(False)
+        # mergeBn.setEnabled(False)
+        parseBn.setEnabled(False)
 
         self.__merger = None
         self.info_wid = None
-
-        # named tuple with references to all the important widgets
-        SelfWidgets = namedtuple('SelfWidgets',
-                                 ['spec_file_edit',
-                                  'spec_file_bn',
-                                  'img_dir_edit',
-                                  'img_dir_bn',
-                                  'version_cbx',
-                                  'parse_bn',
-                                  'total_scans_edit',
-                                  'selected_scans_edit',
-                                  'other_scans_bn',
-                                  'no_match_scans_edit',
-                                  'no_img_info_edit',
-                                  'acq_params_wid',
-                                  'master_edit',
-                                  'outdir_edit',
-                                  'outdir_bn',
-                                  'input_gbx',
-                                  'scans_gbx',
-                                  'params_gbx',
-                                  'output_gbx',
-                                  'merge_bn',
-                                  'cancel_bn'])
-
-        self.__widgets = SelfWidgets(spec_file_edit=spec_file_edit,
-                                     spec_file_bn=spec_file_bn,
-                                     img_dir_edit=img_dir_edit,
-                                     img_dir_bn=img_dir_bn,
-                                     version_cbx=version_cbx,
-                                     parse_bn=parse_bn,
-                                     total_scans_edit=total_scans_edit,
-                                     selected_scans_edit=selected_scans_edit,
-                                     other_scans_bn=other_scans_bn,
-                                     no_match_scans_edit=no_match_scans_edit,
-                                     no_img_info_edit=no_img_info_edit,
-                                     acq_params_wid=acq_params_wid,
-                                     master_edit=master_edit,
-                                     outdir_edit=outdir_edit,
-                                     outdir_bn=outdir_bn,
-                                     input_gbx=input_gbx,
-                                     scans_gbx=scans_gbx,
-                                     params_gbx=params_gbx,
-                                     output_gbx=output_gbx,
-                                     merge_bn=merge_bn,
-                                     cancel_bn=cancel_bn)
-
-        self.__resetState()
 
         if tmp_dir is None:
             tmp_dir, delete_tmp, q_tmp_dir = _create_tmp_dir()
@@ -784,40 +770,23 @@ class MergeWidget(Qt.QDialog):
 
         self.__sigParseDone.connect(self.__parseSpecDone)
 
-        spec_file_edit.textChanged.connect(self.__inputEditTextChanged)
-        spec_file_bn.clicked.connect(self.__pickSpecfile)
-        img_dir_edit.textChanged.connect(self.__inputEditTextChanged)
-        img_dir_bn.clicked.connect(self.__pickImageDir)
-        reset_bn.clicked.connect(self.__resetMaster)
-        parse_bn.clicked.connect(self.__parseSpecStart,
-                                 Qt.Qt.QueuedConnection)
-        outdir_edit.textChanged.connect(self.__updateOutputGroupBox)
-        outdir_bn.clicked.connect(self.__pickOutputDir)
-        master_edit.textChanged.connect(self.__updateOutputGroupBox)
-        merge_bn.clicked.connect(self.__mergeButtonClicked)
-        cancel_bn.clicked.connect(self.reject)
-
-        edit_scans_bn.clicked.connect(self.__editScans)
-        other_scans_bn.clicked.connect(self.__viewOtherScans)
-
-        if img_dir is not None:
-            img_dir_edit.setText(img_dir)
-        if spec_version is not None:
-            version_cbx.setCurrentIndex(spec_version)
-        if output_dir is not None:
-            outdir_edit.setText(output_dir)
-        if spec_file is not None:
-            spec_file_edit.setText(spec_file)
-        self.__widget_setup = False
+        self.__widgetIsSetup = False
 
         self.__xsocs_h5 = None
 
+        versionCBx.setCurrentIndex(spec_version)
+        self.__slotVersionChanged(spec_version)
+        versionCBx.currentIndexChanged[int].connect(self.__slotVersionChanged)
+
+        self.__resetState()
+
     def showEvent(self, *args, **kwargs):
-        if not self.__widget_setup:
-            self.__widget_setup = True
-            spec_file = self.__widgets.spec_file_edit.text()
-            if len(spec_file) != 0:
-                self.__widgets.parse_bn.clicked.emit(True)
+        if not self.__widgetIsSetup:
+            self.__widgetIsSetup = True
+            specFile = self.__input['specfile']
+            self.__checkInput()
+            if specFile:
+                self.__parseBn.clicked.emit(True)
         super(MergeWidget, self).showEvent(*args, **kwargs)
 
     def closeEvent(self, event):
@@ -826,7 +795,7 @@ class MergeWidget(Qt.QDialog):
         elif os.path.exists(self.__tmp_dir_merge):
             shutil.rmtree(self.__tmp_dir_merge, ignore_errors=True)
         if self.__q_tmp_dir is not None:
-            # for some reason the QTemporaryDir gets deleted even thos
+            # for some reason the QTemporaryDir gets deleted even though
             # this instance is still in scope. This is a workaround until
             # we figure out what's going on.
             # (deletion seems to occur when creating the Pool in the
@@ -834,22 +803,52 @@ class MergeWidget(Qt.QDialog):
             self.__q_tmp_dir.setAutoRemove(True)
         super(MergeWidget, self).closeEvent(event)
 
-    def __resetMaster(self, *args, **kwargs):
-        widgets = self.__widgets
+    def __slotVersionChanged(self, index):
+        if index < 0 or index >= len(self._versions):
+            self.__input['version'] = index
+            self.__versionCBx.setCurrentIndex(len(self._versions))
+        else:
+            padding = self._versions['padding'][index]
+            offset = self._versions['offset'][index]
+
+            self.__input['version'] = index
+
+            padSpinBox = self.__padSpinBox
+            nextNrSpinBox = self.__nextNrSpinBox
+            blocked = padSpinBox.blockSignals(True)
+            padSpinBox.setValue(padding)
+            self.__input['padding'] = padding
+            padSpinBox.blockSignals(blocked)
+
+            blocked = nextNrSpinBox.blockSignals(True)
+            nextNrSpinBox.setValue(offset)
+            self.__input['offset'] = offset
+            nextNrSpinBox.blockSignals(blocked)
+
+        self.__checkInput()
+
+    def __slotResetPrefixClicked(self):
+        """
+        Slot called when the reset prefix button is clicked.
+        :return:
+        """
         merger = self.__merger
         if merger is None:
             return
         merger.prefix = None
         master = merger.prefix
-        widgets.master_edit.setText(master)
+        self.__prefixEdit.setText(master)
 
-    def __mergeButtonClicked(self, *args, **kwargs):
-        widgets = self.__widgets
+    def __slotMergeBnClicked(self):
+        """
+        Slot called when the merge button is clicked
+        :return:
+        """
         merger = self.__merger
 
         if merger is None:
             # this part shouldn't even be called, just putting this
-            # in case someone decides to modify the code to enable the merge_bn
+            # in case someone decides to modify the code to enable the mergeBn
             # even tho conditions are not met.
             Qt.QMessageBox.critical(self, 'Error',
                                     'No merger object found.',
@@ -867,33 +866,36 @@ class MergeWidget(Qt.QDialog):
                 raise ValueError('parameter is mandatory.')
             return val
 
-        acq_params_wid = widgets.acq_params_wid
+        acqParamWid = self.__acqParamWid
+
+        name = None
+
         try:
             name = 'Beam Energy'
             merger.beam_energy = \
-                assert_non_none(acq_params_wid.beam_energy)
+                assert_non_none(acqParamWid.beam_energy)
 
             name = 'Direct beam'
-            dir_beam_h = assert_non_none(acq_params_wid.direct_beam_h)
-            dir_beam_v = assert_non_none(acq_params_wid.direct_beam_v)
+            dir_beam_h = assert_non_none(acqParamWid.direct_beam_h)
+            dir_beam_v = assert_non_none(acqParamWid.direct_beam_v)
             merger.center_chan = [dir_beam_h, dir_beam_v]
 
             name = 'Channel per degree'
-            chpdeg_h = assert_non_none(acq_params_wid.chperdeg_h)
-            chpdeg_v = assert_non_none(acq_params_wid.chperdeg_v)
+            chpdeg_h = assert_non_none(acqParamWid.chperdeg_h)
+            chpdeg_v = assert_non_none(acqParamWid.chperdeg_v)
             merger.chan_per_deg = [chpdeg_h, chpdeg_v]
 
             name = 'Prefix'
-            master = str(widgets.master_edit.text())
-            if len(master) == 0:
+            prefix = self.__output['prefix']
+            if len(prefix) == 0:
                 raise ValueError('parameter is mandatory.')
-            merger.prefix = master
+            merger.prefix = prefix
 
-            name = 'output_dir'
-            output_dir = str(widgets.outdir_edit.text())
-            if len(output_dir) == 0:
+            name = 'Output directory'
+            outDir = self.__output['outdir']
+            if len(outDir) == 0:
                 raise ValueError('parameter is mandatory.')
-            merger.output_dir = output_dir
+            merger.output_dir = outDir
 
         except Exception as ex:
             Qt.QMessageBox.critical(self, 'Error',
@@ -931,29 +933,39 @@ class MergeWidget(Qt.QDialog):
     def xsocsH5(self):
         return self.__xsocs_h5
 
-    def __inputEditTextChanged(self, text):
+    def __slotSpecFileChanged(self, fileName):
         """
-        Checking if the provided paths exist.
-        If not, disable the parse button.
+        Slot triggered when the spec file is changed.
         """
-        widgets = self.__widgets
-        sender = self.sender()
+        self.__input['specfile'] = str(fileName)
+        self.__checkInput()
 
-        enabled = False
+    def __slotImgDirChanged(self, dirName):
+        """
+        Slot triggered when the image folder is changed.
+        :param dirName:
+        :return:
+        """
+        self.__input['imgdir'] = str(dirName)
+        self.__checkInput()
 
-        if sender == widgets.spec_file_edit:
-            if os.path.isfile(text):
-                enabled = True
-            else:
-                enabled = False
+    def __checkInput(self):
+        """
+        Checks if all input is provided and enables/disables the parse button
+        and resets the parse results accordingly.
+        :return:
+        """
+        specfile = self.__input['specfile']
+        if specfile and os.path.isfile(specfile):
+            enabled = True
+        else:
+            enabled = False
 
-        elif sender == widgets.img_dir_edit:
-            if len(text) == 0 or os.path.isdir(text):
-                enabled = True
-            else:
-                enabled = False
+        imgdir = self.__input['imgdir']
+        if imgdir and not os.path.isdir(imgdir):
+            enabled = False
 
-        widgets.parse_bn.setEnabled(enabled)
+        self.__parseBn.setEnabled(enabled)
 
         self.__resetState()
 
@@ -963,53 +975,24 @@ class MergeWidget(Qt.QDialog):
         - disables all but the input groupbox
         - clears the scan widget
         """
-        widgets = self.__widgets
-        widgets.scans_gbx.setEnabled(False)
-        widgets.params_gbx.setEnabled(False)
-        widgets.output_gbx.setEnabled(False)
+        self.__scansGbx.setEnabled(False)
+        self.__acqParamsGbx.setEnabled(False)
+        self.__outputGbx.setEnabled(False)
+        self.__mergeBn.setEnabled(False)
         self.__merger = None
 
-    def __pickSpecfile(self, *args, **kwargs):
-        """
-        Spec file picker
-        """
-        widgets = self.__widgets
-        dialog = Qt.QFileDialog(self,
-                                'Select SPEC file',
-                                filter=('Scan files (*.spec);;'
-                                        'Any files (*)'))
-        dialog.setFileMode(Qt.QFileDialog.ExistingFile)
-        if dialog.exec_():
-            file_name = dialog.selectedFiles()[0]
-            widgets.spec_file_edit.setText(file_name)
-
-    def __pickImageDir(self, *args, **kwargs):
-        """
-        Img dir file picker
-        """
-        widgets = self.__widgets
-        dialog = Qt.QFileDialog(self,
-                                'Select EDF folder')
-        dialog.setFileMode(Qt.QFileDialog.Directory)
-        if dialog.exec_():
-            dir_name = dialog.selectedFiles()[0]
-            widgets.img_dir_edit.setText(dir_name)
-
-    def __pickOutputDir(self, *args, **kwargs):
+    def __slotOutDirChanged(self, outDir):
         """
         Output dir file picker
         """
-        widgets = self.__widgets
-        dialog = Qt.QFileDialog(self,
-                                'Select output directory')
-        dialog.setFileMode(Qt.QFileDialog.Directory)
-        if dialog.exec_():
-            dir_name = dialog.selectedFiles()[0]
-            widgets.outdir_edit.setText(dir_name)
-
+        self.__output['outdir'] = outDir
         self.__updateOutputGroupBox()
 
-    def __editScans(self, *args, **kwargs):
+    def __slotEditScansClicked(self):
+        """
+        Slot called when the edit scans button is clicked
+        :return:
+        """
         merger = self.__merger
         if merger is None:
             return
@@ -1017,14 +1000,26 @@ class MergeWidget(Qt.QDialog):
         if ans == Qt.QDialog.Accepted:
             self.__updateScansInfos()
 
-    def __viewOtherScans(self, *args, **kwargs):
+    def __slotOtherScansClicked(self):
+        """
+        Slot called when the other scans button is clicked
+        :return:
+        """
         merger = self.__merger
         if merger is None:
             return
         _ScansInfoDialog(merger, parent=self).exec_()
 
-    def __updateOutputGroupBox(self, first=False, **kwargs):
-        widgets = self.__widgets
+    def __slotPrefixChanged(self, text):
+        """
+        Slot called when the text in the prefixEdit line edit changes
+        :param text:
+        :return:
+        """
+        self.__output['prefix'] = str(text)
+        self.__updateOutputGroupBox()
+
+    def __updateOutputGroupBox(self):
         merger = self.__merger
 
         if merger is None:
@@ -1032,47 +1027,60 @@ class MergeWidget(Qt.QDialog):
         else:
             enable = merger.parsed and len(merger.matched_ids) > 0
 
-        widgets.output_gbx.setEnabled(enable)
+        self.__outputGbx.setEnabled(enable)
+        if not enable:
+            self.__prefixEdit.clear()
 
-        if enable:
-            # improve on this
-            if first:
-                #master = merger.master_file
-                prefix = widgets.master_edit.text()
-                if len(prefix) == 0:
-                    widgets.master_edit.setText(merger.prefix)
+        outDir = self.__output['outdir']
+        prefix = self.__output['prefix']
+        hasOutputDir = outDir is not None and len(outDir) > 0
+        hasPrefix = prefix is not None and len(prefix) > 0
+        enable = hasOutputDir and hasPrefix
+        self.__mergeBn.setEnabled(enable)
 
-            has_output_dir = len(widgets.outdir_edit.text()) > 0
-            has_prefix = len(widgets.master_edit.text()) > 0
-            enable = has_output_dir and has_prefix
-            widgets.merge_bn.setEnabled(enable)
-        else:
-            widgets.master_edit.clear()
+    def __slotPaddingValueChanged(self, value):
+        """
+        Slot called when the padding spinbox value changes
+        :param value:
+        :return:
+        """
+        self.__input['padding'] = value
+        self.__slotVersionChanged(-1)
 
-    def __parseSpecStart(self, *args, **kwargs):
+    def __slotNextNrValueChanged(self, value):
+        """
+        Slot called when the next nr offset spinbox value changes
+        :param value:
+        :return:
+        """
+        self.__input['offset'] = value
+        self.__slotVersionChanged(-1)
+
+    def __slotParseBnClicked(self):
         self.info_wid = None
 
-        widgets = self.__widgets
+        parseBn = self.__parseBn
 
-        version = widgets.version_cbx.currentIndex()
-        spec_file = widgets.spec_file_edit.text()
-        img_dir = widgets.img_dir_edit.text()
-
-        if len(img_dir) == 0:
-            img_dir = None
-        else:
-            img_dir = str(img_dir)
+        specFile = self.__input['specfile']
+        imgDir = self.__input['imgdir']
+        # version = self.__input['version']
+        padding = self.__input['padding']
+        offset = self.__input['offset']
 
         try:
             if self.__merger is None:
-                self.__merger = Id01DataMerger(str(spec_file),
+                self.__merger = Id01DataMerger(specFile,
                                                self.__tmp_dir_merge,
-                                               img_dir=img_dir,
-                                               version=version)
+                                               img_dir=imgDir,
+                                               # version=version,
+                                               nr_offset=offset,
+                                               nr_padding=padding)
             else:
-                self.__merger.reset(str(spec_file),
-                                    img_dir=img_dir,
-                                    version=version)
+                self.__merger.reset(str(specFile),
+                                    img_dir=imgDir,
+                                    # version=version,
+                                    nr_offset=offset,
+                                    nr_padding=padding)
         except Exception as ex:
             msg = ('Parsing failed: {0}.\n'
                    'Message : {1}.'
@@ -1082,8 +1090,8 @@ class MergeWidget(Qt.QDialog):
                                     msg)
             return
 
-        widgets.parse_bn.setEnabled(False)
-        widgets.parse_bn.setText('Parsing...')
+        parseBn.setEnabled(False)
+        parseBn.setText('Parsing...')
 
         info_wid = Qt.QMessageBox(Qt.QMessageBox.Information,
                                   'Parsing...',
@@ -1100,23 +1108,21 @@ class MergeWidget(Qt.QDialog):
                             callback=self.__sigParseDone.emit)
 
     def __parseSpecDone(self, *args, **kwargs):
-        widgets = self.__widgets
 
         self.info_wid.done(0)
         self.info_wid = None
 
-        widgets.parse_bn.setEnabled(True)
-        widgets.parse_bn.setText('Parse file.')
+        self.__parseBn.setEnabled(True)
+        self.__parseBn.setText('Parse file.')
 
         self.__updateScansInfos()
-        self.__updateOutputGroupBox(first=True)
+        self.__updateOutputGroupBox()
 
     def __updateScansInfos(self):
         """
         Fills the scans group box with the results
         of the scan.
         """
-        widgets = self.__widgets
         merger = self.__merger
 
         if merger is None:
@@ -1125,25 +1131,30 @@ class MergeWidget(Qt.QDialog):
             no_match_ids = []
             no_img_ids = []
             enable = False
+            prefix = ''
         else:
             matched_ids = merger.matched_ids
             selected_ids = merger.selected_ids
             no_match_ids = merger.no_match_ids
             no_img_ids = merger.no_img_ids
             enable = merger.parsed
+            prefix = merger.prefix
 
-        n_total = len(matched_ids)
-        n_selected = len(selected_ids)
-        n_no_match = len(no_match_ids)
-        n_no_img = len(no_img_ids)
+        nTotal = len(matched_ids)
+        nSelected = len(selected_ids)
+        nNoMatch = len(no_match_ids)
+        nNoImg = len(no_img_ids)
 
-        widgets.scans_gbx.setEnabled(enable)
-        widgets.params_gbx.setEnabled(len(matched_ids) > 0)
+        self.__scansGbx.setEnabled(enable)
+        self.__acqParamsGbx.setEnabled(len(matched_ids) > 0)
 
-        widgets.total_scans_edit.setText(str(n_total))
-        widgets.selected_scans_edit.setText(str(n_selected))
-        widgets.no_match_scans_edit.setText(str(n_no_match))
-        widgets.no_img_info_edit.setText(str(n_no_img))
+        self.__totalScansEdit.setText(str(nTotal))
+        self.__selectedScansEdit.setText(str(nSelected))
+        self.__noMatchScansEdit.setText(str(nNoMatch))
+        self.__noImgInfoEdit.setText(str(nNoImg))
+
+        self.__output['prefix'] = prefix
+        self.__prefixEdit.setText(prefix)
 
 
 if __name__ == '__main__':

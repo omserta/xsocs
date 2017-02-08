@@ -101,7 +101,9 @@ class Id01DataMerger(object):
                  work_dir,
                  img_dir=None,
                  output_dir=None,
-                 version=1):
+                 version=1,
+                 nr_padding=None,
+                 nr_offset=None):
 
         if not os.path.exists(work_dir):
             os.makedirs(work_dir)
@@ -116,18 +118,25 @@ class Id01DataMerger(object):
         self.reset(spec_fname,
                    img_dir=img_dir,
                    output_dir=output_dir,
-                   version=version)
+                   version=version,
+                   nr_padding=nr_padding,
+                   nr_offset=nr_offset)
 
     def reset(self,
               spec_fname,
               img_dir=None,
               output_dir=None,
-              version=1):
+              version=1,
+              nr_padding=None,
+              nr_offset=None):
         self.__running_exception()
 
         self.__spec_fname = spec_fname
         self.__img_dir = img_dir
         self.__version = version
+        self.__nr_padding = nr_padding
+        self.__nr_offset = nr_offset
+        self.__prefix = None
         self.prefix = 'prefix'
 
         self.__parsed = False
@@ -222,6 +231,8 @@ class Id01DataMerger(object):
                                            self.__spec_h5,
                                            img_dir=self.__img_dir,
                                            version=self.__version,
+                                           nr_padding=self.__nr_padding,
+                                           nr_offset=self.__nr_offset,
                                            callback=callback)
 
         self.__parse_thread.start()
@@ -493,7 +504,8 @@ class Id01DataMerger(object):
         elif isinstance(prefix, str):
             self.__prefix = prefix
         else:
-            raise TypeError('prefix must be a string, or None.')
+            raise TypeError('prefix must be a string, or None. This '
+                            'is q {0}.'.format(type(prefix)))
 
     def __gen_scan_filename(self, scan_id, fullpath=False):
         pattern = '{img_file}_{scan_id}.h5'
@@ -767,7 +779,9 @@ def _spec_get_img_filenames(spec_h5_filename):
 
 def _find_scan_img_files(spec_h5_filename,
                          img_dir=None,
-                         version=1):
+                         version=1,
+                         nr_padding=None,
+                         nr_offset=None):
     """
     Parses the provided "*spec*" HDF5 file and tries to find the edf file
     associated  with each scans. will look for the files in img_dir if
@@ -812,6 +826,12 @@ def _find_scan_img_files(spec_h5_filename,
         nextnr_ofst = 0
         nextnr_pattern = '{0:0>5}'
 
+    if nr_padding is not None:
+        nextnr_pattern = '{{0:0>{0}}}'.format(nr_padding)
+
+    if nr_offset is not None:
+        nextnr_ofst = nr_offset
+
     if img_dir:
         img_dir = os.path.expanduser(os.path.expandvars(img_dir))
 
@@ -853,7 +873,9 @@ class _ParseThread(Thread):
                  spec_h5,
                  img_dir,
                  version,
-                 callback=None):
+                 callback=None,
+                 nr_padding=None,
+                 nr_offset=None):
         super(_ParseThread, self).__init__()
 
         self.__spec_fname = spec_fname
@@ -862,6 +884,9 @@ class _ParseThread(Thread):
         self.__img_dir = img_dir
         self.__version = version
 
+        self.__nr_padding = nr_padding
+        self.__nr_offset = nr_offset
+
         self.__results = None
 
     def run(self):
@@ -869,7 +894,9 @@ class _ParseThread(Thread):
 
         self.__results = _find_scan_img_files(self.__spec_h5,
                                               img_dir=self.__img_dir,
-                                              version=self.__version)
+                                              version=self.__version,
+                                              nr_padding=self.__nr_padding,
+                                              nr_offset=self.__nr_offset)
 
         if self.__callback:
             self.__callback()

@@ -1,4 +1,3 @@
-
 xsocs
 ====
 
@@ -28,7 +27,6 @@ Dependencies
 .. * A Qt binding: `PyQt5, PyQt4 <https://riverbankcomputing.com/software/pyqt/intro>`_ or `PySide <https://pypi.python.org/pypi/PySide/>`_
 
 Supported platforms: Linux
-.. , Windows, Mac OS X.
 
 Documentation
 -------------

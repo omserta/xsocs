@@ -29,6 +29,7 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
+from collections import OrderedDict
 
 import numpy as np
 
@@ -43,7 +44,8 @@ from xsocs.gui.model.TreeView import TreeView
 from .fitview.FitModel import FitModel, FitH5Node
 from .fitview.DropPlotWidget import DropPlotWidget
 
-from.fitview.ResultPlot import plotCentroid, plotGaussian, plotSilx
+from ...fit import GaussianPlotter, CentroidPlotter, SilxPlotter
+
 
 class FitView(Qt.QMainWindow):
     sigPointSelected = Qt.Signal(object)
@@ -262,50 +264,111 @@ class FitView(Qt.QMainWindow):
         :return:
         """
 
-        with self.__fitH5 as fitH5:
+        entry = self.__entry
+        plots = self.__fitPlots
+        fitH5 = self.__fitH5
 
-            entry = self.__entry
+        qspaceH5 = self.__qspaceH5
+        with qspaceH5:
+            cube = qspaceH5.qspace_slice(xIdx)
+            histo = qspaceH5.histo
+            mask = np.where(histo > 0)
+            weights = histo[mask]
+            cube[mask] /= weights
+            xAcqQX = qspaceH5.qx
+            xAcqQY = qspaceH5.qy
+            xAcqQZ = qspaceH5.qz
 
-            qspaceH5 = self.__qspaceH5
-            with qspaceH5:
-                cube = qspaceH5.qspace_slice(xIdx)
-                histo = qspaceH5.histo
-                mask = np.where(histo > 0)
-                weights = histo[mask]
-                cube[mask] /= weights
-                xAcqQX = qspaceH5.qx
-                xAcqQY = qspaceH5.qy
-                xAcqQZ = qspaceH5.qz
+        yAcqQZ = cube.sum(axis=0).sum(axis=0)
+        cube_sum_z = cube.sum(axis=2)
+        yAcqQY = cube_sum_z.sum(axis=0)
+        yAcqQX = cube_sum_z.sum(axis=1)
 
-            yAcqQZ = cube.sum(axis=0).sum(axis=0)
-            cube_sum_z = cube.sum(axis=2)
-            yAcqQY = cube_sum_z.sum(axis=0)
-            yAcqQX = cube_sum_z.sum(axis=1)
+        for plot in plots:
+            plot.clearCurves()
+            plot.clearMarkers()
 
-            for plot in self.__fitPlots:
-                plot.clearCurves()
-                plot.clearMarkers()
+        plots[0].addCurve(xAcqQX, yAcqQX, legend='measured')
+        plots[0].setGraphTitle('QX / Gaussians')
 
-            # TODO : refactor
-            if entry == 'Gaussian':
-                plotGaussian(self.__fitPlots, xIdx,
-                             fitH5, entry,
-                             xAcqQX, xAcqQY, xAcqQZ,
-                             yAcqQX, yAcqQY, yAcqQZ)
+        plots[1].addCurve(xAcqQY, yAcqQY, legend='measured')
+        plots[1].setGraphTitle('QY / Gaussians')
 
-            elif entry == 'Centroid':
-                plotCentroid(self.__fitPlots, xIdx,
-                             fitH5, entry,
-                             xAcqQX, xAcqQY, xAcqQZ,
-                             yAcqQX, yAcqQY, yAcqQZ)
-            elif entry == 'SilxFit':
-                plotSilx(self.__fitPlots, xIdx,
-                             fitH5, entry,
-                             xAcqQX, xAcqQY, xAcqQZ,
-                             yAcqQX, yAcqQY, yAcqQZ)
-            else:
-                # TODO : popup
-                raise ValueError('Unknown entry {0}.'.format(entry))
+        plots[2].addCurve(xAcqQZ, yAcqQZ, legend='measured')
+        plots[2].setGraphTitle('QZ / Gaussians')
+
+        if entry == 'Gaussian':
+            plotterKlass = GaussianPlotter
+        elif entry == 'Centroid':
+            plotterKlass = CentroidPlotter
+        elif entry == 'SilxFit':
+            plotterKlass = SilxPlotter
+
+        plotter = plotterKlass()
+
+        with fitH5:
+            xFitQX = fitH5.get_qx(entry)
+            xFitQY = fitH5.get_qy(entry)
+            xFitQZ = fitH5.get_qz(entry)
+
+            qxPeakParams = OrderedDict()
+            qyPeakParams = OrderedDict()
+            qzPeakParams = OrderedDict()
+
+            processes = fitH5.processes(entry)
+
+            for process in processes:
+                results = fitH5.get_result_names(entry, process)
+                qxPeakParams[process] = xPeak = {}
+                qyPeakParams[process] = yPeak = {}
+                qzPeakParams[process] = zPeak = {}
+                for result in results:
+                    xPeak[result] = fitH5.get_qx_result(entry,
+                                                        process,
+                                                        result)[xIdx]
+                    yPeak[result] = fitH5.get_qy_result(entry,
+                                                        process,
+                                                        result)[xIdx]
+                    zPeak[result] = fitH5.get_qz_result(entry,
+                                                        process,
+                                                        result)[xIdx]
+
+        plotTitle = plotter.getPlotTitle()
+        # qx plot
+        plot = plots[0]
+        plotter.plotFit(plot, xFitQX, qxPeakParams)
+        plot.setGraphTitle('{0} (QX)'.format(plotTitle))
+
+        # qy plot
+        plot = plots[1]
+        plotter.plotFit(plot, xFitQY, qyPeakParams)
+        plot.setGraphTitle('{0} (QY)'.format(plotTitle))
+
+        # qz plot
+        plot = plots[2]
+        plotter.plotFit(plot, xFitQZ, qzPeakParams)
+        plot.setGraphTitle('{0} (QZ)'.format(plotTitle))
+
+            # # TODO : refactor
+            # if entry == 'Gaussian':
+            #     plotGaussian(self.__fitPlots, xIdx,
+            #                  fitH5, entry,
+            #                  xAcqQX, xAcqQY, xAcqQZ,
+            #                  yAcqQX, yAcqQY, yAcqQZ)
+            #
+            # elif entry == 'Centroid':
+            #     plotCentroid(self.__fitPlots, xIdx,
+            #                  fitH5, entry,
+            #                  xAcqQX, xAcqQY, xAcqQZ,
+            #                  yAcqQX, yAcqQY, yAcqQZ)
+            # elif entry == 'SilxFit':
+            #     plotSilx(self.__fitPlots, xIdx,
+            #                  fitH5, entry,
+            #                  xAcqQX, xAcqQY, xAcqQZ,
+            #                  yAcqQX, yAcqQY, yAcqQZ)
+            # else:
+            #     # TODO : popup
+            #     raise ValueError('Unknown entry {0}.'.format(entry))
 
 
 def _initGaussian(plots, fitH5Name, entry, process):

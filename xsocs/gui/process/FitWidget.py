@@ -159,7 +159,7 @@ class FitWidget(Qt.QWidget):
     """
 
     FitTypes = OrderedDict([('Gaussian', FitTypes.GAUSSIAN),
-                            ('Centroid', FitTypes.CENTROID)])
+                            ('Centroid', FitTypes.CENTROID)])\
         # ,
         #                     ('Silx', FitTypes.SILX)])
 

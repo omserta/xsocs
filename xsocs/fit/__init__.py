@@ -1,7 +1,8 @@
-# coding: utf-8
+#!/usr/bin/python
+# coding: utf8
 # /*##########################################################################
 #
-# Copyright (c) 2015-2016 European Synchrotron Radiation Facility
+# Copyright (c) 2015-2017 European Synchrotron Radiation Facility
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,28 +24,13 @@
 #
 # ###########################################################################*/
 
+from __future__ import absolute_import
+
 __authors__ = ["D. Naudet"]
+__date__ = "01/01/2017"
 __license__ = "MIT"
-__date__ = "20/04/2016"
-
-from numpy.distutils.misc_util import Configuration
 
 
-def configuration(parent_package='', top_path=None):
-    config = Configuration('xsocs', parent_package, top_path)
-    config.add_subpackage('examples')
-    config.add_subpackage('fit')
-    config.add_subpackage('gui')
-    config.add_subpackage('io')
-    config.add_subpackage('process')
-    config.add_subpackage('resources')
-    config.add_subpackage('test')
-    config.add_subpackage('util')
-
-    return config
-
-
-if __name__ == "__main__":
-    from numpy.distutils.core import setup
-
-    setup(configuration=configuration)
+from .Gaussian import GaussianFitter, GaussianPlotter
+from .Centroid import CentroidFitter, CentroidPlotter
+from .SilxFitter import SilxFitter, SilxPlotter

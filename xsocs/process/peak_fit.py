@@ -40,10 +40,9 @@ import numpy as np
 
 # from silx.math import curve_fit
 from ..io import QSpaceH5
-from .fit_funcs import GaussianFitter, CentroidFitter, SilxFitter
+from ..fit import GaussianFitter, CentroidFitter, SilxFitter
 from .sharedresults import (FitTypes, GaussianResults,
                             CentroidResults, SilxResults)
-from .fitresults import FitStatus
 
 disp_times = False
 

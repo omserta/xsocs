@@ -718,7 +718,7 @@ class MergeWidget(Qt.QDialog):
         outDirChooser = FileChooser(fileMode=Qt.QFileDialog.Directory,
                                     noLabel=True)
         outDirChooser.lineEdit.setText(outputDir)
-        imgDirChooser.sigSelectionChanged.connect(self.__slotOutDirChanged)
+        outDirChooser.sigSelectionChanged.connect(self.__slotOutDirChanged)
         layout.addWidget(Qt.QLabel('Output directory :'), 1, 0)
         layout.addWidget(outDirChooser, 1, 1)
 

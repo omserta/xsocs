@@ -35,7 +35,8 @@ import shutil
 from types import MethodType
 from functools import partial
 
-from ...util.id01_spec import Id01DataMerger
+from ...process.merge import KmapSpecParser, KmapMerger
+
 from ..widgets.AcqParamsWidget import AcqParamsWidget
 
 from ..widgets.Input import StyledLineEdit
@@ -210,7 +211,7 @@ class _ScansSelectDialog(Qt.QDialog):
                 item = self.__table_widget.item(row, self.SEL_COL)
                 item.setCheckState(Qt.Qt.Unchecked)
 
-    def __showMore(self, *args, **kwargs):
+    def __showMore(self):
         if self.__more_bn.text() == 'More':
             self.__more_bn.setText('Less')
             hide = False
@@ -286,7 +287,7 @@ class _ScansInfoDialog(Qt.QDialog):
 
 
 class _MergeProcessDialog(Qt.QDialog):
-    __sigMergeDone = Qt.Signal(object)
+    __sigMergeDone = Qt.Signal()
 
     def __init__(self, merger, **kwargs):
         super(_MergeProcessDialog, self).__init__(**kwargs)
@@ -351,7 +352,7 @@ class _MergeProcessDialog(Qt.QDialog):
         self.__merger = merger
         self.__status = False
 
-    def __onAccept(self, *args, **kwargs):
+    def __onAccept(self):
         merger = self.__merger
         warn = merger.check_overwrite()
 
@@ -383,7 +384,7 @@ class _MergeProcessDialog(Qt.QDialog):
 
         self.__time = time.time()
 
-    def __onAbort(self, *args, **kwargs):
+    def __onAbort(self):
         abort_diag = Qt.QMessageBox(Qt.QMessageBox.Information,
                                     'Aborting...',
                                     '<b>Cancelling merge.</b>'
@@ -394,11 +395,11 @@ class _MergeProcessDialog(Qt.QDialog):
         abort_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
         abort_diag.setStandardButtons(Qt.QMessageBox.NoButton)
         abort_diag.show()
-        self.__merger.abort_merge(wait=False)
+        self.__merger.abort(wait=False)
 
-    def __mergeDone(self, result):
+    def __mergeDone(self):
         print('TOTAL : {0}.'.format(time.time() - self.__time))
-        self.__status = result[0]
+        self.__status = self.__merger.status
         self.__qtimer.stop()
         self.__qtimer = None
         self.__onProgress()
@@ -412,8 +413,8 @@ class _MergeProcessDialog(Qt.QDialog):
         else:
             self.__bn_box.rejected.connect(self.reject)
 
-    def __onProgress(self, *args, **kwargs):
-        progress = self.__merger.merge_progress()
+    def __onProgress(self):
+        progress = self.__merger.progress()
         if progress is None:
             return
         tree_wid = self.__tree_widget
@@ -443,7 +444,7 @@ class MergeWidget(Qt.QDialog):
                  'offset': [-1, 0]}
     _defaultVersion = 1
 
-    __sigParseDone = Qt.Signal()
+    __sigParsed = Qt.Signal()
 
     def __init__(self,
                  spec_file=None,
@@ -748,6 +749,7 @@ class MergeWidget(Qt.QDialog):
         parseBn.setEnabled(False)
 
         self.__merger = None
+        self.__parser = None
         self.info_wid = None
 
         if tmp_dir is None:
@@ -768,8 +770,6 @@ class MergeWidget(Qt.QDialog):
 
         print('Using temporary folder : {0}.'.format(tmp_dir))
 
-        self.__sigParseDone.connect(self.__parseSpecDone)
-
         self.__widgetIsSetup = False
 
         self.__xsocs_h5 = None
@@ -779,6 +779,8 @@ class MergeWidget(Qt.QDialog):
         versionCBx.currentIndexChanged[int].connect(self.__slotVersionChanged)
 
         self.__resetState()
+
+        self.__sigParsed.connect(self.__slotParsed, Qt.Qt.QueuedConnection)
 
     def showEvent(self, *args, **kwargs):
         if not self.__widgetIsSetup:
@@ -887,15 +889,15 @@ class MergeWidget(Qt.QDialog):
 
             name = 'Prefix'
             prefix = self.__output['prefix']
-            if len(prefix) == 0:
+            if not prefix:
                 raise ValueError('parameter is mandatory.')
-            merger.prefix = prefix
+            merger.prefix = str(prefix)
 
             name = 'Output directory'
             outDir = self.__output['outdir']
-            if len(outDir) == 0:
+            if not outDir:
                 raise ValueError('parameter is mandatory.')
-            merger.output_dir = outDir
+            merger.output_dir = str(outDir)
 
         except Exception as ex:
             Qt.QMessageBox.critical(self, 'Error',
@@ -917,15 +919,16 @@ class MergeWidget(Qt.QDialog):
 
         process_diag = _MergeProcessDialog(merger, parent=self)
         process_diag.setAttribute(Qt.Qt.WA_DeleteOnClose)
-        process_diag.accepted.connect(partial(self.__mergeDone, status=True))
-        process_diag.rejected.connect(partial(self.__mergeDone, status=False))
+        process_diag.accepted.connect(partial(self.__mergeDone))
+        process_diag.rejected.connect(partial(self.__mergeDone))
         process_diag.setModal(True)
         self.__process_diag = process_diag
         process_diag.show()
 
-    def __mergeDone(self, status):
+    def __mergeDone(self):
         self.__process_diag = None
-        if status:
+        status = self.__merger.status
+        if status == KmapMerger.DONE:
             self.__xsocs_h5 = self.__merger.master_file
             self.accept()
 
@@ -1025,7 +1028,7 @@ class MergeWidget(Qt.QDialog):
         if merger is None:
             enable = False
         else:
-            enable = merger.parsed and len(merger.matched_ids) > 0
+            enable = len(merger.matched_ids) > 0
 
         self.__outputGbx.setEnabled(enable)
         if not enable:
@@ -1067,20 +1070,16 @@ class MergeWidget(Qt.QDialog):
         padding = self.__input['padding']
         offset = self.__input['offset']
 
+        spec_h5 = os.path.join(self.__tmp_dir_merge, 'temp_spec.h5')
+
         try:
-            if self.__merger is None:
-                self.__merger = Id01DataMerger(specFile,
-                                               self.__tmp_dir_merge,
-                                               img_dir=imgDir,
-                                               # version=version,
-                                               nr_offset=offset,
-                                               nr_padding=padding)
-            else:
-                self.__merger.reset(str(specFile),
-                                    img_dir=imgDir,
-                                    # version=version,
-                                    nr_offset=offset,
-                                    nr_padding=padding)
+            self.__parser = KmapSpecParser(specFile,
+                                           spec_h5,
+                                           img_dir=imgDir,
+                                           # version=version,
+                                           nr_offset=offset,
+                                           nr_padding=padding,
+                                           callback=self.__sigParsed.emit)
         except Exception as ex:
             msg = ('Parsing failed: {0}.\n'
                    'Message : {1}.'
@@ -1104,16 +1103,24 @@ class MergeWidget(Qt.QDialog):
         info_wid.setStandardButtons(Qt.QMessageBox.NoButton)
         info_wid.show()
         self.info_wid = info_wid
-        self.__merger.parse(blocking=False,
-                            callback=self.__sigParseDone.emit)
+        self.__parser.parse(blocking=False)
 
-    def __parseSpecDone(self, *args, **kwargs):
+    def __slotParsed(self):
 
         self.info_wid.done(0)
         self.info_wid = None
 
         self.__parseBn.setEnabled(True)
         self.__parseBn.setText('Parse file.')
+
+        self.__merger = KmapMerger(self.__parser.results.spec_h5,
+                                   self.__parser.results,
+                                   output_dir=self.__output['outdir'])
+
+        self.__output['prefix'] = self.__merger.prefix
+        blocked = self.__prefixEdit.blockSignals(True)
+        self.__prefixEdit.setText(self.__merger.prefix)
+        self.__prefixEdit.blockSignals(blocked)
 
         self.__updateScansInfos()
         self.__updateOutputGroupBox()
@@ -1137,7 +1144,7 @@ class MergeWidget(Qt.QDialog):
             selected_ids = merger.selected_ids
             no_match_ids = merger.no_match_ids
             no_img_ids = merger.no_img_ids
-            enable = merger.parsed
+            enable = True
             prefix = merger.prefix
 
         nTotal = len(matched_ids)

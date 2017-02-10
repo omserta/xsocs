@@ -28,10 +28,9 @@ __authors__ = ["D. Naudet"]
 __date__ = "20/04/2016"
 __license__ = "MIT"
 
-import os
 import time
 
-from xsocs.util.id01_spec import merge_scan_data
+from xsocs.process.merge import merge_scan_data
 
 # output directory (some temporary files will also be written there)
 output_dir = '/path/to/output/'
@@ -64,6 +63,12 @@ scan_ids = None
 # number, while in version 1 we pad the value to to 5 digits)
 version = 1
 
+# you can also set the offset and padding with the nr_offset and nr_padding
+# keywords to the merge_scan_data function, or ignore them if you want
+#  to use the default values specified by "version".
+# nr_offset = -1
+# nr_padding = 4
+
 # channels (pix.) per degree (used by xrayutilities when converting to
 # qspace coordinates)
 # (not that this value can also be changed later when calling the
@@ -73,12 +78,6 @@ chan_per_deg = [318., 318.]
 # direct beam position in the detector coordinates
 center_chan = [140, 322]
 
-# the merge will actually create one file per scan, then a "master" file
-# (in the output directory) that will contain links to those files. You can
-# give the master file the name you want (if None, a name will be generated
-# with the prefix found in the spec file)
-master_f = None
-
 # checks if some of the output files already exist
 # set it to True if you dont care about overwriting files
 overwrite = False
@@ -86,15 +85,14 @@ overwrite = False
 t_merge = time.time()
 
 merge_scan_data(output_dir,
-                    spec_f,
-                    beam_energy=beam_energy,
-                    chan_per_deg=chan_per_deg,
-                    center_chan=center_chan,
-                    scan_ids=scan_ids,
-                    master_f=master_f,
-                    img_dir=img_base,
-                    version=version,
-                    overwrite=overwrite)
+                spec_f,
+                beam_energy=beam_energy,
+                chan_per_deg=chan_per_deg,
+                center_chan=center_chan,
+                scan_ids=scan_ids,
+                img_dir=img_base,
+                version=version,
+                overwrite=overwrite)
 
 t_merge = time.time() - t_merge
 print('Total time spent : {0}'.format(t_merge))

@@ -52,12 +52,15 @@ class FileChooser(Qt.QWidget):
                  fileMode=None,
                  options=None,
                  appendPath=None,
+                 noLabel=False,
                  **kwargs):
         """
         Extra arguments are passed to the QFileDialog constructor
-        :param parent:
+        :param parent Qt.QWidget:
         :param fileMode Qt.QFileDialog.FileMode:
         :param options Qt.QFileDialog.Options:
+        :param noLabel bool: Set to True to remove the label in front of the
+            line edit.
         :param kwargs: Keyword arguments passed to the QFileDialog constructor.
         """
         super(FileChooser, self).__init__(parent)
@@ -77,9 +80,10 @@ class FileChooser(Qt.QWidget):
         icon = style.standardIcon(Qt.QStyle.SP_DialogOpenButton)
         pickButton.setIcon(icon)
 
-        label = Qt.QLabel('Path :')
+        if not noLabel:
+            label = Qt.QLabel('Path :')
+            layout.addWidget(label)
 
-        layout.addWidget(label)
         layout.addWidget(lineEdit)
         layout.addWidget(pickButton)
 

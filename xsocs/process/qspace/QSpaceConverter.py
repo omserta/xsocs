@@ -35,9 +35,6 @@ from threading import Thread
 import multiprocessing as mp
 import multiprocessing.sharedctypes as mp_sharedctypes
 
-from functools import partial
-
-import h5py
 import numpy as np
 import xrayutilities as xu
 
@@ -83,8 +80,8 @@ class QSpaceConverter(object):
     n_proc = property(lambda self: self.__n_proc)
     """ Number of processes to use. Will use cpu_count() if None or 0. """
 
-    roi = property(lambda self: self.__rect_roi)
-    """ Selected ROI (in sample coordinates) """
+    roi = property(lambda self: self.__params['roi'])
+    """ Selected ROI in sample coordinates : [xmin, xmax, ymin, ymax] """
 
     def __init__(self,
                  xsocsH5_f,
@@ -92,7 +89,7 @@ class QSpaceConverter(object):
                  sample_indices=None,
                  img_binning=None,
                  output_f=None,
-                 rect_roi=None,
+                 roi=None,
                  callback=None):
         """
         Merger for the Kmap SPEC and EDF files. This loads a spech5 file,
@@ -114,7 +111,7 @@ class QSpaceConverter(object):
         self.__params = {'qspace_dims': None,
                          'image_binning': None,
                          'sample_indices': None,
-                         'rect_roi': None}
+                         'roi': None}
 
         self.__callback = callback
         self.__n_proc = None
@@ -129,7 +126,7 @@ class QSpaceConverter(object):
         self.image_binning = img_binning
         self.qspace_dims = qspace_dims
         self.sample_indices = sample_indices
-        self.rect_roi = rect_roi
+        self.roi = roi
 
         self.__set_status(self.READY)
 
@@ -292,14 +289,19 @@ class QSpaceConverter(object):
         self.__params['sample_indices'] = np.array(sample_indices,
                                                    dtype=np.int32)
 
-    rect_roi = property(lambda self: self.__params['rect_roi'])
-
-    @rect_roi.setter
-    def rect_roi(self, rect_roi):
-        if self.rect_roi is False:
+    @roi.setter
+    def roi(self, roi):
+        """
+        Sets the roi. Set to None to unset it. To change an already set roi
+        the previous one has to be unset first.
+        :param roi: roi coordinates in sample coordinates.
+            Four elements array : (xmin, xmax, ymin, ymax)
+        :return:
+        """
+        if self.roi is False:
             raise ValueError('Cannot set a rectangular ROI, pos_indices are '
                              'already set, remove them first.')
-        self.__params['rect_roi'] = rect_roi
+        self.__params['roi'] = roi
         self.__params['sample_indices'] = self.__indices_from_roi()
 
     def __indices_from_roi(self):
@@ -310,16 +312,15 @@ class QSpaceConverter(object):
             positions = xsocsH5.scan_positions(entries[0])
             x_pos = positions.pos_0
             y_pos = positions.pos_1
-            scan_params = xsocsH5.scan_params(entries[0])
 
-        rect_roi = self.rect_roi
-        if self.rect_roi is None:
+        roi = self.roi
+        if self.roi is None:
             return np.arange(len(x_pos))
 
-        x_min = rect_roi[0]
-        x_max = rect_roi[1]
-        y_min = rect_roi[2]
-        y_max = rect_roi[3]
+        x_min = roi[0]
+        x_max = roi[1]
+        y_min = roi[2]
+        y_max = roi[3]
 
         # we cant do this because the points arent perfectly aligned!
         # we could end up with non rectangular rois
@@ -426,10 +427,12 @@ class QSpaceConverter(object):
         return errors
 
     def scan_params(self, scan):
+        """ Returns the scan parameters (filled during acquisition). """
         params = _get_all_params(self.__xsocsH5_f)
         return params[scan]
 
     def __get_scans(self):
+        """ Returns the scan names. """
         params = _get_all_params(self.__xsocsH5_f)
         return sorted(params.keys())
 
@@ -750,7 +753,8 @@ class QSpaceConverter(object):
             for result_idx, pos_idx in enumerate(sample_indices):
                 idx_queue.put((result_idx, pos_idx))
 
-            # sending the None value to let the threads know that they should return
+            # sending the None value to let the threads know that they
+            # should return
             for th_idx in range(n_proc):
                 idx_queue.put(None)
 
@@ -770,10 +774,6 @@ class QSpaceConverter(object):
                 print('Sum {0}'.format(res_times.t_sum))
                 print('Write {0}'.format(res_times.t_write))
                 print('(lock : {0})'.format(res_times.t_w_lock))
-
-            # for res in proc_result = []:
-            #     res_val = res.get()
-            #     if res_val[0] != self.DONE
 
             proc_results = [result.get() for result in results]
             proc_codes = np.array([proc_result[0]
@@ -817,16 +817,19 @@ class QSpaceConverter(object):
             self.__thread.join()
 
     def __running_exception(self):
+        """ Raises an exception if a conversion is in progress. """
         if self.is_running():
             raise RuntimeError('Operation not permitted while '
                                'a parse or merge in running.')
 
     def is_running(self):
+        """ Returns True if a conversion is in progress. """
         return self.status == QSpaceConverter.RUNNING
         #self.__thread and self.__thread.is_alive()
 
     @output_f.setter
     def output_f(self, output_f):
+        """ Sets the output file. """
         if not isinstance(output_f, str):
             raise TypeError('output_f must be a string. Received {0}'
                             ''.format(type(output_f)))
@@ -834,6 +837,10 @@ class QSpaceConverter(object):
 
     @n_proc.setter
     def n_proc(self, n_proc):
+        """ Sets the number of processes to use. If None or 0 the number of
+            processes used will be the number returned by
+            multiprocessing.cpu_count.
+        """
         if n_proc is None:
             self.__n_proc = None
             return
@@ -845,6 +852,12 @@ class QSpaceConverter(object):
             self.__n_proc = n_proc
 
     def abort(self, wait=True):
+        """
+        Aborts the current conversion, if any.
+        :param wait: set to False to return immediatly without waiting for the
+        processes to return.
+        :return:
+        """
         if self.is_running():
             self.__term_evt.set()
             if wait:
@@ -939,6 +952,17 @@ def _to_qspace(th_idx,
                output_fn,
                image_binning,
                img_dtype):
+    """
+    Fonction running in a process. Performs the conversion.
+    :param th_idx:
+    :param entry_files:
+    :param entries:
+    :param img_size:
+    :param output_fn:
+    :param image_binning:
+    :param img_dtype:
+    :return:
+    """
     print('Thread {0} started.'.format(th_idx))
 
     t_histo = 0.

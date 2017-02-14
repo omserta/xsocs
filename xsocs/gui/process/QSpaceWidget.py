@@ -41,6 +41,11 @@ _DEFAULT_IMG_BIN = [1, 1]
 
 
 class ConversionParamsWidget(Qt.QWidget):
+    """
+    Widget for conversion parameters input :
+        - qspace dimensions
+        - image binning size
+    """
     def __init__(self, **kwargs):
         super(ConversionParamsWidget, self).__init__(**kwargs)
         layout = Qt.QGridLayout(self)
@@ -108,6 +113,10 @@ class ConversionParamsWidget(Qt.QWidget):
 
     @property
     def image_binning(self):
+        """
+        Returns the image binning, a 2 integers array.
+        :return:
+        """
         h_bin = self.__imgbin_h_edit.text()
         if len(h_bin) == 0:
             h_bin = None
@@ -122,11 +131,21 @@ class ConversionParamsWidget(Qt.QWidget):
 
     @image_binning.setter
     def image_binning(self, image_binning):
+        """
+        Sets the image binning.
+        :param image_binning: a 2 integers array.
+        :return:
+        """
         self.__imgbin_h_edit.setText(str(image_binning[0]))
         self.__imgbin_v_edit.setText(str(image_binning[1]))
 
     @property
     def qspace_size(self):
+        """
+        Returns the qspace dimensions, a 3 integers (> 1) array if set,
+            or [None, None, None].
+        :return:
+        """
         qsize_x = self.__qsize_x_edit.text()
         if len(qsize_x) == 0:
             qsize_x = None
@@ -146,6 +165,11 @@ class ConversionParamsWidget(Qt.QWidget):
 
     @qspace_size.setter
     def qspace_size(self, qspace_size):
+        """
+        Sets the qspace dimensions.
+        :param qspace_size: A three integers array.
+        :return:
+        """
         self.__qsize_x_edit.setText(str(int(qspace_size[0])))
         self.__qsize_y_edit.setText(str(int(qspace_size[1])))
         self.__qsize_z_edit.setText(str(int(qspace_size[2])))
@@ -165,13 +189,23 @@ class QSpaceWidget(Qt.QDialog):
                  outQSpaceH5,
                  qspaceDims=None,
                  imageBinning=None,
-                 rectRoi=None,
+                 roi=None,
                  **kwargs):
+        """
+        Widgets displaying informations about data to be converted to QSpace,
+            and allowing the user to input some parameters.
+        :param xsocH5File:
+        :param outQSpaceH5:
+        :param qspaceDims:
+        :param imageBinning:
+        :param roi:
+        :param kwargs:
+        """
         super(QSpaceWidget, self).__init__(**kwargs)
 
         self.__status = QSpaceWidget.StatusInit
 
-        self.__params = {'rect_roi': rectRoi,
+        self.__params = {'roi': roi,
                          'xsocsH5_f': xsocH5File,
                          'qspaceH5_f': outQSpaceH5}
         
@@ -298,7 +332,7 @@ class QSpaceWidget(Qt.QDialog):
                                            output_f=outQSpaceH5,
                                            qspace_dims=qspaceDims,
                                            img_binning=imageBinning,
-                                           rect_roi=rectRoi)
+                                           roi=roi)
 
         cancelBn.clicked.connect(self.close)
         convertBn.clicked.connect(self.__slotConvertBnClicked)
@@ -306,6 +340,11 @@ class QSpaceWidget(Qt.QDialog):
         self.__fillScansInfos()
 
     def __slotConvertBnClicked(self):
+        """
+        Slot called when the convert button is clicked. Does some checks
+        then starts the conversion if all is OK.
+        :return:
+        """
         converter = self.__converter
         if converter is None:
             # shouldn't be here
@@ -364,6 +403,10 @@ class QSpaceWidget(Qt.QDialog):
         procDialog.deleteLater()
 
     def __slotConvertDone(self):
+        """
+        Method called when the conversion has been completed succesfuly.
+        :return:
+        """
         converter = self.__converter
         if not converter:
             return
@@ -382,24 +425,21 @@ class QSpaceWidget(Qt.QDialog):
             self._setStatus(self.StatusUnknown)
 
     qspaceH5 = property(lambda self: self.__qspaceH5)
+    """ Written file (set when the conversion was succesful, None otherwise. """
 
     status = property(lambda self: self.__status)
+    """ Status of the widget. """
 
     def _setStatus(self, status):
+        """
+        Sets the status of the widget.
+        :param status:
+        :return:
+        """
         if status not in QSpaceWidget.StatusList:
             raise ValueError('Unknown status value : {0}.'
                              ''.format(status))
         self.__status = status
-
-    def __resetState(self):
-        widgets = self.__widgets
-
-        widgets.scans_table.clear()
-        widgets.scans_table.setHorizontalHeaderLabels(['scan', 'eta'])
-
-        self.__nImgLabel.setText('')
-        self.__nAnglesLabel.setText('')
-        self._setStatus(QSpaceWidget.StatusInit)
 
     def __fillScansInfos(self):
         """
@@ -435,11 +475,11 @@ class QSpaceWidget(Qt.QDialog):
 
         # TODO : warning if the ROI is empty (too small to contain images)
         params = converter.scan_params(scans[0])
-        rect_roi = converter.rect_roi
-        if rect_roi is None:
+        roi = converter.roi
+        if roi is None:
             xMin = xMax = yMin = yMax = 'ns'
         else:
-            xMin, xMax, yMin, yMax = rect_roi
+            xMin, xMax, yMin, yMax = roi
 
         self.__roiXMinEdit.setText(str(xMin))
         self.__roiXMaxEdit.setText(str(xMax))
@@ -459,6 +499,13 @@ class _ConversionProcessDialog(Qt.QDialog):
     def __init__(self, converter,
                  parent=None,
                  **kwargs):
+        """
+        Simple widget displaying a progress bar and a info label during the
+            conversion process.
+        :param converter:
+        :param parent:
+        :param kwargs:
+        """
         super(_ConversionProcessDialog, self).__init__(parent)
         layout = Qt.QVBoxLayout(self)
 
@@ -493,16 +540,29 @@ class _ConversionProcessDialog(Qt.QDialog):
         self.__qtimer.start(1000)
 
     def __onAbort(self):
+        """
+        Slot called when the abort button is clicked.
+        :return:
+        """
         self.__status_lab.setText('<font color="orange">Cancelling...</font>')
         self.__bn_box.button(Qt.QDialogButtonBox.Abort).setEnabled(False)
         self.__converter.abort(wait=False)
         self.__aborted = True
 
     def __onProgress(self):
+        """
+        Slot called when the progress timer timeouts.
+        :return:
+        """
         progress = self.__converter.progress()
         self.__progress_bar.setValue(progress)
 
     def __convertDone(self):
+        """
+        Callback called when the conversion is done (whether its successful or
+        not).
+        :return:
+        """
         self.__qtimer.stop()
         self.__qtimer = None
         self.__onProgress()
@@ -522,6 +582,7 @@ class _ConversionProcessDialog(Qt.QDialog):
             okBn.setText('Close')
 
     status = property(lambda self: 0 if self.__aborted else 1)
+    """ Status of the process. """
 
 
 if __name__ == '__main__':

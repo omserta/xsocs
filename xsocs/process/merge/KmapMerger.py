@@ -188,8 +188,6 @@ class KmapMerger(object):
 
         if blocking:
             self.__run_merge()
-            if self.__callback:
-                self.__callback()
         else:
             thread = self.__thread = Thread(target=self.__run_merge)
             thread.start()

@@ -36,7 +36,7 @@ print('Using Qt {0}'.format(Qt.qVersion()))
 
 from .XsocsGui import XsocsGui
 from .process.MergeWidget import MergeWidget
-from .process.RecipSpaceWidget import RecipSpaceWidget
+from .process.QSpaceWidget import QSpaceWidget
 
 
 def merge_window(*args, **kwargs):
@@ -50,7 +50,7 @@ def merge_window(*args, **kwargs):
 def conversion_window(*args, **kwargs):
     app = Qt.QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(True)
-    mw = RecipSpaceWidget(*args, **kwargs)
+    mw = QSpaceWidget(*args, **kwargs)
     mw.show()
     app.exec_()
 

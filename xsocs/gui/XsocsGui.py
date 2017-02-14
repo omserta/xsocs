@@ -43,7 +43,7 @@ from .model.TreeView import TreeView
 from .model.ModelDef import ModelRoles
 from .model.Model import Model, RootNode
 
-from .process.RecipSpaceWidget import RecipSpaceWidget
+from .process.QSpaceWidget import QSpaceWidget
 
 from .project.FitGroup import FitItem
 from .project.QSpaceGroup import QSpaceItem
@@ -191,14 +191,14 @@ class XsocsGui(Qt.QMainWindow):
         xsocsPrefix = xsocsFile.rpartition('.')[0]
         template = '{0}_qspace_{{0:>04}}.h5'.format(xsocsPrefix)
         output_f = nextFileName(self.__project.workdir, template)
-        widget = RecipSpaceWidget(parent=self.sender(),
-                                  data_h5f=self.__project.xsocsFile,
-                                  output_f=output_f,
-                                  qspace_size=None,
-                                  image_binning=None,
-                                  rect_roi=event)
+        widget = QSpaceWidget(self.__project.xsocsFile,
+                              outQSpaceH5=output_f,
+                              qspaceDims=None,
+                              imageBinning=None,
+                              rectRoi=event,
+                              parent=self.sender())
         widget.exec_()
-        if widget.status == RecipSpaceWidget.StatusCompleted:
+        if widget.status == QSpaceWidget.StatusCompleted:
             qspaceF = widget.qspaceH5
             qspaceGroup = self.__project.qspaceGroup()
             qspaceItem = qspaceGroup.addQSpace(qspaceF)

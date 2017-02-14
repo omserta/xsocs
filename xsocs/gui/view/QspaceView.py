@@ -60,7 +60,7 @@ class PlotIntensityMap(XsocsPlot2D):
     """
 
     def __init__(self, parent=None, **kwargs):
-        super(PlotIntensityMap, self).__init__(**kwargs)
+        super(PlotIntensityMap, self).__init__(parent=parent, **kwargs)
         self.setMinimumSize(150, 150)
 
         self.setDataMargins(0.2, 0.2, 0.2, 0.2)
@@ -258,7 +258,7 @@ class QSpaceView(Qt.QMainWindow):
             self.__qy = qspaceH5.qy
             self.__qz = qspaceH5.qz
             firstX = sampleX[0]
-            firstY = sampleY[1]
+            firstY = sampleY[0]
 
         self.__node = node
 

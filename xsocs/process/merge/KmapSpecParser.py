@@ -155,8 +155,6 @@ class KmapSpecParser(object):
 
         if blocking:
             self.__run_parse()
-            if self.__callback:
-                self.__callback()
         else:
             thread = self.__thread = Thread(target=self.__run_parse)
             thread.start()

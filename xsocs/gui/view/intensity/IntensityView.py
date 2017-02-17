@@ -32,26 +32,25 @@ __date__ = "15/09/2016"
 import numpy as np
 
 from silx.gui import qt as Qt
-from silx.gui.plot import PlotWindow
 
-from matplotlib import cm
+from .PlotModel import PlotTree
 
-from ..model.TreeView import TreeView
-from ..model.Model import Model, RootNode, Node
-from ..model.ModelDef import ModelColumns, ModelRoles
-from ..project.XsocsH5Factory import h5NodeToProjectItem
-from ..project.Hdf5Nodes import H5GroupNode
-from ..project.IntensityGroup import IntensityGroup
-from ..widgets.XsocsPlot2D import XsocsPlot2D
-from ..widgets.Input import StyledLineEdit
-from ..widgets.Buttons import FixedSizePushButon
-from ..widgets.Containers import GroupBox
+from ...model.TreeView import TreeView
+from ...model.Model import Model, RootNode, Node
+from ...model.ModelDef import ModelRoles
+from ...project.XsocsH5Factory import h5NodeToProjectItem
+from ...project.Hdf5Nodes import H5GroupNode
+from ...project.IntensityGroup import IntensityGroup
+from ...widgets.XsocsPlot2D import XsocsPlot2D
+from ...widgets.Input import StyledLineEdit
+from ...widgets.Buttons import FixedSizePushButon
+from ...widgets.Containers import GroupBox
 
 try:
     from silx.gui.plot.ImageRois import ImageRoiManager
 except ImportError:
     # TODO remove this import once the ROIs are added to the silx release.
-    from ..silx_imports.ImageRois import ImageRoiManager
+    from ...silx_imports.ImageRois import ImageRoiManager
 
 
 class RectRoiWidget(Qt.QWidget):
@@ -456,10 +455,18 @@ class IntensityView(Qt.QMainWindow):
         dock.setFeatures(features)
         self.addDockWidget(Qt.Qt.RightDockWidgetArea, dock)
 
+        profileWid = Qt.QWidget()
+        profileLayout = Qt.QHBoxLayout(profileWid)
+
         self.__profilePlot = profilePlot = XsocsPlot2D()
         profilePlot.setKeepDataAspectRatio(False)
+        profileLayout.addWidget(profilePlot, 10)
+
+        plotTree = PlotTree(profilePlot)
+        profileLayout.addWidget(plotTree)
+
         dock = Qt.QDockWidget(self)
-        dock.setWidget(profilePlot)
+        dock.setWidget(profileWid)
         features = dock.features() ^ Qt.QDockWidget.DockWidgetClosable
         dock.setFeatures(features)
         self.addDockWidget(Qt.Qt.BottomDockWidgetArea, dock)
@@ -543,13 +550,14 @@ class IntensityView(Qt.QMainWindow):
             angles[entryIdx] = xsocsH5.scan_angle(entry)
 
         title = 'Profile @ ({0:.7g}, {1:.7g})'.format(point.x, point.y)
-        plot.addCurve(angles, intensities, legend='i_entries')
+        plot.addCurve(angles, intensities, legend='All')
         plot.setGraphTitle(title)
 
         if selected:
             plot.addCurve(angles[selected],
                           intensities[selected],
-                          legend='i_selected')
+                          legend='Selected ({0}/{1}'.format(len(selected),
+                                                            len(entries)))
 
         for unselIdx in unselected:
             plot.addXMarker(angles[unselIdx],

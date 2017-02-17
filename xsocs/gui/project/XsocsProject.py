@@ -75,8 +75,12 @@ class XsocsProject(ProjectItem):
             return xsocsH5.scan_positions(entry)
 
     def shortName(self, entry):
-        if entry == 'Total':
-            return entry
+        """
+        Returns the angle of the given entry, or None if the entry is not
+            found.
+        :param entry:
+        :return: str
+        """
         with self.xsocsH5 as xsocsH5:
             return str(xsocsH5.scan_angle(entry))
 

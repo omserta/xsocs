@@ -706,7 +706,10 @@ class XsocsPlot2D(PlotWindow):
                         curve = curve[0]
 
                 if curve:
-                    curveX, curveY = self.getCurve(curve)[0:2]
+                    data = self.getCurve(curve)
+                    if data is None:
+                        return
+                    curveX, curveY = data[0:2]
                     dataIdx = ((curveX - x) ** 2 + (curveY - y) ** 2).argmin()
                     x = curveX[dataIdx]
                     y = curveY[dataIdx]

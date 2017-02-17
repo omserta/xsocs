@@ -118,8 +118,8 @@ class IntensityGroupNode(H5GroupNode):
             self.__viewWidget = view
         return view()
 
-    # def _loadChildren(self):
-    #     return []
+    def _loadChildren(self):
+        return []
 
 
 @H5NodeClassDef('IntensityNode',

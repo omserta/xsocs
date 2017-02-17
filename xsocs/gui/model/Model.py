@@ -62,6 +62,8 @@ class Model(Qt.QAbstractItemModel):
         self.__root.sigInternalDataChanged.connect(self.__internalDataChanged)
 
     def columnsWithDelegates(self):
+        if self.ColumnsWithDelegates is None:
+            return []
         return self.ColumnsWithDelegates
 
     def startModel(self):
@@ -211,4 +213,5 @@ class Model(Qt.QAbstractItemModel):
         if not index.isValid():
             return False
         node = index.data(role=ModelRoles.InternalDataRole)
-        return node.setData(index.column(), value, role)
+        rc = node.setData(index.column(), value, role)
+        return rc

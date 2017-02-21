@@ -43,7 +43,8 @@ from .Hdf5Nodes import H5GroupNode, H5NodeClassDef, H5DatasetNode
 
 from ..view.FitView import FitView
 from ..view.QspaceView import QSpaceView
-from ..view.IntensityView import IntensityView
+from ..view.intensity.IntensityView import IntensityView
+from ..project.IntensityGroup import IntensityGroup
 
 
 class ScatterPlotButton(EditorMixin, Qt.QWidget):
@@ -112,9 +113,8 @@ class IntensityGroupNode(H5GroupNode):
 
         view = self.__viewWidget
         if view is None or view() is None:
-            view = weakref.ref(IntensityView(parent,
-                                              self.model,
-                                              self))
+            iGroup = IntensityGroup(self.h5File, nodePath=self.h5Path)
+            view = weakref.ref(IntensityView(iGroup, parent))
             self.__viewWidget = view
         return view()
 

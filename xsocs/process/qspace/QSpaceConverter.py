@@ -90,13 +90,20 @@ class QSpaceConverter(object):
                  img_binning=None,
                  output_f=None,
                  roi=None,
+                 entries=None,
                  callback=None):
         """
         Merger for the Kmap SPEC and EDF files. This loads a spech5 file,
              converts it to HDF5 and then tries to match scans and edf image
              files.
         :param xsocsH5_f: path to the input XsocsH5 file.
+        :param qspace_dims: dimensions of the qspace volume
+        :param img_binning: binning to apply to the images before conversion.
+            Default : (1, 1)
         :param output_f: path to the output file that will be created.
+        :param roi: Roi in sample coordinates (xMin, xMax, yMin, yMax)
+        :param entries: a list of entry names to convert to qspace. If None,
+            all entries found in the xsocsH5File will be used.
         :param callback: callback to call when the parsing is done.
         """
         super(QSpaceConverter, self).__init__()
@@ -108,10 +115,22 @@ class QSpaceConverter(object):
         self.__xsocsH5_f = xsocsH5_f
         self.__output_f = output_f
 
+        xsocsH5 = XsocsH5.XsocsH5(xsocsH5_f)
+        # checking entries
+        if entries is None:
+            entries = xsocsH5.entries()
+        else:
+            diff = set(entries) - set(xsocsH5.entries())
+            if len(diff) > 0:
+                raise ValueError('The following entries were not found in '
+                                 'the input file :\n - {0}'
+                                 ''.format('\n -'.join(diff)))
+
         self.__params = {'qspace_dims': None,
                          'image_binning': None,
                          'sample_indices': None,
-                         'roi': None}
+                         'roi': None,
+                         'entries': sorted(entries)}
 
         self.__callback = callback
         self.__n_proc = None
@@ -132,10 +151,9 @@ class QSpaceConverter(object):
 
     def __get_scans(self):
         """
-        Returns the scans found in the input file.
+        Returns the entries that will be converted.
         """
-        params = _get_all_params(self.__xsocsH5_f)
-        return sorted(params.keys())
+        return self.__params['entries']
 
     scans = property(__get_scans)
     """ Returns the scans found in the input file. """
@@ -431,11 +449,6 @@ class QSpaceConverter(object):
         params = _get_all_params(self.__xsocsH5_f)
         return params[scan]
 
-    def __get_scans(self):
-        """ Returns the scan names. """
-        params = _get_all_params(self.__xsocsH5_f)
-        return sorted(params.keys())
-
     def __run_convert(self):
         """
         Performs the conversion.
@@ -454,7 +467,7 @@ class QSpaceConverter(object):
 
             params = _get_all_params(xsocsH5_f)
 
-            entries = sorted(params.keys())
+            entries = self.__get_scans()
             n_entries = len(entries)
 
             first_param = params[entries[0]]

@@ -29,6 +29,8 @@ __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "15/09/2016"
 
+from collections import namedtuple
+
 import numpy as np
 
 from silx.gui import qt as Qt
@@ -36,21 +38,25 @@ from silx.gui import qt as Qt
 from .PlotModel import PlotTree
 
 from ...model.TreeView import TreeView
-from ...model.Model import Model, RootNode, Node
 from ...model.ModelDef import ModelRoles
-from ...project.XsocsH5Factory import h5NodeToProjectItem
+from ...model.Model import Model, RootNode, Node
+
 from ...project.Hdf5Nodes import H5GroupNode
 from ...project.IntensityGroup import IntensityGroup
-from ...widgets.XsocsPlot2D import XsocsPlot2D
-from ...widgets.Input import StyledLineEdit
-from ...widgets.Buttons import FixedSizePushButon
+
 from ...widgets.Containers import GroupBox
+from ...widgets.Input import StyledLineEdit
+from ...widgets.XsocsPlot2D import XsocsPlot2D
+from ...widgets.Buttons import FixedSizePushButon
 
 try:
     from silx.gui.plot.ImageRois import ImageRoiManager
 except ImportError:
     # TODO remove this import once the ROIs are added to the silx release.
     from ...silx_imports.ImageRois import ImageRoiManager
+
+
+IntensityViewEvent = namedtuple('IntensityViewEvent', ['roi', 'entries'])
 
 
 class RectRoiWidget(Qt.QWidget):
@@ -62,7 +68,7 @@ class RectRoiWidget(Qt.QWidget):
         super(RectRoiWidget, self).__init__(parent)
 
         self.__roiToolBar = roiToolBar = roiManager.toolBar(rois=['rectangle'],
-                                        options=['show'])
+                                                            options=['show'])
         roiToolBar.setMovable(False)
 
         topLayout = Qt.QVBoxLayout(self)
@@ -403,13 +409,13 @@ class IntensityView(Qt.QMainWindow):
     plot = property(lambda self: self.__plotWindow)
 
     def __init__(self,
-                 parent,
-                 model,
-                 node,
+                 intensityGroup,
+                 parent=None,
                  **kwargs):
-        super(IntensityView, self).__init__(parent=parent)
+        super(IntensityView, self).__init__(parent, **kwargs)
 
-        self.setWindowTitle('[XSOCS] {0}'.format(node.h5Path))
+        self.setWindowTitle('[XSOCS] {0}:{1}'.format(intensityGroup.filename,
+                                                     intensityGroup.path))
 
         self.__displayedNode = None
         self.__selectedPoint = None
@@ -423,7 +429,7 @@ class IntensityView(Qt.QMainWindow):
         layout = Qt.QVBoxLayout(selector)
 
         # TODO : check item type
-        self.__iGroup = intensityGroup = h5NodeToProjectItem(node)
+        self.__iGroup = intensityGroup
         self.__tree = tree = IntensityTree(intensityGroup, parent=self)
         tree.model().dataChanged.connect(self.__slotModelDataChanged)
         tree.sigCurrentChanged.connect(self.__slotItemSelected)
@@ -535,7 +541,8 @@ class IntensityView(Qt.QMainWindow):
             return
 
         iGroup = self.__iGroup
-        entries, selected, unselected = self.__tree.model().getSelectedEntries()
+        entries, selected, unselected =\
+            self.__tree.model().getSelectedEntries()
         nEntries = len(entries)
 
         xsocsH5 = iGroup.projectRoot().xsocsH5
@@ -572,7 +579,14 @@ class IntensityView(Qt.QMainWindow):
         :param roi:
         :return:
         """
-        self.sigProcessApplied.emit(roi)
+        entries, selected, _ =\
+            self.__tree.model().getSelectedEntries()
+
+        selEntries = [entries[idx] for idx in selected]
+
+        event = IntensityViewEvent(roi=roi, entries=selEntries)
+
+        self.sigProcessApplied.emit(event)
 
 
 if __name__ == '__main__':

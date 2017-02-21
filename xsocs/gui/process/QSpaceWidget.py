@@ -31,6 +31,8 @@ __date__ = "15/09/2016"
 
 from silx.gui import qt as Qt
 
+from ...io.XsocsH5 import XsocsH5
+
 from ..widgets.Containers import GroupBox
 from ..widgets.Input import StyledLineEdit
 from ...process.qspace.QSpaceConverter import QSpaceConverter
@@ -190,20 +192,38 @@ class QSpaceWidget(Qt.QDialog):
                  qspaceDims=None,
                  imageBinning=None,
                  roi=None,
+                 entries=None,
                  **kwargs):
         """
         Widgets displaying informations about data to be converted to QSpace,
             and allowing the user to input some parameters.
-        :param xsocH5File:
-        :param outQSpaceH5:
-        :param qspaceDims:
-        :param imageBinning:
-        :param roi:
+        :param xsocH5File: name of the input XsocsH5 file.
+        :param outQSpaceH5: name of the output hdf5 file
+        :param qspaceDims: dimensions of the qspace volume
+        :param imageBinning: binning to apply to the images before conversion.
+            Default : (1, 1)
+        :param roi: Roi in sample coordinates (xMin, xMax, yMin, yMax)
+        :param entries: a list of entry names to convert to qspace. If None,
+            all entries found in the xsocsH5File will be used.
         :param kwargs:
         """
         super(QSpaceWidget, self).__init__(**kwargs)
 
         self.__status = QSpaceWidget.StatusInit
+
+        xsocsH5 = XsocsH5(xsocH5File)
+
+        # checking entries
+        if entries is None:
+            entries = xsocsH5.entries()
+        elif len(entries) == 0:
+            raise ValueError('At least one entry must be selected.')
+        else:
+            diff = set(entries) - set(xsocsH5.entries())
+            if len(diff) > 0:
+                raise ValueError('The following entries were not found in '
+                                 'the input file :\n - {0}'
+                                 ''.format('\n -'.join(diff)))
 
         self.__params = {'roi': roi,
                          'xsocsH5_f': xsocH5File,
@@ -332,7 +352,8 @@ class QSpaceWidget(Qt.QDialog):
                                            output_f=outQSpaceH5,
                                            qspace_dims=qspaceDims,
                                            img_binning=imageBinning,
-                                           roi=roi)
+                                           roi=roi,
+                                           entries=entries)
 
         cancelBn.clicked.connect(self.close)
         convertBn.clicked.connect(self.__slotConvertBnClicked)
@@ -485,12 +506,14 @@ class QSpaceWidget(Qt.QDialog):
         self.__roiXMaxEdit.setText(str(xMax))
         self.__roiYMinEdit.setText(str(yMin))
         self.__roiYMaxEdit.setText(str(yMax))
-        
+
         indices = converter.sample_indices
         nImgTxt = '{0} / {1}'.format(len(indices),
                                      params['n_images'])
         self.__nImgLabel.setText(nImgTxt)
-        self.__nAnglesLabel.setText(str(len(scans)))
+
+        nEntries = len(XsocsH5(self.__params['xsocsH5_f']).entries())
+        self.__nAnglesLabel.setText('{0} / {1}'.format(len(scans), nEntries))
 
 
 class _ConversionProcessDialog(Qt.QDialog):

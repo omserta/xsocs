@@ -556,6 +556,8 @@ class QSpaceConverter(object):
 
                 entry_files = []
 
+                all_entries = set(master_h5.entries())
+
                 positions = master_h5.scan_positions(entries[0])
                 sample_x = positions.pos_0
                 sample_y = positions.pos_1
@@ -677,6 +679,8 @@ class QSpaceConverter(object):
                       max(output_shape[2] // 4, 1),)
             qspace_sum_chunks = max(n_images // 10, 1),
 
+            discarded_entries = sorted(all_entries - set(entries))
+
             _create_result_file(output_f,
                                 output_shape,
                                 sample_x[sample_indices],
@@ -685,6 +689,8 @@ class QSpaceConverter(object):
                                 qy_idx,
                                 qz_idx,
                                 histo,
+                                selected_entries=entries,
+                                discarded_entries=discarded_entries,
                                 compression='lzf',
                                 qspace_chunks=chunks,
                                 qspace_sum_chunks=qspace_sum_chunks,
@@ -921,19 +927,40 @@ def _init_thread(idx_queue_,
 
 
 def _create_result_file(h5_fn,
-                        qspace_shape,
-                        # dtype,
+                        qspace_dims,
+                        image_binning,
                         pos_x,
                         pos_y,
-                        bins_x,
-                        bins_y,
-                        bins_z,
+                        q_x,
+                        q_y,
+                        q_z,
                         histo,
-                        # roi_shape,
+                        selected_entries,
+                        discarded_entries=None,
                         compression='lzf',
                         qspace_chunks=None,
                         qspace_sum_chunks=None,
                         overwrite=False):
+    """
+    Initializes the output file.
+    :param h5_fn: name of the file to initialize
+    :param qspace_dims: dimensions of the q space
+    :param image_binning: binning applied to the images
+    :param pos_x: sample X positions (one for each qspace cube)
+    :param pos_y: sample Y positions (one for each qspace cube)
+    :param q_x: X coordinates of the qspace cube
+    :param q_y: Y coordinates of the qspace cube
+    :param q_z: Z coordinates of the qspace cube
+    :param histo: histogram (number of hits per element of the qspace elements)
+    :param selected_entries: list of input entries used for the conversion
+    :param discarded_entries: list of input entries discarded, or None
+    :param compression: datasets compression
+    :param qspace_chunks: qspace chunking
+    :param qspace_sum_chunks:
+    :param overwrite: True to force overwriting the file if it already exists.
+    :return:
+    """
+
     if not overwrite:
         mode = 'w-'
     else:
@@ -945,17 +972,18 @@ def _create_result_file(h5_fn,
 
     qspace_h5 = QSpaceH5.QSpaceH5Writer(h5_fn, mode=mode)
     qspace_h5.init_file(len(pos_x),
-                        qspace_shape,
+                        qspace_dims,
                         qspace_chunks=qspace_chunks,
                         qspace_sum_chunks=qspace_sum_chunks,
                         compression=compression)
     qspace_h5.set_histo(histo)
     qspace_h5.set_sample_x(pos_x)
     qspace_h5.set_sample_y(pos_y)
-    qspace_h5.set_qx(bins_x)
-    qspace_h5.set_qy(bins_y)
-    qspace_h5.set_qz(bins_z)
-    # qspace_h5.set_image_shape(roi_shape)
+    qspace_h5.set_qx(q_x)
+    qspace_h5.set_qy(q_y)
+    qspace_h5.set_qz(q_z)
+    qspace_h5.set_entries(selected_entries, discarded=discarded_entries)
+    qspace_h5.set_image_binning(image_binning)
 
 
 def _to_qspace(th_idx,

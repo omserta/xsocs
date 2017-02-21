@@ -47,6 +47,8 @@ class QSpaceH5(XsocsH5Base):
     sample_y_path = 'Data/sample_y'
     qspace_sum_path = 'Data/qspace_sum'
     image_shape_path = 'Data/image_shape'
+    params_path = 'Params/'
+    entries_path = 'params/entries'
 
     def __init__(self, h5_f, mode='r'):
         super(QSpaceH5, self).__init__(h5_f, mode=mode)
@@ -188,3 +190,30 @@ class QSpaceH5Writer(QSpaceH5):
 
     def set_image_shape(self, image_shape):
         self._set_array_data(QSpaceH5.image_shape_path, image_shape)
+
+    def set_entries(self, selected, discarded=None):
+        """
+        Sets the input entries that were converted to qspace.
+        :param selected: Selected entry names
+        :param discarded: List of input entries that were discarded, or None.
+        :return:
+        """
+        path = self.entries_path + '/selected'
+        selected = _np.array(selected, dtype=_np.string_)
+        self._set_array_data(path, selected)
+        path = self.entries_path + '/discarded'
+        discarded = _np.array((discarded is not None and discarded) or [],
+                              dtype=_np.string_)
+        self._set_array_data(path, discarded)
+
+    def set_image_binning(self, image_binning):
+        """
+        Stores the image binning used when converting to q space
+        :param image_binning: a 2 elements array.
+        :return:
+        """
+        path = self.params_path + '/image_binning'
+        self._set_array_data(path, _np.array(image_binning))
+
+if __name__ == '__main__':
+    pass

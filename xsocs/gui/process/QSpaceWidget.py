@@ -590,13 +590,22 @@ class _ConversionProcessDialog(Qt.QDialog):
         self.__qtimer = None
         self.__onProgress()
         abortBn = self.__bn_box.button(Qt.QDialogButtonBox.Abort)
-        if self.__aborted:
+
+        converter = self.__converter
+
+        if converter.status == QSpaceConverter.CANCELED:
             self.__bn_box.rejected.disconnect(self.__onAbort)
             self.__status_lab.setText('<font color="red">Conversion '
                                       'cancelled.</font>')
             abortBn.setText('Close')
             self.__bn_box.rejected.connect(self.reject)
             abortBn.setEnabled(True)
+        elif converter.status == QSpaceConverter.ERROR:
+            self.__bn_box.removeButton(abortBn)
+            okBn = self.__bn_box.addButton(Qt.QDialogButtonBox.Ok)
+            self.__status_lab.setText('<font color="red">Error : {0}.</font>'
+                                      ''.format(converter.status_msg))
+            okBn.setText('Close')
         else:
             self.__bn_box.removeButton(abortBn)
             okBn = self.__bn_box.addButton(Qt.QDialogButtonBox.Ok)

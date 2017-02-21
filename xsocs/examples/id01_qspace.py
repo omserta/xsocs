@@ -25,10 +25,7 @@ image_binning = [4, 4]
 # positions (on the sample) to convert to qspace
 # if pos_indices will be ignored if rect_roi is provided
 # rect_roi = [x_min, x_max, y_min, y_max] (sample positions)
-# pos_indices = array with indices (of the sample positions array)
-#   to convert to qspace
 roi = None
-sample_indices = None
 
 # set to true if you want to overwrite the output file
 # otherwise an exception will be raised if the file already exists
@@ -43,6 +40,5 @@ kmap_2_qspace(xsocs_h5,
               qspace_dims,
               image_binning=image_binning,
               roi=roi,
-              sample_indices=sample_indices,
               n_proc=n_proc,
               overwrite=overwrite)

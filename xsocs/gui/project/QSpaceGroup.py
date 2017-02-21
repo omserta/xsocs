@@ -103,25 +103,28 @@ class QSpaceItem(ProjectItem):
         if qspaceFile is None:
             return
 
-        with QSpaceH5(qspaceFile) as qspaceH5:
-            with self:
-                pathTpl = self.path + '/info/{0}'
-                with qspaceH5.qspace_dset_ctx() as ctx:
-                    shape = np.array(ctx.shape)
-                itemPath = pathTpl.format('#')
-                self._set_scalar_data(itemPath, shape[0])
-                itemPath = pathTpl.format('shape')
-                self._set_array_data(itemPath, shape[1:])
-                qx = qspaceH5.qx
-                qy = qspaceH5.qy
-                qz = qspaceH5.qz
-                itemPath = pathTpl.format('qx range')
-                self._set_array_data(itemPath, np.array([qx[0], qx[-1]]))
-                itemPath = pathTpl.format('qy range')
-                self._set_array_data(itemPath, np.array([qy[0], qy[-1]]))
-                itemPath = pathTpl.format('qz range')
-                self._set_array_data(itemPath, np.array([qz[0], qz[-1]]))
+        # with QSpaceH5(qspaceFile) as qspaceH5:
+        #     with self:
+        #         pathTpl = self.path + '/info/{0}'
+        #         with qspaceH5.qspace_dset_ctx() as ctx:
+        #             shape = np.array(ctx.shape)
+        #         itemPath = pathTpl.format('# points')
+        #         self._set_scalar_data(itemPath, shape[0])
+        #         itemPath = pathTpl.format('qspace dims')
+        #         self._set_array_data(itemPath, shape[1:])
+        #         qx = qspaceH5.qx
+        #         qy = qspaceH5.qy
+        #         qz = qspaceH5.qz
+        #         itemPath = pathTpl.format('qx range')
+        #         self._set_array_data(itemPath, np.array([qx[0], qx[-1]]))
+        #         itemPath = pathTpl.format('qy range')
+        #         self._set_array_data(itemPath, np.array([qy[0], qy[-1]]))
+        #         itemPath = pathTpl.format('qz range')
+        #         self._set_array_data(itemPath, np.array([qz[0], qz[-1]]))
 
         FitGroup(self.filename,
                  self.path + '/' + QSpaceItem.FitGroupPath,
                  mode=self.mode)
+
+if __name__ == '__main__':
+    pass

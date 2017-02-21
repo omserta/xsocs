@@ -34,6 +34,7 @@ import weakref
 
 from silx.gui import qt as Qt, icons
 
+from ..model.Node import Node
 from ..model.ModelDef import ModelColumns
 from ..model.NodeEditor import EditorMixin
 
@@ -44,7 +45,11 @@ from .Hdf5Nodes import H5GroupNode, H5NodeClassDef, H5DatasetNode
 from ..view.FitView import FitView
 from ..view.QspaceView import QSpaceView
 from ..view.intensity.IntensityView import IntensityView
+
+from ..project.QSpaceGroup import QSpaceItem
+from ..project.ProjectItem import ProjectItem
 from ..project.IntensityGroup import IntensityGroup
+
 
 
 class ScatterPlotButton(EditorMixin, Qt.QWidget):
@@ -134,10 +139,133 @@ class IntensityNode(H5DatasetNode):
                          Qt.Qt.DisplayRole)
 
 
+class QSpaceInfoNode(Node):
+    """
+    Simple node displaying the qspace conversion parameters.
+    """
+    icons = Qt.QStyle.SP_FileDialogInfoView
+
+    def _loadChildren(self):
+        # This node is created by a QSpaceItemNode, which is a H5Node
+        # and H5Node have themselves as subject, and the groupClasses
+        # inherit their parent's subject.
+        qspaceNode = self.subject
+        qspaceItem = ProjectItem(qspaceNode.h5File, qspaceNode.h5Path).cast()
+
+        children = []
+
+        if not isinstance(qspaceItem, QSpaceItem):
+            node = Node(nodeName='Error, invalid file.')
+            icon = Qt.qApp.style().standardIcon(
+                Qt.QStyle.SP_MessageBoxCritical)
+            node.setData(0, icon, Qt.Qt.DecorationRole)
+            return [node]
+
+        qspaceH5 = qspaceItem.qspaceH5
+
+        ##################################################
+        # Adding selected/discarded entries.
+        ##################################################
+
+        selected = qspaceH5.selected_entries
+        discarded = qspaceH5.discarded_entries
+
+        # support for previous versions.
+        # TODO : remove sometimes...
+        if selected is None or len(selected) == 0:
+            selected = qspaceItem.projectRoot().xsocsH5.entries()
+        if discarded is None:
+            discarded = []
+
+        nSelected = len(selected)
+        nDiscarded = len(discarded)
+
+        selectedList = Node(nodeName='Selected entries')
+        selectedList.setData(0,
+                             'Entries used for the conversion.',
+                             role=Qt.Qt.ToolTipRole)
+        selectedList.setData(ModelColumns.ValueColumn,
+                             '{0}'.format(nSelected))
+        for entry in selected:
+            node = Node(nodeName=entry)
+            selectedList.appendChild(node)
+        children.append(selectedList)
+
+        discardedList = Node(nodeName='Discarded entries')
+        discardedList.setData(0,
+                              'Discarded input entries.',
+                              role=Qt.Qt.ToolTipRole)
+        discardedList.setData(ModelColumns.ValueColumn,
+                              '{0}'.format(nDiscarded))
+        for entry in discarded:
+            node = Node(nodeName=entry)
+            discardedList.appendChild(node)
+        children.append(discardedList)
+
+        ##################################################
+        # Adding ROI info
+        ##################################################
+
+        sampleRoi = qspaceH5.sample_roi
+        toolTip = """<ul>
+                    <li>xMin : {0:.7g}
+                    <li>xMax : {1:.7g}
+                    <li>yMin : {2:.7g}
+                    <li>yMax : {3:.7g}
+                    </ul>
+                  """.format(*sampleRoi)
+        roiNode = Node(nodeName='Roi')
+        text = '{0:6g}, {1:6g}, {2:6g}, {3:6g}'.format(*sampleRoi)
+        roiNode.setData(ModelColumns.ValueColumn, text)
+        roiNode.setData(ModelColumns.NameColumn, toolTip, Qt.Qt.ToolTipRole)
+        node = Node(nodeName='xMin')
+        node.setData(ModelColumns.ValueColumn, '{0:.7g}'.format(sampleRoi[0]))
+        roiNode.appendChild(node)
+        node = Node(nodeName='xMax')
+        node.setData(ModelColumns.ValueColumn, '{0:.7g}'.format(sampleRoi[1]))
+        roiNode.appendChild(node)
+        node = Node(nodeName='yMin')
+        node.setData(ModelColumns.ValueColumn, '{0:.7g}'.format(sampleRoi[2]))
+        roiNode.appendChild(node)
+        node = Node(nodeName='yMax')
+        node.setData(ModelColumns.ValueColumn, '{0:.7g}'.format(sampleRoi[3]))
+        roiNode.appendChild(node)
+
+        children.append(roiNode)
+
+        ##################################################
+        # Adding image binning.
+        ##################################################
+        node = Node(nodeName='Image binning')
+        imageBinning = qspaceH5.image_binning
+        # support for previous versions
+        # TODO : remove eventualy
+        if imageBinning is None:
+            text = 'unavailable'
+        else:
+            text = '{0}x{1}'.format(*imageBinning)
+        node.setData(ModelColumns.ValueColumn, text)
+        children.append(node)
+
+        ##################################################
+        # Adding qspace dims.
+        ##################################################
+        qspaceDimsNode = Node(nodeName='Qspace size')
+        qspaceDims = qspaceH5.qspace_dimensions
+        # support for previous versions
+        # TODO : remove eventualy
+        text = '{0}x{1}x{2} (qx, qy, qz)'.format(*qspaceDims)
+        qspaceDimsNode.setData(ModelColumns.ValueColumn, text)
+        children.append(qspaceDimsNode)
+
+        return children
+
+
 @H5NodeClassDef('QSpaceItem',
                 attribute=('XsocsClass', 'QSpaceItem'))
 class QSpaceItemNode(H5GroupNode):
     editors = QSpaceButton
+    groupClasses = [('Infos', QSpaceInfoNode)]
 
     def __init__(self, *args, **kwargs):
         super(QSpaceItemNode, self).__init__(*args, **kwargs)
@@ -156,6 +284,14 @@ class QSpaceItemNode(H5GroupNode):
                                           self))
             self.__viewWidget = view
         return view()
+
+    def _loadChildren(self):
+        # dirty hack to remove a legacy group from appearing in the tree
+        # TODO : to be removed eventualy
+        children = super(QSpaceItemNode, self)._loadChildren()
+        filtered = [child for child in children
+                    if os.path.basename(child.h5Path) != 'info']
+        return filtered
 
 
 class FitButton(EditorMixin, Qt.QWidget):

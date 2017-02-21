@@ -86,7 +86,6 @@ class QSpaceConverter(object):
     def __init__(self,
                  xsocsH5_f,
                  qspace_dims=None,
-                 sample_indices=None,
                  img_binning=None,
                  output_f=None,
                  roi=None,
@@ -144,7 +143,6 @@ class QSpaceConverter(object):
 
         self.image_binning = img_binning
         self.qspace_dims = qspace_dims
-        self.sample_indices = sample_indices
         self.roi = roi
 
         self.__set_status(self.READY)
@@ -285,27 +283,27 @@ class QSpaceConverter(object):
         self.__params['image_binning'] = np.array(image_binning_int,
                                                   dtype=np.int32)
 
-    @sample_indices.setter
-    def sample_indices(self, sample_indices):
-        """
-        Binning applied to the image before converting to qspace
-        """
-        if sample_indices is None:
-            self.__params['sample_indices'] = None
-            return
-
-        sample_indices = np.array(sample_indices, ndmin=1).astype(np.long)
-
-        if sample_indices.ndim != 1:
-            raise ValueError('sample_indices must be a 1D array.')
-
-        if len(sample_indices) == 0:
-            self.__params['sample_indices'] = None
-            return
-
-        # TODO : check values
-        self.__params['sample_indices'] = np.array(sample_indices,
-                                                   dtype=np.int32)
+    # @sample_indices.setter
+    # def sample_indices(self, sample_indices):
+    #     """
+    #     Binning applied to the image before converting to qspace
+    #     """
+    #     if sample_indices is None:
+    #         self.__params['sample_indices'] = None
+    #         return
+    #
+    #     sample_indices = np.array(sample_indices, ndmin=1).astype(np.long)
+    #
+    #     if sample_indices.ndim != 1:
+    #         raise ValueError('sample_indices must be a 1D array.')
+    #
+    #     if len(sample_indices) == 0:
+    #         self.__params['sample_indices'] = None
+    #         return
+    #
+    #     # TODO : check values
+    #     self.__params['sample_indices'] = np.array(sample_indices,
+    #                                                dtype=np.int32)
 
     @roi.setter
     def roi(self, roi):
@@ -461,6 +459,7 @@ class QSpaceConverter(object):
         qspace_dims = self.qspace_dims
         xsocsH5_f = self.xsocsH5_f
         output_f = self.output_f
+        sample_roi = self.__params['roi']
 
         try:
             ta = time.time()
@@ -683,6 +682,8 @@ class QSpaceConverter(object):
 
             _create_result_file(output_f,
                                 output_shape,
+                                image_binning,
+                                sample_roi,
                                 sample_x[sample_indices],
                                 sample_y[sample_indices],
                                 qx_idx,
@@ -929,6 +930,7 @@ def _init_thread(idx_queue_,
 def _create_result_file(h5_fn,
                         qspace_dims,
                         image_binning,
+                        sample_roi,
                         pos_x,
                         pos_y,
                         q_x,
@@ -984,6 +986,7 @@ def _create_result_file(h5_fn,
     qspace_h5.set_qz(q_z)
     qspace_h5.set_entries(selected_entries, discarded=discarded_entries)
     qspace_h5.set_image_binning(image_binning)
+    qspace_h5.set_sample_roi(sample_roi)
 
 
 def _to_qspace(th_idx,

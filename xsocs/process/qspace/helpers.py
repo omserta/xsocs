@@ -36,7 +36,6 @@ def kmap_2_qspace(xsocsH5_f,
                   qspace_dims,
                   image_binning=(4, 4),
                   roi=None,
-                  sample_indices=None,
                   n_proc=None,
                   overwrite=False):
     """
@@ -64,12 +63,6 @@ def kmap_2_qspace(xsocsH5_f,
         y_max.
     :type roi: *optional* `array_like` (x_min, x_max, y_min, y_max)
 
-    :param sample_indices: indices of the positions (on the sample) that have
-        to be converted to qspace. **Ignored** if *roi* is provided.
-        E.g : if the array [0, 1, 2] is provided, only the first 3 sample
-        scans positions will be converted to qspace.
-    :type sample_indices: *optional* `array_like`
-
     :param n_proc: number of process to use. If None, the number of process
         used will be the one returned by multiprocessing.cpu_count().
     :type n_proc: `int`
@@ -85,8 +78,6 @@ def kmap_2_qspace(xsocsH5_f,
 
     if roi is not None:
         converter.roi = roi
-    elif sample_indices is not None:
-        converter.sample_indices = sample_indices
 
     converter.image_binning = image_binning
 

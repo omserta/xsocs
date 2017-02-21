@@ -103,6 +103,60 @@ class QSpaceH5(XsocsH5Base):
     image_shape = property(lambda self:
                            self._get_array_data(QSpaceH5.image_shape_path))
 
+    @property
+    def selected_entries(self):
+        """
+        Returns the input entries used for the conversion.
+        :return:
+        """
+        path = self.entries_path + '/selected'
+        entries = self._get_array_data(path)
+        if entries is not None:
+            return [entry.decode() for entry in entries]
+        return []
+
+    @property
+    def discarded_entries(self):
+        """
+        Returns the input entries that were not used for the conversion.
+        :return:
+        """
+        path = self.entries_path + '/discarded'
+        entries = self._get_array_data(path)
+        if entries is not None:
+            return [entry.decode() for entry in entries]
+        return []
+
+    @property
+    def image_binning(self):
+        """
+        Returns the image binning used when converting to q space.
+        :return:
+        """
+        path = self.params_path + '/image_binning'
+        return self._get_array_data(path)
+
+    @property
+    def sample_roi(self):
+        """
+        Returns the sample area selected for conversion (sample coordinates).
+        :return: 4 elements array : xMin, xMax, yMin, yMax
+        """
+        path = self.params_path + '/sample_roi'
+        sample_roi = self._get_array_data(path)
+        if sample_roi is None:
+            return [_np.nan, _np.nan, _np.nan, _np.nan]
+        return sample_roi
+
+    @property
+    def qspace_dimensions(self):
+        """
+        Returns the dimensions of the qspace cubes
+        :return:
+        """
+        with self.qspace_dset_ctx() as dset:
+            return dset.shape[1:]
+
 
 class QSpaceH5Writer(QSpaceH5):
     cube_dtype = _np.float32
@@ -213,7 +267,24 @@ class QSpaceH5Writer(QSpaceH5):
         :return:
         """
         path = self.params_path + '/image_binning'
+        if image_binning is None or len(image_binning) != 2:
+            raise ValueError('image_binning must be a 2 elements array : '
+                             '{0}.'.format(image_binning))
         self._set_array_data(path, _np.array(image_binning))
+
+    def set_sample_roi(self, sample_roi):
+        """
+        Stores the sample area selected for conversion (sample coordinates).
+        :param sample_roi: 4 elements array : xMin, xMax, yMin, yMax
+        :return:
+        """
+        path = self.params_path + '/sample_roi'
+        if sample_roi is None:
+            sample_roi = [_np.nan, _np.nan, _np.nan, _np.nan]
+        elif len(sample_roi) != 4:
+            raise ValueError('sample_roi must be a 4 elements array (or None):'
+                             ' {0}.'.format(sample_roi))
+        self._set_array_data(path, _np.array(sample_roi))
 
 if __name__ == '__main__':
     pass

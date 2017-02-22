@@ -338,7 +338,7 @@ class IntensityViewItemNode(Node):
 
 
 class IntensityModelColumns(object):
-    AngleColumn = range(1)
+    AngleColumn = 0
     ColumnNames = ['Angle']
 
 

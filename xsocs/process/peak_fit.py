@@ -114,7 +114,7 @@ class PeakFitter(Thread):
                 n_points = qdata_shape[0]
 
                 if indices is None:
-                    indices = range(n_points)
+                    indices = list(range(n_points))
                 else:
                     indices = indices[:]
         except IOError:

@@ -24,7 +24,7 @@ Dependencies
 * `numpy <http://www.numpy.org>`_
 * `h5py <http://www.h5py.org/>`_
 * `silx <https://pypi.python.org/pypi/silx>`_
-.. * A Qt binding: `PyQt5, PyQt4 <https://riverbankcomputing.com/software/pyqt/intro>`_ or `PySide <https://pypi.python.org/pypi/PySide/>`_
+* A Qt binding: `PyQt5, PyQt4 <https://riverbankcomputing.com/software/pyqt/intro>`_ or `PySide <https://pypi.python.org/pypi/PySide/>`_
 
 Supported platforms: Linux
 

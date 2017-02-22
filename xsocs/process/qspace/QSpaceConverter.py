@@ -435,8 +435,9 @@ class QSpaceConverter(object):
         check_values(params, 'chan_per_deg', 'Chan. per deg.')
         check_values(params, 'center_chan', 'Center channel')
 
-        n_images = params[params.keys()[0]]['n_images']
-        n_positions = params[params.keys()[0]]['n_positions']
+        keys = list(params.keys())
+        n_images = params[keys[0]]['n_images']
+        n_positions = params[keys[0]]['n_positions']
         if n_images != n_positions:
             errors.append('number of images != number of X/Y coordinates '
                           'on sample : '

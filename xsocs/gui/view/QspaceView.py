@@ -460,8 +460,8 @@ class QSpaceView(Qt.QMainWindow):
         :return:
         """
         if event is not None:
-            self.sigFitDone.emit(self.__node, event)
             self.__nextFitFile()
+            self.sigFitDone.emit(self.__node, event)
 
         for widget in self.__lockWidgets:
             widget.setEnabled(True)

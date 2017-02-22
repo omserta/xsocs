@@ -8,7 +8,7 @@ Installation
 
 The latest development version can be obtained from the git repository::
 
-    git clone git://gitlab.esrf.fr:xsocs/xsocs.git
+    git clone https://gitlab.esrf.fr/kmap/xsocs.git
     cd xsocs
 
 And then install::

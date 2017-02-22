@@ -31,8 +31,8 @@ __date__ = "18/10/2016"
 # Do not copy into the source folder !
 
 MAJOR = 0
-MINOR = 2
-MICRO = 1
+MINOR = 4
+MICRO = 0
 RELEV = "dev"  # <16
 SERIAL = 0  # <16
 

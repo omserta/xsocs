@@ -49,7 +49,3 @@ License
 -------
 
 The source code of xsocs is licensed under the MIT and LGPL licenses.
-See the `copyright file TBD`_ for details.
-
-.. |Travis Status| image:: TBD
-.. |Appveyor Status| image:: TBD

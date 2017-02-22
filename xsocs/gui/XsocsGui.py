@@ -195,7 +195,8 @@ class XsocsGui(Qt.QMainWindow):
                               outQSpaceH5=output_f,
                               qspaceDims=None,
                               imageBinning=None,
-                              roi=event,
+                              roi=event.roi,
+                              entries=event.entries,
                               parent=self.sender())
         widget.exec_()
         if widget.status == QSpaceWidget.StatusCompleted:

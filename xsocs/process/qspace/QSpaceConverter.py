@@ -86,17 +86,23 @@ class QSpaceConverter(object):
     def __init__(self,
                  xsocsH5_f,
                  qspace_dims=None,
-                 sample_indices=None,
                  img_binning=None,
                  output_f=None,
                  roi=None,
+                 entries=None,
                  callback=None):
         """
         Merger for the Kmap SPEC and EDF files. This loads a spech5 file,
              converts it to HDF5 and then tries to match scans and edf image
              files.
         :param xsocsH5_f: path to the input XsocsH5 file.
+        :param qspace_dims: dimensions of the qspace volume
+        :param img_binning: binning to apply to the images before conversion.
+            Default : (1, 1)
         :param output_f: path to the output file that will be created.
+        :param roi: Roi in sample coordinates (xMin, xMax, yMin, yMax)
+        :param entries: a list of entry names to convert to qspace. If None,
+            all entries found in the xsocsH5File will be used.
         :param callback: callback to call when the parsing is done.
         """
         super(QSpaceConverter, self).__init__()
@@ -108,10 +114,22 @@ class QSpaceConverter(object):
         self.__xsocsH5_f = xsocsH5_f
         self.__output_f = output_f
 
+        xsocsH5 = XsocsH5.XsocsH5(xsocsH5_f)
+        # checking entries
+        if entries is None:
+            entries = xsocsH5.entries()
+        else:
+            diff = set(entries) - set(xsocsH5.entries())
+            if len(diff) > 0:
+                raise ValueError('The following entries were not found in '
+                                 'the input file :\n - {0}'
+                                 ''.format('\n -'.join(diff)))
+
         self.__params = {'qspace_dims': None,
                          'image_binning': None,
                          'sample_indices': None,
-                         'roi': None}
+                         'roi': None,
+                         'entries': sorted(entries)}
 
         self.__callback = callback
         self.__n_proc = None
@@ -125,17 +143,15 @@ class QSpaceConverter(object):
 
         self.image_binning = img_binning
         self.qspace_dims = qspace_dims
-        self.sample_indices = sample_indices
         self.roi = roi
 
         self.__set_status(self.READY)
 
     def __get_scans(self):
         """
-        Returns the scans found in the input file.
+        Returns the entries that will be converted.
         """
-        params = _get_all_params(self.__xsocsH5_f)
-        return sorted(params.keys())
+        return self.__params['entries']
 
     scans = property(__get_scans)
     """ Returns the scans found in the input file. """
@@ -267,27 +283,27 @@ class QSpaceConverter(object):
         self.__params['image_binning'] = np.array(image_binning_int,
                                                   dtype=np.int32)
 
-    @sample_indices.setter
-    def sample_indices(self, sample_indices):
-        """
-        Binning applied to the image before converting to qspace
-        """
-        if sample_indices is None:
-            self.__params['sample_indices'] = None
-            return
-
-        sample_indices = np.array(sample_indices, ndmin=1).astype(np.long)
-
-        if sample_indices.ndim != 1:
-            raise ValueError('sample_indices must be a 1D array.')
-
-        if len(sample_indices) == 0:
-            self.__params['sample_indices'] = None
-            return
-
-        # TODO : check values
-        self.__params['sample_indices'] = np.array(sample_indices,
-                                                   dtype=np.int32)
+    # @sample_indices.setter
+    # def sample_indices(self, sample_indices):
+    #     """
+    #     Binning applied to the image before converting to qspace
+    #     """
+    #     if sample_indices is None:
+    #         self.__params['sample_indices'] = None
+    #         return
+    #
+    #     sample_indices = np.array(sample_indices, ndmin=1).astype(np.long)
+    #
+    #     if sample_indices.ndim != 1:
+    #         raise ValueError('sample_indices must be a 1D array.')
+    #
+    #     if len(sample_indices) == 0:
+    #         self.__params['sample_indices'] = None
+    #         return
+    #
+    #     # TODO : check values
+    #     self.__params['sample_indices'] = np.array(sample_indices,
+    #                                                dtype=np.int32)
 
     @roi.setter
     def roi(self, roi):
@@ -431,11 +447,6 @@ class QSpaceConverter(object):
         params = _get_all_params(self.__xsocsH5_f)
         return params[scan]
 
-    def __get_scans(self):
-        """ Returns the scan names. """
-        params = _get_all_params(self.__xsocsH5_f)
-        return sorted(params.keys())
-
     def __run_convert(self):
         """
         Performs the conversion.
@@ -448,13 +459,14 @@ class QSpaceConverter(object):
         qspace_dims = self.qspace_dims
         xsocsH5_f = self.xsocsH5_f
         output_f = self.output_f
+        sample_roi = self.__params['roi']
 
         try:
             ta = time.time()
 
             params = _get_all_params(xsocsH5_f)
 
-            entries = sorted(params.keys())
+            entries = self.__get_scans()
             n_entries = len(entries)
 
             first_param = params[entries[0]]
@@ -542,6 +554,8 @@ class QSpaceConverter(object):
             with XsocsH5.XsocsH5(xsocsH5_f, mode='r') as master_h5:
 
                 entry_files = []
+
+                all_entries = set(master_h5.entries())
 
                 positions = master_h5.scan_positions(entries[0])
                 sample_x = positions.pos_0
@@ -664,14 +678,20 @@ class QSpaceConverter(object):
                       max(output_shape[2] // 4, 1),)
             qspace_sum_chunks = max(n_images // 10, 1),
 
+            discarded_entries = sorted(all_entries - set(entries))
+
             _create_result_file(output_f,
                                 output_shape,
+                                image_binning,
+                                sample_roi,
                                 sample_x[sample_indices],
                                 sample_y[sample_indices],
                                 qx_idx,
                                 qy_idx,
                                 qz_idx,
                                 histo,
+                                selected_entries=entries,
+                                discarded_entries=discarded_entries,
                                 compression='lzf',
                                 qspace_chunks=chunks,
                                 qspace_sum_chunks=qspace_sum_chunks,
@@ -908,19 +928,41 @@ def _init_thread(idx_queue_,
 
 
 def _create_result_file(h5_fn,
-                        qspace_shape,
-                        # dtype,
+                        qspace_dims,
+                        image_binning,
+                        sample_roi,
                         pos_x,
                         pos_y,
-                        bins_x,
-                        bins_y,
-                        bins_z,
+                        q_x,
+                        q_y,
+                        q_z,
                         histo,
-                        # roi_shape,
+                        selected_entries,
+                        discarded_entries=None,
                         compression='lzf',
                         qspace_chunks=None,
                         qspace_sum_chunks=None,
                         overwrite=False):
+    """
+    Initializes the output file.
+    :param h5_fn: name of the file to initialize
+    :param qspace_dims: dimensions of the q space
+    :param image_binning: binning applied to the images
+    :param pos_x: sample X positions (one for each qspace cube)
+    :param pos_y: sample Y positions (one for each qspace cube)
+    :param q_x: X coordinates of the qspace cube
+    :param q_y: Y coordinates of the qspace cube
+    :param q_z: Z coordinates of the qspace cube
+    :param histo: histogram (number of hits per element of the qspace elements)
+    :param selected_entries: list of input entries used for the conversion
+    :param discarded_entries: list of input entries discarded, or None
+    :param compression: datasets compression
+    :param qspace_chunks: qspace chunking
+    :param qspace_sum_chunks:
+    :param overwrite: True to force overwriting the file if it already exists.
+    :return:
+    """
+
     if not overwrite:
         mode = 'w-'
     else:
@@ -932,17 +974,19 @@ def _create_result_file(h5_fn,
 
     qspace_h5 = QSpaceH5.QSpaceH5Writer(h5_fn, mode=mode)
     qspace_h5.init_file(len(pos_x),
-                        qspace_shape,
+                        qspace_dims,
                         qspace_chunks=qspace_chunks,
                         qspace_sum_chunks=qspace_sum_chunks,
                         compression=compression)
     qspace_h5.set_histo(histo)
     qspace_h5.set_sample_x(pos_x)
     qspace_h5.set_sample_y(pos_y)
-    qspace_h5.set_qx(bins_x)
-    qspace_h5.set_qy(bins_y)
-    qspace_h5.set_qz(bins_z)
-    # qspace_h5.set_image_shape(roi_shape)
+    qspace_h5.set_qx(q_x)
+    qspace_h5.set_qy(q_y)
+    qspace_h5.set_qz(q_z)
+    qspace_h5.set_entries(selected_entries, discarded=discarded_entries)
+    qspace_h5.set_image_binning(image_binning)
+    qspace_h5.set_sample_roi(sample_roi)
 
 
 def _to_qspace(th_idx,

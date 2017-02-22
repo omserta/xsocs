@@ -90,6 +90,7 @@ class Node(object):
     deletable = False
     dragEnabledColumns = [None, None]
     columnCount = ModelColumns.ColumnMax
+    checkable = False
 
     # TODO : count visible references to unload data that isn't
     # displayed anymore
@@ -190,6 +191,14 @@ class Node(object):
 
     hidden = property(lambda self: self.__hidden)
 
+    def _notifyDataChange(self, column=0, role=Qt.Qt.EditRole):
+        # TODO : manage role
+        self.sigInternalDataChanged.emit([column])
+
+    def blockSignals(self, block):
+        # tODO : find out why block doesnt seem to work
+        return self._sigHandler.blockSignals(block)
+
     def _setModel(self, model):
         if model:
             self.__model = weakref.ref(model)
@@ -201,7 +210,8 @@ class Node(object):
         currentCount = len(self.__data)
         diff = columnCount - currentCount
         if diff > 0:
-            self.__data.extend([{ModelRoles.InternalDataRole: self}
+            self.__data.extend([{ModelRoles.InternalDataRole: self,
+                                 Qt.Qt.CheckStateRole: None}
                                 for _ in range(diff)])
 
         # setting data for new columns
@@ -218,7 +228,8 @@ class Node(object):
                     icon = style.standardIcon(icon)
                 else:
                     continue
-                self._setData(iconIdx, icon, Qt.Qt.DecorationRole)
+                self._setData(iconIdx, icon,
+                              Qt.Qt.DecorationRole, notify=False)
 
         if not isinstance(self.editableColumns, (list, tuple)):
             editableColumns = [False] * columnCount
@@ -271,8 +282,8 @@ class Node(object):
                 if editor:
                     # TODO : not true if it s just a "paint" editor
                     editableColumns[editorIdx] = getattr(editor,
-                                                              'editable',
-                                                              True)
+                                                         'editable',
+                                                         True)
                     if editorIdx not in self.activeColumns:
                         self.activeColumns.append(editorIdx)
                 if editor and issubclass(editor, EditorMixin):
@@ -281,10 +292,12 @@ class Node(object):
                     persistent = False
                 self._setData(editorIdx,
                               editor,
-                              ModelRoles.EditorClassRole)
+                              ModelRoles.EditorClassRole,
+                              notify=False)
                 self._setData(editorIdx,
                               persistent,
-                              ModelRoles.PersistentEditorRole)
+                              ModelRoles.PersistentEditorRole,
+                              notify=False)
                 self.editors = editors[:]
             self.editableColumns = tuple(editableColumns)
 
@@ -298,10 +311,14 @@ class Node(object):
         # TODO : notify the view!
         # self.sigInternalDataChanged.emit([])
 
-    def _setData(self, column, data, role):
+    def _setData(self, column, data, role, notify=True):
         if self.__data[column].get(role) == data:
             return False
         self.__data[column][role] = data
+
+        if notify:
+            self.sigInternalDataChanged.emit([column])
+
         return True
 
     isStarted = property(lambda self: self.__started)
@@ -387,6 +404,13 @@ class Node(object):
             index = model.index(row, ModelColumns.NameColumn, index)
         return index
 
+    @property
+    def checkState(self):
+        return self.data(0, role=Qt.Qt.CheckStateRole)
+
+    def setCheckState(self, state):
+        self._setData(0, state, role=Qt.Qt.CheckStateRole)
+
     enabled = property(lambda self: self.__enabled)
 
     def setEnabled(self, enabled, update=True):
@@ -394,19 +418,21 @@ class Node(object):
         for child in self._children(initialize=False):
             child.setEnabled(enabled)
         if update:
-            self.sigInternalDataChanged.emit([])
+            self.sigInternalDataChanged.emit([0])
 
     nodeName = property(lambda self: self.__nodeName)
 
     @nodeName.setter
     def nodeName(self, nodeName):
+        blocked = self.blockSignals(True)
         self.__nodeName = nodeName
         self._setData(ModelColumns.NameColumn,
                       self.__nodeName,
                       Qt.Qt.EditRole)
-        self.setData(ModelColumns.NameColumn,
-                     self.__nodeName,
-                     role=Qt.Qt.DisplayRole)
+        self.blockSignals(blocked)
+        self._setData(ModelColumns.NameColumn,
+                      self.__nodeName,
+                      role=Qt.Qt.DisplayRole)
 
     def _childInternalDataChanged(self, sender, childIndices):
         if not sender:
@@ -520,15 +546,22 @@ class Node(object):
                     if col is None:
                         col = column
                     if role is None:
-                        self._setData(col, str(value), Qt.Qt.DisplayRole)
-                        notify = notify or self._setData(col, value, Qt.Qt.EditRole)
+                        self._setData(col, str(value),
+                                      Qt.Qt.DisplayRole, notify=False)
+                        notify = notify or self._setData(col,
+                                                         value,
+                                                         Qt.Qt.EditRole,
+                                                         notify=False)
                     else:
-                        notify = notify or self._setData(col, value, role)
+                        notify = notify or self._setData(col, value,
+                                                         role, notify=False)
                     if notify:
                         columns.add(col)
             else:
-                self._setData(column, str(result), Qt.Qt.DisplayRole)
-                notify = self._setData(column, result, Qt.Qt.EditRole)
+                self._setData(column, str(result),
+                              Qt.Qt.DisplayRole, notify=False)
+                notify = self._setData(column, result,
+                                       Qt.Qt.EditRole, notify=False)
                 columns = [column]
 
             if notify:
@@ -544,7 +577,9 @@ class Node(object):
         enabled = (self.enabled and Qt.Qt.ItemIsEnabled) or Qt.Qt.NoItemFlags
         draggable = (self.isColumnDragEnabled(column)
                      and Qt.Qt.ItemIsDragEnabled) or Qt.Qt.NoItemFlags
-        return flags | enabled | draggable
+        checkable = ((self.checkable and Qt.Qt.ItemIsUserCheckable)
+                     or Qt.Qt.NoItemFlags)
+        return flags | enabled | draggable | checkable
 
     def _childConnect(self, child):
         child.sigInternalDataChanged.connect(
@@ -584,18 +619,25 @@ class Node(object):
         # TODO : notify
         if column < 0 or column > len(self.__data):
             return False
+
         if role == Qt.Qt.EditRole:
             # TODO : something better + in __paramChanged
-            if data != self.__data[column].get(Qt.Qt.EditRole):
-                self.__data[column][Qt.Qt.DisplayRole] =\
-                    str(data)
-                self.__data[column][Qt.Qt.EditRole] = data
+            if self._setData(column, data, Qt.Qt.EditRole, notify=False):
+                self._setData(column, data, Qt.Qt.DisplayRole, notify=False)
+            # if data != self.__data[column].get(Qt.Qt.EditRole):
+            #     self.__data[column][Qt.Qt.DisplayRole] =\
+            #         str(data)
+            #     self.__data[column][Qt.Qt.EditRole] = data
                 if self.__started:
                     self.commitModelData(column, data)
                     if self.subject and not self.subjectSignals(column):
                         self._getModelData(column)
         else:
-            self.__data[column][role] = data
+            # self.__data[column][role] = data
+            self._setData(column, data, role)
+
+        # self.sigInternalDataChanged.emit([column])
+
         return True
 
     def _children(self, initialize=True, append=None):

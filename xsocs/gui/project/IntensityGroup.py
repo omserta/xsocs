@@ -61,6 +61,11 @@ class IntensityItem(ProjectItem):
         scanPositions = self.projectRoot().positions(entry)
         return intensity, scanPositions
 
+    def getPointValue(self, index):
+        with self.item_context(self.path) as dsetCtx:
+            value = dsetCtx[index]
+        return value
+
 
 @ItemClassDef('IntensityGroup')
 class IntensityGroup(ProjectItem):
@@ -90,6 +95,10 @@ class IntensityGroup(ProjectItem):
 
     def getIntensityItems(self):
         return self.children(classinfo=IntensityItem)
+
+    def getIntensityItem(self, entry):
+        itemPath = self.IntensityPathTpl.format(self.path, entry)
+        return IntensityItem(self.filename, itemPath)
 
 
 def _getIntensity(entry, entry_f, projectLock, projectFile, pathTpl, queue):

@@ -182,7 +182,6 @@ class H5Base(Node):
         return newChildren
 
     def _refreshNode(self):
-        diff = set()
         with h5py.File(self.h5File) as h5f:
             thisItem = h5f[self.h5Path]
             try:

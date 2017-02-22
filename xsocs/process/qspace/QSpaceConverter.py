@@ -23,6 +23,8 @@
 #
 # ###########################################################################*/
 
+from __future__ import absolute_import
+
 __authors__ = ["D. Naudet"]
 __license__ = "MIT"
 __date__ = "01/03/2016"

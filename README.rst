@@ -16,35 +16,30 @@ And then install::
 
 Or, if pip is not available (not recommended):
     python setup.py install [--user]
+    
+Starting XSOCS
+--------------
+At the moment the only way to run XSOCS is from the python interpreter :
+
+**>> python -c 'from xsocs.gui import xsocs_main; xsocs_main()'**
 
 Dependencies
 ------------
 
-* `Python <https://www.python.org/>`_ 2.7, 3.4 and 3.5.
+* `Python <https://www.python.org/>`_ 2.7, 3.4 or 3.5.
 * `numpy <http://www.numpy.org>`_
 * `h5py <http://www.h5py.org/>`_
 * `silx <https://pypi.python.org/pypi/silx>`_
 * A Qt binding: `PyQt5, PyQt4 <https://riverbankcomputing.com/software/pyqt/intro>`_ or `PySide <https://pypi.python.org/pypi/PySide/>`_
 
-Supported platforms: Linux
+Supported platforms
+-------------------
+* Linux
 
 Documentation
 -------------
+TBD ...
 
-..
-    To build the documentation from the source (requires `Sphinx <http://www.sphinx-doc.org>`_), run::
-
-    python setup.py build build_doc
-..
-Testing
--------
-..
-    |Travis Status| |Appveyor Status|
-
-    To run the tests, from the source directory, run::
-
-        python run_tests.py
-..
 License
 -------
 
